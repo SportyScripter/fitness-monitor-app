@@ -12,7 +12,9 @@ import {
   Sliders,
   ArrowRight,
   Sparkles,
-  Zap
+  Zap,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import {
   WorkoutDay,
@@ -66,6 +68,14 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   const [chartExerciseName, setChartExerciseName] = useState<string | null>(null);
   const [isPreviousWorkoutModalOpen, setIsPreviousWorkoutModalOpen] = useState(false);
   const [activeDetailExercise, setActiveDetailExercise] = useState<Exercise | null>(null);
+  const [expandedExerciseIds, setExpandedExerciseIds] = useState<Record<string, boolean>>({});
+
+  const toggleExerciseExpand = (exerciseId: string) => {
+    setExpandedExerciseIds((prev) => ({
+      ...prev,
+      [exerciseId]: !prev[exerciseId],
+    }));
+  };
 
   const selectedDay =
     currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
@@ -399,13 +409,47 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             ) : (
               <div className="space-y-3">
                 {selectedDay.exercises.map((exercise, index) => {
-                  const baseWeight = typeof exercise.defaultWeightKg === 'number' ? exercise.defaultWeightKg : 0;
-                  const displayWeight =
-                    baseWeight > 0
-                      ? baseWeight % 1 === 0
-                        ? String(baseWeight)
-                        : baseWeight.toFixed(1)
-                      : 'Ciało';
+                  const isExpanded = !!expandedExerciseIds[exercise.id];
+
+                  // Detailed sets for this exercise
+                  const detailedSets =
+                    exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0
+                      ? exercise.plannedSetsDetails
+                      : Array.from({ length: exercise.plannedSets || 3 }, (_, i) => {
+                          const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                          return {
+                            setNumber: i + 1,
+                            reps: baseReps,
+                            weightKg: exercise.defaultWeightKg || 0,
+                            rir: exercise.targetRIR ?? 2,
+                            rpe: exercise.targetRPE || 8,
+                          };
+                        });
+
+                  // Dynamic Reps Display: e.g. "2-6" if different, or "6" if all equal
+                  const repsList = detailedSets
+                    .map((s) => (typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps)) || 0))
+                    .filter((n) => n > 0);
+                  let displayReps = exercise.targetRepsRange || '8';
+                  if (repsList.length > 0) {
+                    const minReps = Math.min(...repsList);
+                    const maxReps = Math.max(...repsList);
+                    displayReps = minReps === maxReps ? `${minReps}` : `${minReps}-${maxReps}`;
+                  }
+
+                  // Dynamic Weight Display: e.g. "85 kg" if constant, "80-90 kg" if variable, "Ciało" if 0
+                  const weightList = detailedSets.map((s) => Number(s.weightKg) || 0);
+                  let displayWeightDynamic = 'Ciało';
+                  if (weightList.length > 0 && Math.max(...weightList) > 0) {
+                    const minW = Math.min(...weightList);
+                    const maxW = Math.max(...weightList);
+                    const minWStr = minW % 1 === 0 ? String(minW) : minW.toFixed(1);
+                    const maxWStr = maxW % 1 === 0 ? String(maxW) : maxW.toFixed(1);
+                    displayWeightDynamic =
+                      minW === maxW
+                        ? `${minWStr} ${exercise.unit || 'kg'}`
+                        : `${minWStr}-${maxWStr} ${exercise.unit || 'kg'}`;
+                  }
 
                   // Historical comparison for this specific exercise
                   const pastLogsForEx = workoutLogs
@@ -464,33 +508,106 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                         </div>
                       )}
 
-                      {/* Large numeric grid */}
+                      {/* Numeric summary grid with Chevron toggle next to Przerwa */}
                       <div className="grid grid-cols-4 gap-2 p-2.5 rounded-2xl bg-neutral-950 border border-neutral-800/80 text-center text-xs">
                         <div>
                           <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Serie</span>
                           <span className="font-extrabold text-white font-mono-numbers text-sm">
-                            {exercise.plannedSets}
+                            {detailedSets.length}
                           </span>
                         </div>
                         <div>
                           <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Powtórzenia</span>
                           <span className="font-extrabold text-white font-mono-numbers text-sm">
-                            {exercise.targetRepsRange}
+                            {displayReps}
                           </span>
                         </div>
                         <div>
                           <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Ciężar</span>
                           <span className="font-black text-amber-400 font-mono-numbers text-sm">
-                            {exercise.defaultWeightKg > 0 ? `${displayWeight} ${exercise.unit || 'kg'}` : 'Ciało'}
+                            {displayWeightDynamic}
                           </span>
                         </div>
-                        <div>
-                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Przerwa</span>
-                          <span className="font-bold text-neutral-300 font-mono-numbers text-sm">
-                            {exercise.restSeconds}s
-                          </span>
+                        <div
+                          onClick={() => toggleExerciseExpand(exercise.id)}
+                          className="flex items-center justify-center gap-1 cursor-pointer select-none group"
+                          title="Rozwiń / zwiń listę serii"
+                        >
+                          <div>
+                            <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Przerwa</span>
+                            <span className="font-bold text-neutral-300 font-mono-numbers text-sm">
+                              {exercise.restSeconds || exercise.restBetweenSetsSec || 90}s
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExerciseExpand(exercise.id);
+                            }}
+                            className={`p-1 rounded-lg transition-all cursor-pointer ${
+                              isExpanded
+                                ? 'bg-amber-400 text-black shadow-sm'
+                                : 'bg-neutral-900 text-amber-400 group-hover:bg-neutral-800'
+                            }`}
+                            aria-label="Rozwiń listę serii"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                            )}
+                          </button>
                         </div>
                       </div>
+
+                      {/* Collapsible Sets List (Rozwijana lista serii indeksowana od 1) */}
+                      {isExpanded && (
+                        <div className="p-3 bg-neutral-950/90 rounded-2xl border border-neutral-800 space-y-2 animate-in fade-in duration-200">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-neutral-400 pb-1.5 border-b border-neutral-900">
+                            <span className="uppercase tracking-wider text-amber-400">
+                              Rozpiska serii ({detailedSets.length})
+                            </span>
+                            <span className="text-neutral-500 font-mono-numbers text-[10px]">
+                              Przerwa po serii: {exercise.restSeconds || exercise.restBetweenSetsSec || 90}s
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 font-mono-numbers">
+                            {detailedSets.map((set, sIdx) => {
+                              const sWeight = Number(set.weightKg) || 0;
+                              return (
+                                <div
+                                  key={sIdx}
+                                  className="flex items-center justify-between p-2 rounded-xl bg-neutral-900/90 border border-neutral-800/80 text-xs"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-6 h-6 rounded-lg bg-black border border-neutral-800 text-amber-400 font-bold flex items-center justify-center text-[10px]">
+                                      #{set.setNumber || sIdx + 1}
+                                    </span>
+                                    <span className="text-white font-black">
+                                      {sWeight > 0 ? `${sWeight} ${exercise.unit || 'kg'}` : 'Ciało'}
+                                    </span>
+                                    <span className="text-neutral-500">×</span>
+                                    <span className="text-amber-300 font-black">
+                                      {set.reps} powt
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[11px] text-neutral-400">
+                                    <span className="px-1.5 py-0.5 rounded bg-black/60 text-neutral-300 font-medium">
+                                      RIR {set.rir !== undefined ? set.rir : (exercise.targetRIR ?? 2)}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded bg-black/60 text-neutral-300 font-medium">
+                                      RPE {set.rpe !== undefined ? set.rpe : (exercise.targetRPE || 8)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Target Pace and HR if present */}
                       {(exercise.targetPace || exercise.targetHR) && (

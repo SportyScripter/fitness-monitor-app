@@ -56,10 +56,9 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   const [unit, setUnit] = useState<ExerciseUnit>('kg');
 
   // Rows of Planned Sets (Columns: Seria #, Powtórzenia, Ciężar, RIR, RPE)
+  // Default to 1 row as requested, allowing user to manually add more rows with "+ Dodaj serię"
   const [sets, setSets] = useState<ExercisePlannedSet[]>([
     { setNumber: 1, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
-    { setNumber: 2, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
-    { setNumber: 3, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
   ]);
 
   // Bottom Toggles & Settings
@@ -89,7 +88,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       if (exerciseToEdit.plannedSetsDetails && exerciseToEdit.plannedSetsDetails.length > 0) {
         setSets(exerciseToEdit.plannedSetsDetails.map((s, idx) => ({ ...s, setNumber: idx + 1 })));
       } else {
-        const count = exerciseToEdit.plannedSets || 3;
+        const count = exerciseToEdit.plannedSets || 1;
         const defaultReps = parseInt(String(exerciseToEdit.targetRepsRange).split('-')[0]) || 8;
         const initialSets: ExercisePlannedSet[] = Array.from({ length: count }, (_, i) => ({
           setNumber: i + 1,
@@ -119,15 +118,13 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       setTechniqueNotes(exerciseToEdit.techniqueNotes || '');
       setShowCatalog(false);
     } else {
-      // New Exercise Defaults
+      // New Exercise Defaults: STRICTLY 1 SET DEFAULT
       setName('');
       setMuscleGroup('Klatka Piersiowa (Chest)');
       setExerciseType('STRENGTH');
       setUnit('kg');
       setSets([
         { setNumber: 1, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
-        { setNumber: 2, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
-        { setNumber: 3, reps: 8, weightKg: 60, rir: 2, rpe: 8 },
       ]);
       setRestBetweenSetsSec(90);
       setRestAfterExerciseSec(120);
@@ -149,13 +146,16 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     setName(catItem.name);
     setMuscleGroup(catItem.muscleGroup);
     const initialReps = parseInt(catItem.defaultReps.split('-')[0]) || 8;
-    const newSets: ExercisePlannedSet[] = Array.from({ length: catItem.defaultSets || 3 }, (_, i) => ({
-      setNumber: i + 1,
-      reps: initialReps,
-      weightKg: catItem.defaultWeight || 0,
-      rir: catItem.defaultRIR ?? 2,
-      rpe: catItem.defaultRPE || 8,
-    }));
+    // When adding a new exercise from catalog, start with 1 set default as per user requirements
+    const newSets: ExercisePlannedSet[] = [
+      {
+        setNumber: 1,
+        reps: initialReps,
+        weightKg: catItem.defaultWeight || 0,
+        rir: catItem.defaultRIR ?? 2,
+        rpe: catItem.defaultRPE || 8,
+      },
+    ];
     setSets(newSets);
     setRestBetweenSetsSec(catItem.restSeconds || 90);
     setTechniqueNotes(catItem.techniqueNotes || '');

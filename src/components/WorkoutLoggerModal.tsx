@@ -748,6 +748,63 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   // Rest progress percentage for Garmin timer deck
   const restProgressPct = Math.min(100, Math.round((lapSeconds / Math.max(1, targetRestSeconds)) * 100));
 
+  // Current active set and exercise details for flat mobile view
+  const currentExTotalSets = exercisesState[activeExerciseIdx]?.sets.length || currentActiveEx?.plannedSets || 3;
+  const currentExUnit = currentActiveSet?.unit || currentActiveEx?.unit || 'kg';
+  const currentSetWeight = currentActiveSet?.weightKg ?? currentActiveEx?.defaultWeightKg ?? 0;
+  const currentSetReps = currentActiveSet?.reps ?? (parseInt(String(currentActiveEx?.targetRepsRange || '8').split('-')[0]) || 8);
+  const currentSetRpe = currentActiveSet?.rpe ?? exercisesState[activeExerciseIdx]?.exerciseRpe ?? currentActiveEx?.targetRPE ?? 8;
+  const currentSetRir = currentActiveSet?.rir ?? exercisesState[activeExerciseIdx]?.exerciseRir ?? currentActiveEx?.targetRIR ?? 2;
+  const currentSetTempo = currentActiveEx?.tempo || 'Standard';
+
+  // Next set calculation
+  let nextSetInfo: {
+    setNumber: number;
+    totalSets: number;
+    weightKg: number;
+    reps: number | string;
+    rpe: number;
+    rir: number;
+    tempo: string;
+    unit: string;
+    exerciseName: string;
+    isNextExercise: boolean;
+  } | null = null;
+
+  if (activeSetIdx + 1 < currentExTotalSets) {
+    const nextSet = exercisesState[activeExerciseIdx]?.sets[activeSetIdx + 1];
+    nextSetInfo = {
+      setNumber: activeSetIdx + 2,
+      totalSets: currentExTotalSets,
+      weightKg: nextSet?.weightKg ?? currentSetWeight,
+      reps: nextSet?.reps ?? currentSetReps,
+      rpe: nextSet?.rpe ?? currentSetRpe,
+      rir: nextSet?.rir ?? currentSetRir,
+      tempo: currentSetTempo,
+      unit: nextSet?.unit || currentExUnit,
+      exerciseName: currentActiveEx?.name || '',
+      isNextExercise: false,
+    };
+  } else if (activeExerciseIdx + 1 < exercisesState.length) {
+    const nextExState = exercisesState[activeExerciseIdx + 1];
+    const nextSet = nextExState?.sets[0];
+    nextSetInfo = {
+      setNumber: 1,
+      totalSets: nextExState?.sets.length || 3,
+      weightKg: nextSet?.weightKg ?? nextExState?.exercise.defaultWeightKg ?? 0,
+      reps: nextSet?.reps ?? nextExState?.exercise.targetRepsRange ?? 8,
+      rpe: nextSet?.rpe ?? nextExState?.exerciseRpe ?? nextExState?.exercise.targetRPE ?? 8,
+      rir: nextSet?.rir ?? nextExState?.exerciseRir ?? nextExState?.exercise.targetRIR ?? 2,
+      tempo: nextExState?.exercise.tempo || 'Standard',
+      unit: nextSet?.unit || nextExState?.exercise.unit || 'kg',
+      exerciseName: nextExState?.exercise.name || '',
+      isNextExercise: true,
+    };
+  }
+
+  // Next exercise in queue
+  const nextExerciseInQueue = exercisesState[activeExerciseIdx + 1]?.exercise || null;
+
   return (
     <>
       {/* 1. Global Sticky Mini-Player (When workout runs in background) */}
@@ -1085,467 +1142,207 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
             </div>
           </div>
 
-        {/* Scrollable Exercise Logging List */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs overscroll-contain touch-pan-y">
-          {exercisesState.map((exItem, exIdx) => {
-            const isCurrentEx = exIdx === activeExerciseIdx;
-            const exUnit = exItem.exercise.unit || 'kg';
-            const isEndurance =
-              exItem.exercise.exerciseType === 'RUNNING' ||
-              exItem.exercise.exerciseType === 'HYROX_STATION' ||
-              exItem.exercise.exerciseType === 'INTERVAL_CARDIO';
+        {/* Flat View for Current and Next Set + Next Exercise in Queue */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3.5 text-xs overscroll-contain">
+          {/* Exercise Stepper / Navigation Strip */}
+          <div className="flex items-center justify-between gap-2 px-1 text-xs">
+            <button
+              type="button"
+              disabled={activeExerciseIdx === 0}
+              onClick={() => {
+                setActiveExerciseIdx((prev) => Math.max(0, prev - 1));
+                setActiveSetIdx(0);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              ← Poprzednie ćw.
+            </button>
 
-            // Find past logs for this exercise to show previous performance
-            const pastLogsForEx = workoutLogs
-              .filter(
-                (l) =>
-                  l.exerciseName.trim().toLowerCase() === exItem.exercise.name.trim().toLowerCase()
-              )
-              .sort((a, b) => compareLogsDescending(a, b));
+            <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 font-heading">
+              Ćw. {activeExerciseIdx + 1} z {exercisesState.length}
+            </span>
 
-            const lastDate = pastLogsForEx[0] ? extractLogDate(pastLogsForEx[0]) : '';
-            const rawLastSessionSets = lastDate
-              ? pastLogsForEx.filter((l) => extractLogDate(l) === lastDate)
-              : [];
-            const lastSessionMap = new Map<number, WorkoutLogEntry>();
-            rawLastSessionSets.forEach((s) => lastSessionMap.set(s.setNumber || 1, s));
-            const lastSessionSets = Array.from(lastSessionMap.values()).sort((a, b) => a.setNumber - b.setNumber);
-
-            return (
-              <div
-                key={exItem.exercise.id}
-                className={`p-4 sm:p-5 rounded-2xl bg-neutral-950 border transition-all shadow-md space-y-4 ${
-                  isCurrentEx
-                    ? 'border-amber-400/60 ring-1 ring-amber-400/20'
-                    : 'border-neutral-800'
-                }`}
-              >
-                {/* Exercise Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800/80">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black">
-                        #{exIdx + 1}
-                      </span>
-                      <h3 className="text-base font-bold text-white font-heading">
-                        {exItem.exercise.name}
-                      </h3>
-
-                      {exItem.exercise.exerciseType && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-400 border border-amber-400/20">
-                          {exItem.exercise.exerciseType === 'RUNNING'
-                            ? 'Bieg'
-                            : exItem.exercise.exerciseType === 'HYROX_STATION'
-                            ? 'Stacja Hyrox'
-                            : exItem.exercise.exerciseType === 'INTERVAL_CARDIO'
-                            ? 'Kardio'
-                            : 'Siła'}
-                        </span>
-                      )}
-
-                      <span className="text-xs text-neutral-400">
-                        ({exItem.exercise.muscleGroup.split('(')[0].trim()})
-                      </span>
-
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono-numbers font-bold bg-neutral-900 text-neutral-300">
-                        {exUnit}
-                      </span>
-                    </div>
-
-                    {/* Previous performance & pacing */}
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      {lastSessionSets.length > 0 ? (
-                        <div className="flex items-center gap-1.5 text-[11px] text-amber-300 bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/20">
-                          <History className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>
-                            Poprzednio ({lastDate}):{' '}
-                            <strong className="text-white font-mono-numbers">
-                              {lastSessionSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ')}
-                            </strong>
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-neutral-500 italic">
-                          Pierwsza rejestracja tego ćwiczenia
-                        </span>
-                      )}
-
-                      {exItem.exercise.targetPace &&
-                      exItem.exercise.targetPace.trim() !== '' &&
-                      exItem.exercise.targetPace.trim() !== '0' && (
-                        <span className="text-[11px] text-emerald-400 bg-neutral-900 px-2 py-0.5 rounded">
-                          Tempo cel: <strong className="text-white">{exItem.exercise.targetPace}</strong>
-                        </span>
-                      )}
-
-                      {exItem.exercise.targetHR && Number(exItem.exercise.targetHR) > 0 && (
-                        <span className="text-[11px] text-rose-400 bg-neutral-900 px-2 py-0.5 rounded">
-                          Tętno HR: <strong className="text-white">{exItem.exercise.targetHR} bpm</strong>
-                        </span>
-                      )}
-
-                      {exItem.exercise.tempo && (
-                        <span className="text-[11px] text-neutral-400 bg-neutral-900 px-2 py-0.5 rounded">
-                          Tempo ruchu: <strong className="text-neutral-200">{exItem.exercise.tempo}</strong>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions for this exercise: View Chart + Remove */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => setSelectedChartExerciseName(exItem.exercise.name)}
-                      className="px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-800 hover:border-amber-400/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      title="Zobacz wykres progresu i historię"
-                    >
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      <span>Wykres</span>
-                    </button>
-
-                    <button
-                      onClick={() => removeExerciseFromSession(exIdx)}
-                      className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 transition-colors cursor-pointer"
-                      title="Usuń ćwiczenie z tej sesji"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Sets Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[560px]">
-                    <thead>
-                      <tr className="text-neutral-400 font-semibold text-[11px] border-b border-neutral-900 pb-2">
-                        <th className="w-12 pb-2">Seria</th>
-                        <th className="w-36 pb-2">Ciężar ({exUnit})</th>
-                        <th className="w-36 pb-2">Powtórzenia / Dystans</th>
-                        <th className="w-24 pb-2 text-right">Tonaż</th>
-                        <th className="w-32 pb-2 text-center">Czas Serii & Przerwa</th>
-                        <th className="w-20 pb-2 text-center">Zalicz</th>
-                        <th className="w-10 pb-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-900 font-mono-numbers">
-                      {exItem.sets.map((set, setIdx) => {
-                        const isActiveSet = isCurrentEx && setIdx === activeSetIdx;
-
-                        return (
-                          <tr
-                            key={set.setNumber}
-                            onClick={() => handleSelectActiveSet(exIdx, setIdx)}
-                            className={`transition-colors cursor-pointer ${
-                              isActiveSet
-                                ? 'bg-amber-400/10 font-bold'
-                                : set.completed
-                                ? 'bg-emerald-500/5'
-                                : 'hover:bg-neutral-900/40'
-                            }`}
-                          >
-                            <td className="py-2.5 text-neutral-400 font-bold">
-                              <span className="flex items-center gap-1">
-                                {isActiveSet && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                                #{set.setNumber}
-                              </span>
-                            </td>
-
-                            {/* Weight control with quick +/- buttons */}
-                            <td className="py-2.5 pr-2" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => adjustWeight(exIdx, setIdx, -2.5)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  -
-                                </button>
-                                <input
-                                  type="number"
-                                  step="2.5"
-                                  value={set.weightKg}
-                                  onChange={(e) => updateSet(exIdx, setIdx, 'weightKg', parseFloat(e.target.value) || 0)}
-                                  className="w-16 bg-neutral-900 border border-neutral-800 rounded px-1.5 py-1 text-center font-bold text-white text-xs"
-                                />
-                                <button
-                                  onClick={() => adjustWeight(exIdx, setIdx, 2.5)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </td>
-
-                            {/* Reps / Distance control */}
-                            <td className="py-2.5 pr-2" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => adjustReps(exIdx, setIdx, -1)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  -
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={set.reps}
-                                  onChange={(e) => updateSet(exIdx, setIdx, 'reps', parseInt(e.target.value, 10) || 0)}
-                                  className="w-14 bg-neutral-900 border border-neutral-800 rounded px-1.5 py-1 text-center font-bold text-white text-xs"
-                                />
-                                <button
-                                  onClick={() => adjustReps(exIdx, setIdx, 1)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </td>
-
-                            {/* Tonnage */}
-                            <td className="py-2.5 text-right font-bold text-amber-400 pr-3">
-                              {set.tonnage.toLocaleString()} kg
-                            </td>
-
-                            {/* Garmin Recorded Timing for this set */}
-                            <td className="py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                              <div className="flex items-center justify-center gap-1.5 text-[10px]">
-                                {set.setDurationSec ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-white text-black font-bold" title="Czas trwania serii (Time-Under-Tension)">
-                                    ⏱️ {set.setDurationSec}s
-                                  </span>
-                                ) : (
-                                  <span className="text-neutral-600">-</span>
-                                )}
-
-                                {set.restDurationSec ? (
-                                  <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30" title="Czas odpoczynku po serii">
-                                    ☕ {set.restDurationSec}s
-                                  </span>
-                                ) : null}
-                              </div>
-                            </td>
-
-                            {/* Completion Toggle */}
-                            <td className="py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => toggleSetComplete(exIdx, setIdx)}
-                                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer mx-auto ${
-                                  set.completed
-                                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20 scale-105'
-                                    : 'bg-neutral-900 text-neutral-500 border border-neutral-800 hover:border-neutral-700'
-                                }`}
-                              >
-                                <Check className="w-4 h-4 stroke-[3]" />
-                              </button>
-                            </td>
-
-                            {/* Delete Set */}
-                            <td className="py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                              {exItem.sets.length > 1 && (
-                                <button
-                                  onClick={() => removeSetFromExercise(exIdx, setIdx)}
-                                  className="text-neutral-600 hover:text-red-400 p-1 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Add Set button + RPE/RIR for this exercise */}
-                <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-900">
-                  <button
-                    onClick={() => addSetToExercise(exIdx)}
-                    className="px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-bold transition-all flex items-center gap-1.5 self-start cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-amber-400" />
-                    <span>+ Dodaj Serię</span>
-                  </button>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] uppercase font-bold text-neutral-400">RPE:</span>
-                      <select
-                        value={exItem.exerciseRpe}
-                        onChange={(e) => updateExerciseRpe(exIdx, parseFloat(e.target.value))}
-                        className="bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-white font-bold cursor-pointer"
-                      >
-                        {[6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10].map((v) => (
-                          <option key={v} value={v}>
-                            {v}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] uppercase font-bold text-neutral-400">RIR:</span>
-                      <select
-                        value={exItem.exerciseRir}
-                        onChange={(e) => updateExerciseRir(exIdx, parseInt(e.target.value, 10))}
-                        className="bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-white font-bold cursor-pointer"
-                      >
-                        {[0, 1, 2, 3, 4, 5].map((v) => (
-                          <option key={v} value={v}>
-                            {v}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <input
-                      type="text"
-                      placeholder="Notatka do tego ćwiczenia..."
-                      value={exItem.exerciseNotes}
-                      onChange={(e) => updateExerciseNotes(exIdx, e.target.value)}
-                      className="bg-neutral-900 border border-neutral-800 rounded px-2.5 py-1 text-xs text-neutral-300 placeholder:text-neutral-600 focus:outline-none focus:border-neutral-700 min-w-[180px]"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Add Exercise Live to this session */}
-          <div className="pt-2">
-            {!isAddingExerciseLive ? (
-              <button
-                onClick={() => setIsAddingExerciseLive(true)}
-                className="w-full py-3 rounded-2xl bg-neutral-950 border border-dashed border-neutral-800 hover:border-amber-400/50 text-neutral-400 hover:text-white transition-all font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Plus className="w-4 h-4 text-amber-400" />
-                <span>+ Dodaj kolejne ćwiczenie / stację hybrydową w trakcie treningu</span>
-              </button>
-            ) : (
-              <div className="p-4 rounded-2xl bg-neutral-950 border border-amber-400 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-                  <span className="font-bold text-amber-400 uppercase text-xs">
-                    Dodaj Ćwiczenie lub Stację do Trwającej Sesji
-                  </span>
-                  <button onClick={() => setIsAddingExerciseLive(false)} className="text-neutral-400 hover:text-white cursor-pointer">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Form for custom live exercise with units */}
-                <form onSubmit={handleAddLiveCustom} className="space-y-3 bg-neutral-900 p-3 rounded-xl border border-neutral-800">
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                    <div>
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Typ:</label>
-                      <select
-                        value={liveExerciseType}
-                        onChange={(e) => setLiveExerciseType(e.target.value as ExerciseType)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-bold"
-                      >
-                        <option value="STRENGTH">🏋️ Siłowe</option>
-                        <option value="RUNNING">🏃 Biegowe</option>
-                        <option value="HYROX_STATION">⚡ Stacja Hyrox</option>
-                        <option value="INTERVAL_CARDIO">🔥 Kardio</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Jednostka:</label>
-                      <select
-                        value={liveUnit}
-                        onChange={(e) => setLiveUnit(e.target.value as ExerciseUnit)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-bold"
-                      >
-                        <option value="kg">kg</option>
-                        <option value="lb">lb</option>
-                        <option value="km">km</option>
-                        <option value="m">m</option>
-                      </select>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Nazwa ćwiczenia:</label>
-                      <input
-                        type="text"
-                        placeholder="np. 1km Bieg tempowy / Podciąganie"
-                        value={customExerciseName}
-                        onChange={(e) => setCustomExerciseName(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-bold"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Serie:</label>
-                      <input
-                        type="number"
-                        value={customSets}
-                        onChange={(e) => setCustomSets(parseInt(e.target.value) || 1)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Powt / Dystans:</label>
-                      <input
-                        type="text"
-                        value={customReps}
-                        onChange={(e) => setCustomReps(e.target.value)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-neutral-400 block mb-0.5">Ciężar ({liveUnit}):</label>
-                      <input
-                        type="number"
-                        value={customWeight}
-                        onChange={(e) => setCustomWeight(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button
-                      type="submit"
-                      className="px-4 py-1.5 rounded-lg bg-amber-400 text-black font-black uppercase text-xs cursor-pointer hover:bg-amber-300"
-                    >
-                      + Wstaw do Sesji
-                    </button>
-                  </div>
-                </form>
-
-                <div className="space-y-2">
-                  <span className="text-[10px] uppercase font-bold text-neutral-400 block">Szybki wybór z katalogu:</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto">
-                    {EXERCISE_CATALOG.slice(0, 12).map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => handleAddLiveFromCatalog(item)}
-                        className="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-400 text-left text-xs text-white truncate cursor-pointer"
-                      >
-                        {item.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+            <button
+              type="button"
+              disabled={activeExerciseIdx >= exercisesState.length - 1}
+              onClick={() => {
+                setActiveExerciseIdx((prev) => Math.min(exercisesState.length - 1, prev + 1));
+                setActiveSetIdx(0);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              Następne ćw. →
+            </button>
           </div>
 
-          {/* Overall Session Notes */}
-          <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2">
-            <span className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-amber-400" />
-              <span>Notatka Ogólna do Całego Treningu:</span>
-            </span>
-            <textarea
-              rows={2}
-              placeholder="np. Dobra regeneracja, czasy przerw dotrzymane, wysoka moc na saniach..."
-              value={sessionNotes}
-              onChange={(e) => setSessionNotes(e.target.value)}
-              className="w-full bg-neutral-900 border border-neutral-800 rounded-xl p-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-amber-400/50"
-            />
+          {/* 1. OBECNA SERIA (Current Active Set Card) */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-amber-400/50 shadow-lg space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-lg bg-amber-400 text-black font-black uppercase text-[10px] tracking-wider">
+                  Obecna Seria #{activeSetIdx + 1} z {currentExTotalSets}
+                </span>
+                <span className="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-xs">
+                  {currentActiveEx?.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetComplete(activeExerciseIdx, activeSetIdx)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  currentActiveSet?.completed
+                    ? 'bg-emerald-500 text-black shadow-md'
+                    : 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800'
+                }`}
+              >
+                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>{currentActiveSet?.completed ? 'Zaliczona' : 'Zalicz'}</span>
+              </button>
+            </div>
+
+            {/* 4 Parametry Obecnej Serii: Ciężar, RPE, RIR, Tempo */}
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {/* Ciężar */}
+              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
+                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
+                  Ciężar ({currentExUnit})
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  step="any"
+                  min="0"
+                  value={currentSetWeight}
+                  onChange={(e) =>
+                    updateSet(activeExerciseIdx, activeSetIdx, 'weightKg', parseFloat(e.target.value) || 0)
+                  }
+                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-amber-400 text-sm font-mono-numbers focus:outline-none"
+                />
+              </div>
+
+              {/* RPE */}
+              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
+                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
+                  RPE
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  step="0.5"
+                  min="1"
+                  max="10"
+                  value={currentSetRpe}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 8;
+                    updateSet(activeExerciseIdx, activeSetIdx, 'rpe', val);
+                    updateExerciseRpe(activeExerciseIdx, val);
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-white text-sm font-mono-numbers focus:outline-none"
+                />
+              </div>
+
+              {/* RIR */}
+              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
+                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
+                  RIR
+                </span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  min="0"
+                  max="10"
+                  value={currentSetRir}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10) || 0;
+                    updateSet(activeExerciseIdx, activeSetIdx, 'rir', val);
+                    updateExerciseRir(activeExerciseIdx, val);
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-amber-300 text-sm font-mono-numbers focus:outline-none"
+                />
+              </div>
+
+              {/* Tempo */}
+              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
+                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
+                  Tempo
+                </span>
+                <div className="py-1 px-1 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-black text-neutral-200 truncate font-mono-numbers">
+                  {currentSetTempo}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. NASTĘPNA SERIA (Next Set Card) */}
+          {nextSetInfo ? (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950/80 border border-neutral-800/90 space-y-2.5">
+              <div className="flex items-center justify-between pb-1.5 border-b border-neutral-900">
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-neutral-900 text-neutral-400 border border-neutral-800">
+                    Następna Seria #{nextSetInfo.setNumber} {nextSetInfo.isNextExercise ? `• ${nextSetInfo.exerciseName}` : ''}
+                  </span>
+                </div>
+                <span className="text-[11px] text-neutral-400 font-mono-numbers">
+                  Cel: <strong className="text-white">{nextSetInfo.reps} powt</strong>
+                </span>
+              </div>
+
+              {/* 4 Parametry Następnej Serii: Ciężar, RPE, RIR, Tempo */}
+              <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
+                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">Ciężar</span>
+                  <span className="font-extrabold text-white font-mono-numbers text-sm">
+                    {nextSetInfo.weightKg > 0 ? `${nextSetInfo.weightKg} ${nextSetInfo.unit}` : 'Ciało'}
+                  </span>
+                </div>
+
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
+                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">RPE</span>
+                  <span className="font-extrabold text-white font-mono-numbers text-sm">
+                    {nextSetInfo.rpe}
+                  </span>
+                </div>
+
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
+                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">RIR</span>
+                  <span className="font-extrabold text-amber-300 font-mono-numbers text-sm">
+                    {nextSetInfo.rir}
+                  </span>
+                </div>
+
+                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
+                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">Tempo</span>
+                  <span className="font-bold text-neutral-300 text-xs truncate block font-mono-numbers">
+                    {nextSetInfo.tempo}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-bold">
+              🔥 To ostatnia zaplanowana seria tego treningu! Daj z siebie wszystko!
+            </div>
+          )}
+
+          {/* 3. POD SPODEM: Mały tekst z nazwą następnego ćwiczenia */}
+          <div className="pt-2 px-1 flex items-center justify-between text-xs text-neutral-400 border-t border-neutral-900">
+            <div className="flex items-center gap-1.5 truncate">
+              <ArrowRight className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="text-neutral-500 uppercase text-[10px] font-bold tracking-wider shrink-0">
+                Następne ćwiczenie:
+              </span>
+              <span className="text-neutral-200 font-semibold truncate">
+                {nextExerciseInQueue ? nextExerciseInQueue.name : 'Brak (to ostatnie ćwiczenie w sesji)'}
+              </span>
+            </div>
+            {nextExerciseInQueue && (
+              <span className="text-[10px] text-amber-400 font-mono-numbers shrink-0 font-bold ml-2">
+                {nextExerciseInQueue.plannedSets} serie
+              </span>
+            )}
           </div>
         </div>
 

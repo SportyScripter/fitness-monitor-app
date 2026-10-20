@@ -117,8 +117,18 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   const exUnit = exercise.unit || 'kg';
 
+interface ExerciseDetailSetItem {
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+  rir: number;
+  completed: boolean;
+  unit: ExerciseUnit;
+  notes?: string;
+}
+
   // Helper to construct sets for selectedLogDate
-  const buildInitialSets = (targetDate: string) => {
+  const buildInitialSets = (targetDate: string): ExerciseDetailSetItem[] => {
     const existing = getThisDayLogs(targetDate);
     if (existing.length > 0) {
       // If this specific day was already logged on that date, load completed sets
@@ -126,9 +136,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         setNumber: l.setNumber,
         weightKg: l.weightKg,
         reps: l.reps,
+        rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
         completed: true,
-        unit: l.unit || exUnit,
-        notes: l.notes,
+        unit: (l.unit as ExerciseUnit) || exUnit,
+        notes: l.notes || '',
       }));
     }
 
@@ -158,11 +169,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         rir: setRir,
         completed: false, // Fresh session: UNCOMPLETED
         unit: (prevSet?.unit as ExerciseUnit) || exUnit,
+        notes: '',
       };
     });
   };
 
-  const [setsToLog, setSetsToLog] = useState(() => buildInitialSets(selectedLogDate));
+  const [setsToLog, setSetsToLog] = useState<ExerciseDetailSetItem[]>(() => buildInitialSets(selectedLogDate));
   const [exerciseNotes, setExerciseNotes] = useState<string>(() => getThisDayLogs(selectedLogDate)[0]?.notes || '');
   const [exerciseRpe, setExerciseRpe] = useState<number>(() => getThisDayLogs(selectedLogDate)[0]?.rpe || exercise.targetRPE || 8);
   const [exerciseRir, setExerciseRir] = useState<number>(() => getThisDayLogs(selectedLogDate)[0]?.rir ?? exercise.targetRIR ?? 2);
@@ -232,6 +244,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           rir: last ? last.rir : (exercise.targetRIR ?? 2),
           completed: false,
           unit: exUnit,
+          notes: '',
         },
       ];
     });
