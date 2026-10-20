@@ -271,57 +271,116 @@ export const VolumeMatrixView: React.FC<VolumeMatrixViewProps> = ({
             <Dumbbell className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
             <p>Nie zapisano jeszcze żadnych serii w tym tygodniu.</p>
             <p className="text-neutral-500 mt-1">
-              Przejdź do zakładki &quot;5-Dniowy Plan&quot; i kliknij &quot;Rozpocznij Trening&quot; aby wprowadzić pierwsze serie.
+              Przejdź do zakładki Trening i kliknij &quot;Rozpocznij Trening&quot; aby wprowadzić pierwsze serie.
             </p>
           </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="text-neutral-400 text-[10px] uppercase font-bold tracking-wider border-b border-neutral-800">
-                  <th className="py-2.5 px-3">Data</th>
-                  <th className="py-2.5 px-3">Ćwiczenie</th>
-                  <th className="py-2.5 px-3">Partia</th>
-                  <th className="py-2.5 px-3">Seria</th>
-                  <th className="py-2.5 px-3">Ciężar</th>
-                  <th className="py-2.5 px-3">Powt.</th>
-                  <th className="py-2.5 px-3 text-amber-400">Tonaż (kg)</th>
-                  <th className="py-2.5 px-3">RPE / RIR</th>
-                  <th className="py-2.5 px-3 min-w-[150px]">Notatki</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/60">
-                {workoutLogs.slice(-20).reverse().map((entry) => (
-                  <tr key={entry.id} className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="py-2.5 px-3 text-neutral-400 font-mono-numbers">{entry.dateStr}</td>
-                    <td className="py-2.5 px-3 font-semibold text-white">{entry.exerciseName}</td>
-                    <td className="py-2.5 px-3 text-neutral-400">{entry.muscleGroup.split('(')[0]}</td>
-                    <td className="py-2.5 px-3 font-mono-numbers text-neutral-400">#{entry.setNumber}</td>
-                    <td className="py-2.5 px-3 font-mono-numbers font-bold text-white">{entry.weightKg} kg</td>
-                    <td className="py-2.5 px-3 font-mono-numbers text-white">{entry.reps}</td>
-                    <td className="py-2.5 px-3 font-mono-numbers font-bold text-amber-400">
-                      {entry.tonnageKg.toLocaleString()} kg
-                    </td>
-                    <td className="py-2.5 px-3 font-semibold text-neutral-200">
-                      @{entry.rpe} <span className="text-neutral-400 text-[10px] font-normal">(RIR {entry.rir})</span>
-                    </td>
-                    <td className="py-2.5 px-3 text-neutral-400 text-[11px]">
-                      {entry.notes && (
-                        <span className="text-white block font-medium">{entry.notes}</span>
-                      )}
-                      {entry.sessionNotes && (
-                        <span className="text-neutral-500 italic block text-[10px]">
-                          Sesja: {entry.sessionNotes}
+          <div className="mt-4">
+            {/* Mobile Cards (Visible below md) */}
+            <div className="space-y-2.5 md:hidden">
+              {workoutLogs.slice(-15).reverse().map((entry) => (
+                <div
+                  key={entry.id}
+                  className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 text-xs space-y-1.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-neutral-400 font-mono-numbers">
+                          {entry.dateStr}
                         </span>
-                      )}
-                      {!entry.notes && !entry.sessionNotes && (
-                        <span className="text-neutral-600">-</span>
-                      )}
-                    </td>
+                        <span className="text-[10px] text-amber-400 font-bold">
+                          • {entry.muscleGroup?.split('(')[0]}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-white text-sm mt-0.5">
+                        {entry.exerciseName}
+                      </h4>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 font-mono-numbers text-[11px]">
+                      Seria #{entry.setNumber}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 p-2 rounded-xl bg-neutral-900/60 text-center font-mono-numbers">
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block">Ciężar × Powt</span>
+                      <span className="font-bold text-white">
+                        {entry.weightKg}kg × {entry.reps}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block">Tonaż</span>
+                      <span className="font-black text-amber-400">
+                        {entry.tonnageKg.toLocaleString()} kg
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block">RPE / RIR</span>
+                      <span className="font-bold text-neutral-300">
+                        @{entry.rpe} <span className="text-[9px] text-neutral-500">({entry.rir})</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {entry.notes && (
+                    <p className="text-[11px] text-neutral-400 italic">
+                      {entry.notes}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table (Hidden below md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-neutral-400 text-[10px] uppercase font-bold tracking-wider border-b border-neutral-800">
+                    <th className="py-2.5 px-3">Data</th>
+                    <th className="py-2.5 px-3">Ćwiczenie</th>
+                    <th className="py-2.5 px-3">Partia</th>
+                    <th className="py-2.5 px-3">Seria</th>
+                    <th className="py-2.5 px-3">Ciężar</th>
+                    <th className="py-2.5 px-3">Powt.</th>
+                    <th className="py-2.5 px-3 text-amber-400">Tonaż (kg)</th>
+                    <th className="py-2.5 px-3">RPE / RIR</th>
+                    <th className="py-2.5 px-3 min-w-[150px]">Notatki</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-800/60">
+                  {workoutLogs.slice(-20).reverse().map((entry) => (
+                    <tr key={entry.id} className="hover:bg-neutral-800/30 transition-colors">
+                      <td className="py-2.5 px-3 text-neutral-400 font-mono-numbers">{entry.dateStr}</td>
+                      <td className="py-2.5 px-3 font-semibold text-white">{entry.exerciseName}</td>
+                      <td className="py-2.5 px-3 text-neutral-400">{entry.muscleGroup.split('(')[0]}</td>
+                      <td className="py-2.5 px-3 font-mono-numbers text-neutral-400">#{entry.setNumber}</td>
+                      <td className="py-2.5 px-3 font-mono-numbers font-bold text-white">{entry.weightKg} kg</td>
+                      <td className="py-2.5 px-3 font-mono-numbers text-white">{entry.reps}</td>
+                      <td className="py-2.5 px-3 font-mono-numbers font-bold text-amber-400">
+                        {entry.tonnageKg.toLocaleString()} kg
+                      </td>
+                      <td className="py-2.5 px-3 font-semibold text-neutral-200">
+                        @{entry.rpe} <span className="text-neutral-400 text-[10px] font-normal">(RIR {entry.rir})</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-neutral-400 text-[11px]">
+                        {entry.notes && (
+                          <span className="text-white block font-medium">{entry.notes}</span>
+                        )}
+                        {entry.sessionNotes && (
+                          <span className="text-neutral-500 italic block text-[10px]">
+                            Sesja: {entry.sessionNotes}
+                          </span>
+                        )}
+                        {!entry.notes && !entry.sessionNotes && (
+                          <span className="text-neutral-600">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

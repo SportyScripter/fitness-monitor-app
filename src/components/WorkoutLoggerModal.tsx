@@ -23,6 +23,7 @@ import {
   MoveRight,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   RotateCcw,
   Play,
   Pause,
@@ -64,6 +65,8 @@ interface WorkoutLoggerModalProps {
   weeksList?: MesocyclePhase[];
   onSwitchDay?: (targetWeek: number, targetDay: WorkoutDay) => void;
   onMoveDay?: (fromWeek: number, fromDayNumber: number, toWeek: number, toDayNumber: number) => void;
+  isMinimized?: boolean;
+  onToggleMinimize?: (minimized: boolean) => void;
 }
 
 interface ActiveExerciseState {
@@ -88,8 +91,24 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   weeksList = MESOCYCLE_WEEKS,
   onSwitchDay,
   onMoveDay,
+  isMinimized,
+  onToggleMinimize,
 }) => {
   const currentPhase = weeksList.find((w) => w.week === currentWeek) || MESOCYCLE_WEEKS[0];
+
+  // Internal minimization state if uncontrolled
+  const [internalMinimized, setInternalMinimized] = useState<boolean>(false);
+  const isMin = isMinimized !== undefined ? isMinimized : internalMinimized;
+  const handleMinimize = (minVal: boolean) => {
+    if (onToggleMinimize) {
+      onToggleMinimize(minVal);
+    } else {
+      setInternalMinimized(minVal);
+    }
+  };
+
+  // Expandable exercise title in Garmin stoper card
+  const [isExerciseNameExpanded, setIsExerciseNameExpanded] = useState<boolean>(false);
 
   // Overall workout session notes
   const [sessionNotes, setSessionNotes] = useState<string>('');
@@ -730,212 +749,184 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   const restProgressPct = Math.min(100, Math.round((lapSeconds / Math.max(1, targetRestSeconds)) * 100));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl max-h-[94dvh] sm:max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
-        {/* Top Sticky Header */}
-        <div className="p-4 sm:p-5 border-b border-neutral-800 bg-neutral-950/90 shrink-0 space-y-3">
-          {/* Main Title & Action Buttons */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black shadow-lg shadow-amber-400/20 shrink-0">
-                <Dumbbell className="w-6 h-6" />
+    <>
+      {/* 1. Global Sticky Mini-Player (When workout runs in background) */}
+      {isMin && (
+        <div
+          onClick={() => handleMinimize(false)}
+          className="fixed top-[92px] sm:top-[96px] left-0 right-0 z-40 px-3 max-w-xl mx-auto cursor-pointer animate-in slide-in-from-top-2 duration-200"
+          title="Kliknij, aby otworzyć pełny ekran treningu"
+          role="button"
+          tabIndex={0}
+        >
+          <div className="bg-neutral-900/95 backdrop-blur-xl border-2 border-amber-400/90 hover:border-amber-400 rounded-2xl p-2.5 shadow-2xl shadow-amber-400/15 flex items-center justify-between gap-2.5 transition-all active:scale-[0.99]">
+            {/* Left: Status Badge & Exercise info */}
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div
+                className={`px-2 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 flex items-center gap-1 shadow-sm ${
+                  garminPhase === 'WORK'
+                    ? 'bg-amber-400 text-black animate-pulse'
+                    : 'bg-emerald-500 text-black'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-black shrink-0" />
+                <span>{garminPhase === 'WORK' ? 'Seria' : 'Przerwa'}</span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black font-heading">
-                    Tydzień {currentWeek} • {day.dayNamePolish}
-                  </span>
-                  <span className="text-xs text-neutral-400">
-                    {day.type}
-                  </span>
-                </div>
-                <h2 className="text-lg sm:text-xl font-black text-white font-heading mt-0.5">
-                  {day.title}
-                </h2>
+
+              <div className="min-w-0">
+                <h4 className="text-xs font-black text-white truncate font-heading leading-tight">
+                  {currentActiveEx?.name || 'Ćwiczenie'}
+                </h4>
+                <p className="text-[10px] text-neutral-400 truncate mt-0.5 font-mono-numbers">
+                  {currentActiveSet?.weightKg ? `${currentActiveSet.weightKg} ${currentActiveSet.unit || 'kg'} × ` : ''}
+                  {currentActiveEx?.targetRepsRange || '8'} powt • #{activeSetIdx + 1}/{currentActiveEx?.plannedSets || 3}
+                </p>
               </div>
             </div>
 
-            {/* Quick Actions: Timer + Previous Workout + Workout Stats + Close */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* Right: Digital Timer & Compact Action Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="text-right">
+                <span
+                  className={`text-base font-black font-mono-numbers tracking-tight block leading-none ${
+                    garminPhase === 'WORK' ? 'text-amber-400' : 'text-emerald-400'
+                  }`}
+                >
+                  {formatSessionTime(lapSeconds)}
+                </span>
+                <span className="text-[9px] text-neutral-500 uppercase font-bold block mt-0.5">
+                  {garminPhase === 'WORK' ? 'Czas serii' : `z ${targetRestSeconds}s`}
+                </span>
+              </div>
+
+              {/* Single Compact Action Button (Tick) - finishes set / rest with ONE tap */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleGarminLap();
+                }}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center font-black transition-all cursor-pointer shadow-md touch-manipulation active:scale-95 ${
+                  garminPhase === 'WORK'
+                    ? 'bg-amber-400 hover:bg-amber-300 text-black shadow-amber-400/25 ring-2 ring-amber-300'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/25 ring-2 ring-emerald-300'
+                }`}
+                title={garminPhase === 'WORK' ? "Zakończ serię i zacznij przerwę" : "Rozpocznij kolejną serię"}
+                aria-label="Zalicz serię / Zmień status timera"
+              >
+                <Check className="w-5 h-5 stroke-[3]" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Full Active Workout Modal Container (Hidden when minimized, preserving all timers & state) */}
+      <div
+        className={
+          isMin
+            ? 'hidden'
+            : 'fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain'
+        }
+      >
+        <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl max-h-[94dvh] sm:max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
+          {/* Top Sticky Header */}
+          <div className="p-3.5 sm:p-5 border-b border-neutral-800 bg-neutral-950/95 shrink-0 space-y-2.5">
+            {/* Row 1: Title & Close 'X' Button in Top Right */}
+            <div className="flex items-start justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black shadow-lg shadow-amber-400/20 shrink-0">
+                  <Dumbbell className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black font-heading">
+                      Tydzień {currentWeek} • {day.dayNamePolish}
+                    </span>
+                    <span className="text-[11px] text-neutral-400">
+                      {day.type}
+                    </span>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-black text-white font-heading mt-0.5 truncate">
+                    {day.title}
+                  </h2>
+                </div>
+              </div>
+
+              {/* Close "X" Button in the Top Right Corner - hides to background without terminating session */}
+              <button
+                type="button"
+                onClick={() => handleMinimize(true)}
+                className="p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer shrink-0 touch-manipulation"
+                title="Ukryj do tła (trening trwa dalej)"
+                aria-label="Ukryj do tła"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Row 2: "Sesja: MM:SS", History, and "Dane & Czasy" in a single compact row */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-none">
               {/* Global Session Timer Badge */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 font-mono-numbers text-xs font-bold" title="Całkowity czas od startu treningu">
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 font-mono-numbers text-xs font-bold shrink-0"
+                title="Całkowity czas od startu treningu"
+              >
                 <Clock className="w-3.5 h-3.5" />
                 <span>Sesja: {formatSessionTime(sessionSeconds)}</span>
               </div>
 
               {/* View Previous Workout Button */}
               <button
+                type="button"
                 onClick={() => setIsPreviousModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-800 transition-colors cursor-pointer shrink-0"
                 title="Podgląd poprzedniego treningu"
               >
                 <History className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Poprzedni</span>
+                <span className="hidden xs:inline sm:inline">Poprzedni</span>
               </button>
 
-              {/* Workout Statistics Button */}
+              {/* Workout Statistics Button ("Dane & Czasy") */}
               <button
+                type="button"
                 onClick={() => setIsStatsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-400/30 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-900 hover:bg-neutral-800 text-amber-300 border border-amber-400/30 transition-colors cursor-pointer shrink-0"
                 title="Statystyki czasów serii, odpoczynku i tonażu"
               >
                 <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Dane & Czasy</span>
               </button>
-
-              <button
-                onClick={onClose}
-                className="p-2 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
-          </div>
 
-          {/* Navigation Bar: Next Workout Preview & Fast Switcher */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-neutral-900 text-xs">
-            {nextUncompletedDay ? (
-              <div className="flex items-center gap-2 bg-neutral-900/80 px-3 py-1.5 rounded-xl border border-neutral-800 text-neutral-300">
-                <span className="text-[10px] uppercase font-bold text-neutral-400">
-                  Następny w kolejce:
-                </span>
-                <span className="font-bold text-white truncate max-w-[220px]">
-                  {nextUncompletedDay.dayNamePolish} - {nextUncompletedDay.title}
-                </span>
-                {onSwitchDay && (
-                  <button
-                    onClick={() => onSwitchDay(currentWeek, nextUncompletedDay!)}
-                    className="ml-1 text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-0.5 cursor-pointer underline"
-                  >
-                    Przejdź <ArrowRight className="w-3 h-3" />
-                  </button>
-                )}
+            {/* Today Re-run notification if existing logs */}
+            {existingTodayLogs.length > 0 && (
+              <div className="p-2.5 px-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-bold flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-[11px] leading-tight">
+                    Trening wykonany dzisiaj ({existingTodayLogs.length} serii). Możesz edytować lub dopisać kolejne.
+                  </span>
+                </div>
               </div>
-            ) : (
-              <span className="text-neutral-500 text-[11px]">Dni z tego tygodnia zrealizowane!</span>
             )}
-
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-              <span className="text-[10px] text-neutral-400 uppercase font-bold shrink-0">
-                Dni:
-              </span>
-              {weekDays.map((d) => {
-                const isCurrent = d.id === day.id;
-                return (
-                  <button
-                    key={d.id}
-                    onClick={() => onSwitchDay && onSwitchDay(currentWeek, d)}
-                    className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                      isCurrent
-                        ? 'bg-amber-400 text-black font-black'
-                        : 'bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800'
-                    }`}
-                  >
-                    D{d.dayNumber}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={() => setIsMoveDayOpen(!isMoveDayOpen)}
-                className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-semibold flex items-center gap-1 cursor-pointer ml-1"
-                title="Przesuń ten trening na inny termin"
-              >
-                <MoveRight className="w-3 h-3 text-amber-400" />
-                <span>Przesuń</span>
-              </button>
-            </div>
           </div>
-
-          {/* Today Re-run notification */}
-          {existingTodayLogs.length > 0 && (
-            <div className="p-2.5 px-3 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-bold flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>
-                  Wykonałeś już ten trening dzisiaj ({existingTodayLogs.length} zapisanych serii). Wyświetlono Twoje serie z możliwością edycji lub dopisania kolejnych — ponowne zapisanie zaktualizuje dzisiejszy trening bez duplikatów.
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Move Day Inline Dialog */}
-          {isMoveDayOpen && (
-            <div className="p-3 rounded-2xl bg-neutral-900 border border-amber-400/50 space-y-2 text-xs animate-in fade-in">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-amber-400 uppercase text-[10px] tracking-wider">
-                  Przesuń ten trening ({day.dayNamePolish}) na inny termin:
-                </span>
-                <button onClick={() => setIsMoveDayOpen(false)} className="text-neutral-400 hover:text-white">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowy Tydzień:</label>
-                  <select
-                    value={shiftTargetWeek}
-                    onChange={(e) => setShiftTargetWeek(Number(e.target.value))}
-                    className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white font-bold cursor-pointer"
-                  >
-                    {weeksList.map((w) => (
-                      <option key={w.week} value={w.week}>
-                        Tydzień {w.week}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowy Dzień:</label>
-                  <select
-                    value={shiftTargetDayNum}
-                    onChange={(e) => setShiftTargetDayNum(Number(e.target.value))}
-                    className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white font-bold cursor-pointer"
-                  >
-                    <option value={1}>Dzień 1 (Poniedziałek)</option>
-                    <option value={2}>Dzień 2 (Wtorek)</option>
-                    <option value={3}>Dzień 3 (Środa)</option>
-                    <option value={4}>Dzień 4 (Czwartek)</option>
-                    <option value={5}>Dzień 5 (Piątek)</option>
-                    <option value={6}>Dzień 6 (Sobota)</option>
-                    <option value={7}>Dzień 7 (Niedziela)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  onClick={() => setIsMoveDayOpen(false)}
-                  className="px-3 py-1 rounded-lg text-neutral-400 hover:text-white"
-                >
-                  Anuluj
-                </button>
-                <button
-                  onClick={handleConfirmShiftDay}
-                  className="px-4 py-1 rounded-lg bg-amber-400 text-black font-black uppercase text-[11px]"
-                >
-                  Przenieś Trening
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ========================================================================= */}
           {/* GARMIN DUAL-TIMER DECK (STOPER SERII I PRZERWY W STYLU GARMINA)          */}
           {/* ========================================================================= */}
-          <div className="pt-1">
+          <div className="p-3 sm:p-5 border-b border-neutral-800/80 bg-neutral-950/40 shrink-0">
             {/* Rest Alert Banner */}
             {isRestAlertActive && (
-              <div className="mb-2 p-3 rounded-2xl bg-amber-400 text-black font-black flex items-center justify-between gap-3 shadow-xl animate-bounce">
+              <div className="mb-2.5 p-3 rounded-2xl bg-amber-400 text-black font-black flex items-center justify-between gap-3 shadow-xl animate-bounce">
                 <div className="flex items-center gap-2">
                   <BellRing className="w-5 h-5 text-black shrink-0 animate-spin" />
                   <span className="text-xs sm:text-sm">
-                    CZAS NA SERIĘ! Zaplanowana przerwa ({targetRestSeconds}s) minęła. Kliknij LAP i zacznij ćwiczyć!
+                    CZAS NA SERIĘ! Przerwa ({targetRestSeconds}s) minęła. Kliknij LAP!
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={handleGarminLap}
                   className="px-4 py-1.5 rounded-xl bg-black text-amber-400 uppercase text-xs font-black shrink-0 cursor-pointer hover:bg-neutral-900"
                 >
@@ -946,18 +937,18 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
             {/* Deck Frame: White for WORK, Black for REST */}
             <div
-              className={`rounded-2xl p-4 sm:p-5 transition-all duration-300 shadow-2xl relative overflow-hidden ${
+              className={`rounded-2xl p-3.5 sm:p-5 transition-all duration-300 shadow-2xl relative overflow-hidden ${
                 garminPhase === 'WORK'
                   ? 'bg-white text-zinc-950 border-4 border-neutral-300 ring-4 ring-white/20'
                   : 'bg-black text-amber-400 border-2 border-neutral-800'
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                {/* Left: Mode Indicator, Active Exercise, Digital Clock */}
-                <div className="space-y-1">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {/* Left: Mode Indicator, Expandable Exercise Title, Metrics */}
+                <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-black uppercase tracking-wider ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                         garminPhase === 'WORK'
                           ? 'bg-black text-white'
                           : 'bg-amber-400 text-black'
@@ -975,13 +966,36 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                     </span>
                   </div>
 
-                  <h3
-                    className={`text-base sm:text-lg font-black font-heading truncate max-w-[340px] sm:max-w-lg ${
-                      garminPhase === 'WORK' ? 'text-zinc-950' : 'text-white'
-                    }`}
-                  >
-                    {currentActiveEx?.name || 'Ćwiczenie'}
-                  </h3>
+                  {/* Expandable Exercise Title with Chevron or click */}
+                  <div className="flex items-start gap-1.5 pt-0.5">
+                    <h3
+                      onClick={() => setIsExerciseNameExpanded(!isExerciseNameExpanded)}
+                      className={`text-base sm:text-lg font-black font-heading cursor-pointer leading-snug select-none transition-all ${
+                        isExerciseNameExpanded ? 'break-words' : 'truncate max-w-[280px] sm:max-w-lg'
+                      } ${
+                        garminPhase === 'WORK' ? 'text-zinc-950 hover:text-amber-600' : 'text-white hover:text-amber-400'
+                      }`}
+                      title="Kliknij, aby rozwinąć/zwinąć pełną nazwę ćwiczenia"
+                    >
+                      {currentActiveEx?.name || 'Ćwiczenie'}
+                    </h3>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsExerciseNameExpanded(!isExerciseNameExpanded)}
+                      className={`p-0.5 rounded transition-transform cursor-pointer shrink-0 mt-0.5 ${
+                        garminPhase === 'WORK' ? 'text-zinc-700 hover:text-black' : 'text-neutral-400 hover:text-white'
+                      }`}
+                      title={isExerciseNameExpanded ? "Zwiń nazwę" : "Rozwiń pełną nazwę"}
+                      aria-label="Rozwiń pełną nazwę ćwiczenia"
+                    >
+                      {isExerciseNameExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
 
                   <div
                     className={`text-xs font-medium ${
@@ -1006,10 +1020,10 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                 </div>
 
                 {/* Center / Right: Big Digital Timer & Rest Bar */}
-                <div className="flex flex-col items-start sm:items-end justify-center gap-1.5">
+                <div className="flex flex-col items-start sm:items-end justify-center gap-1 shrink-0">
                   <div className="flex items-baseline gap-2 font-mono-numbers">
                     <span
-                      className={`text-4xl sm:text-5xl font-black tracking-tight ${
+                      className={`text-3xl sm:text-5xl font-black tracking-tight ${
                         garminPhase === 'WORK' ? 'text-black' : 'text-amber-400'
                       }`}
                     >
@@ -1042,7 +1056,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <span className="text-[11px] text-zinc-500 font-sans">
+                    <span className="text-[10px] sm:text-[11px] text-zinc-500 font-sans">
                       Czas trwania aktywnej serii (Time-Under-Tension)
                     </span>
                   )}
@@ -1050,11 +1064,11 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               </div>
 
               {/* Big Garmin LAP Button */}
-              <div className="mt-4 pt-3 border-t border-neutral-200/40 dark:border-neutral-800">
+              <div className="mt-3 pt-2.5 border-t border-neutral-200/40 dark:border-neutral-800">
                 <button
                   type="button"
                   onClick={handleGarminLap}
-                  className={`w-full min-h-[52px] sm:min-h-[56px] rounded-xl font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-[0.98] ${
+                  className={`w-full min-h-[48px] sm:min-h-[52px] rounded-xl font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-[0.98] ${
                     garminPhase === 'WORK'
                       ? 'bg-black text-white hover:bg-neutral-800 shadow-black/30'
                       : 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
@@ -1070,7 +1084,6 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               </div>
             </div>
           </div>
-        </div>
 
         {/* Scrollable Exercise Logging List */}
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 text-xs overscroll-contain touch-pan-y">
@@ -1605,6 +1618,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           onClose={() => setIsPreviousModalOpen(false)}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 };

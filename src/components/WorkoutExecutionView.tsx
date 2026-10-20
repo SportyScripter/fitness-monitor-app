@@ -1,0 +1,568 @@
+import React, { useState } from 'react';
+import {
+  Play,
+  Flame,
+  Award,
+  Activity,
+  Dumbbell,
+  Clock,
+  CheckCircle2,
+  TrendingUp,
+  History,
+  Sliders,
+  ArrowRight,
+  Sparkles,
+  Zap
+} from 'lucide-react';
+import {
+  WorkoutDay,
+  Exercise,
+  TrainingCycleCatalog,
+  MesocyclePhase,
+  WorkoutLogEntry,
+  ExerciseUnit
+} from '../types/hyrox';
+import { ExerciseChartModal } from './ExerciseChartModal';
+import { PreviousWorkoutModal } from './PreviousWorkoutModal';
+import { ExerciseDetailModal } from './ExerciseDetailModal';
+
+interface WorkoutExecutionViewProps {
+  activeCycle: TrainingCycleCatalog;
+  currentWeek: number;
+  weeksList: MesocyclePhase[];
+  currentWeekDays: WorkoutDay[];
+  selectedDayId: string;
+  onSelectDayId: (dayId: string) => void;
+  onStartWorkout: (day: WorkoutDay) => void;
+  onOpenSimulator: () => void;
+  onOpenRecovery: () => void;
+  onUpdateDay: (day: WorkoutDay) => void;
+  workoutLogs: WorkoutLogEntry[];
+  onSaveLogs?: (newEntries: WorkoutLogEntry[]) => void;
+  onWeekChange: (week: number) => void;
+  activeOngoingWorkoutDay?: WorkoutDay | null;
+  isWorkoutMinimized?: boolean;
+  onMaximizeWorkout?: () => void;
+}
+
+export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
+  activeCycle,
+  currentWeek,
+  weeksList,
+  currentWeekDays,
+  selectedDayId,
+  onSelectDayId,
+  onStartWorkout,
+  onOpenSimulator,
+  onOpenRecovery,
+  onUpdateDay,
+  workoutLogs = [],
+  onSaveLogs,
+  onWeekChange,
+  activeOngoingWorkoutDay,
+  isWorkoutMinimized,
+  onMaximizeWorkout,
+}) => {
+  const [chartExerciseName, setChartExerciseName] = useState<string | null>(null);
+  const [isPreviousWorkoutModalOpen, setIsPreviousWorkoutModalOpen] = useState(false);
+  const [activeDetailExercise, setActiveDetailExercise] = useState<Exercise | null>(null);
+
+  const selectedDay =
+    currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
+
+  const currentPhase = weeksList.find((w) => w.week === currentWeek) || {
+    week: currentWeek,
+    name: `Tydzień ${currentWeek}: Plan Indywidualny`,
+    volumeMultiplier: 1.0,
+    targetRIR: 2,
+    targetRPE: 8.0,
+    progressionNote: 'Dostosuj obciążenie i tempo w każdym ćwiczeniu.',
+    isDeload: false,
+  };
+
+  // Helper to check if day has logged workouts
+  const isDayCompleted = (day: WorkoutDay) => {
+    if (!day) return false;
+    return workoutLogs.some(
+      (l) => l.dayId === day.id || (l.dayTitle === day.title && l.dayId?.startsWith(`w${currentWeek}-`))
+    );
+  };
+
+  // Previous logs for selected day
+  const previousWorkoutLogs = selectedDay
+    ? workoutLogs.filter(
+        (l) => l.dayTitle === selectedDay.title || l.dayId === selectedDay.id
+      )
+    : [];
+  const prevDates = Array.from(
+    new Set(previousWorkoutLogs.map((l) => l.dateStr || l.timestamp?.split('T')[0]))
+  )
+    .filter(Boolean)
+    .sort()
+    .reverse();
+  const latestPrevDate = prevDates[0];
+  const latestPreviousSessionLogs = latestPrevDate
+    ? previousWorkoutLogs.filter(
+        (l) => (l.dateStr || l.timestamp?.split('T')[0]) === latestPrevDate
+      )
+    : [];
+
+  const handleUpdateExerciseInPlan = (updatedExercise: Exercise) => {
+    if (!selectedDay) return;
+    const updatedExercises = selectedDay.exercises.map((ex) =>
+      ex.id === updatedExercise.id ? updatedExercise : ex
+    );
+    const updatedDay: WorkoutDay = {
+      ...selectedDay,
+      exercises: updatedExercises,
+    };
+    onUpdateDay(updatedDay);
+    setActiveDetailExercise(updatedExercise);
+  };
+
+  const handleSaveExercisePerformance = (
+    sets: {
+      setNumber: number;
+      weightKg: number;
+      reps: number;
+      completed: boolean;
+      unit: string;
+      notes?: string;
+    }[],
+    exerciseNotes?: string,
+    targetDate?: string,
+    rpe?: number,
+    rir?: number
+  ) => {
+    if (!selectedDay || !activeDetailExercise) return;
+    const dateStr = targetDate || new Date().toISOString().split('T')[0];
+    const sessionId = `manual-session-${dateStr}-${selectedDay.id}`;
+
+    const newEntries: WorkoutLogEntry[] = sets
+      .filter((s) => s.completed)
+      .map((s) => ({
+        id: `log-${Date.now()}-${s.setNumber}-${Math.random().toString(36).substr(2, 4)}`,
+        timestamp: new Date().toISOString(),
+        dateStr,
+        dayId: selectedDay.id,
+        dayTitle: selectedDay.title,
+        exerciseId: activeDetailExercise.id,
+        exerciseName: activeDetailExercise.name,
+        muscleGroup: activeDetailExercise.muscleGroup,
+        setNumber: s.setNumber,
+        weightKg: Number(s.weightKg) || 0,
+        reps: Number(s.reps) || 0,
+        tonnageKg: (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
+        rpe: typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8),
+        rir: typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2),
+        notes: s.notes || exerciseNotes || undefined,
+        sessionId,
+        sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
+        activityType: 'STRENGTH',
+        unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || 'kg',
+        targetDistance: activeDetailExercise.targetDistance,
+        distanceUnit: activeDetailExercise.distanceUnit,
+        targetPace: activeDetailExercise.targetPace,
+        targetHR: activeDetailExercise.targetHR,
+      }));
+
+    if (newEntries.length > 0 && onSaveLogs) {
+      onSaveLogs(newEntries);
+    }
+  };
+
+  const calculateDayPlannedTonnage = (day: WorkoutDay) => {
+    if (!day || !Array.isArray(day.exercises) || day.exercises.length === 0) return 0;
+    return day.exercises.reduce((sum, ex) => {
+      if (!ex) return sum;
+      const baseWeight = typeof ex.defaultWeightKg === 'number' ? ex.defaultWeightKg : 0;
+      const repsRange = ex.targetRepsRange ? String(ex.targetRepsRange) : '8';
+      const reps = parseInt(repsRange.split('-')[0]) || 8;
+      const sets = typeof ex.plannedSets === 'number' ? ex.plannedSets : 3;
+      return sum + baseWeight * reps * sets;
+    }, 0);
+  };
+
+  return (
+    <div className="space-y-4 pb-24 max-w-xl mx-auto">
+      {/* Week Header info with quick change */}
+      <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-4 shadow-lg">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-400 text-black shadow-sm">
+              Tydzień {currentWeek}
+            </span>
+            <span className="text-xs font-bold text-white font-heading truncate max-w-[180px] sm:max-w-xs">
+              {currentPhase.name.replace(/^Tydzień\s*\d+:\s*/i, '')}
+            </span>
+          </div>
+
+          {currentPhase.isDeload && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
+              Deload
+            </span>
+          )}
+        </div>
+
+        {/* Day Selector Strip - Big tactile buttons with completion status */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
+          {currentWeekDays.map((day) => {
+            const isSelected = selectedDay && selectedDay.id === day.id;
+            const completed = isDayCompleted(day);
+
+            return (
+              <button
+                key={day.id}
+                onClick={() => onSelectDayId(day.id)}
+                className={`flex-1 min-w-[70px] p-2 rounded-2xl border text-center transition-all cursor-pointer touch-manipulation min-h-[58px] flex flex-col items-center justify-center relative ${
+                  isSelected
+                    ? 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
+                    : completed
+                    ? 'bg-neutral-900/90 text-emerald-400 border-emerald-500/30'
+                    : 'bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                }`}
+                title={day.title}
+              >
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isSelected ? 'text-black' : 'text-neutral-400'
+                    }`}
+                  >
+                    D{day.dayNumber}
+                  </span>
+                  {completed && (
+                    <CheckCircle2
+                      className={`w-3 h-3 ${isSelected ? 'text-black' : 'text-emerald-400'}`}
+                    />
+                  )}
+                </div>
+
+                <span
+                  className={`text-[11px] font-extrabold truncate max-w-[65px] ${
+                    isSelected ? 'text-black font-black' : 'text-white'
+                  }`}
+                >
+                  {day.dayNamePolish?.slice(0, 3) || `D${day.dayNumber}`}
+                </span>
+
+                <span
+                  className={`text-[8px] uppercase font-bold tracking-tight mt-0.5 ${
+                    isSelected ? 'text-neutral-900' : 'text-neutral-500'
+                  }`}
+                >
+                  {day.type === 'RUNNING_HIIT' ? 'Bieg' : day.type === 'WEEKEND_HYROX' ? 'Hyrox' : day.type === 'REST_RECOVERY' ? 'Rest' : 'Siła'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedDay ? (
+        <div className="space-y-4">
+          {/* Day Hero Card & MAIN CTA */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-4 sm:p-5 shadow-2xl space-y-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                    selectedDay.type === 'FBW'
+                      ? 'bg-amber-400 text-black'
+                      : selectedDay.type === 'RUNNING_HIIT'
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : selectedDay.type === 'WEEKEND_HYROX'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                      : selectedDay.type === 'REST_RECOVERY'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                  }`}
+                >
+                  {selectedDay.type.replace('_', ' ')}
+                </span>
+                <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-neutral-500" /> ~{selectedDay.durationMinutes} min
+                </span>
+                <span className="text-[11px] text-neutral-400">
+                  RPE <strong className="text-white">{selectedDay.targetRpeRange}</strong> • RIR <strong className="text-white">{selectedDay.targetRirRange}</strong>
+                </span>
+              </div>
+
+              <h2 className="text-xl font-black text-white font-heading leading-tight">
+                {selectedDay.dayNamePolish}: {selectedDay.title}
+              </h2>
+              <p className="text-xs text-neutral-400 mt-1">
+                {selectedDay.subtitle}
+              </p>
+            </div>
+
+            {/* PREVIOUS SESSION RECAP (if available) */}
+            {latestPreviousSessionLogs.length > 0 && (
+              <div
+                onClick={() => setIsPreviousWorkoutModalOpen(true)}
+                className="p-2.5 rounded-2xl bg-amber-400/10 border border-amber-400/20 text-xs text-amber-300 flex items-center justify-between gap-2 cursor-pointer hover:bg-amber-400/15 transition-all"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <History className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">
+                    Poprzednio ({latestPrevDate}):{' '}
+                    <strong className="text-white font-mono-numbers font-semibold">
+                      {latestPreviousSessionLogs.length} serii ukończonych
+                    </strong>
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-400 underline shrink-0">
+                  Zobacz wyniki
+                </span>
+              </div>
+            )}
+
+            {/* PRIMARY ACTION BUTTON (Large touch target for gym usage) */}
+            <div className="pt-2">
+              {activeOngoingWorkoutDay && isWorkoutMinimized ? (
+                <button
+                  onClick={() => {
+                    if (onMaximizeWorkout) onMaximizeWorkout();
+                  }}
+                  className="w-full py-4 px-6 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-amber-400/30 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98] ring-2 ring-amber-300 animate-pulse"
+                  aria-label="Wznów trwający trening"
+                >
+                  <Play className="w-5 h-5 fill-current stroke-[2.5]" />
+                  <span>Wznów Trening w Toku ({activeOngoingWorkoutDay.dayNamePolish || activeOngoingWorkoutDay.title})</span>
+                </button>
+              ) : (
+                <>
+                  {(selectedDay.type === 'FBW' || selectedDay.type === 'CUSTOM') && (
+                    <button
+                      onClick={() => onStartWorkout(selectedDay)}
+                      className="w-full py-4 px-6 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-amber-400/25 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98]"
+                      aria-label="Rozpocznij trening na żywo"
+                    >
+                      <Play className="w-5 h-5 fill-current stroke-[2.5]" />
+                      <span>Rozpocznij Trening (Na Żywo)</span>
+                    </button>
+                  )}
+
+              {selectedDay.type === 'RUNNING_HIIT' && (
+                <button
+                  onClick={() => onStartWorkout(selectedDay)}
+                  className="w-full py-4 px-6 rounded-2xl bg-red-500 hover:bg-red-400 text-white font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-red-500/25 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98]"
+                  aria-label="Otwórz dziennik biegu HIIT"
+                >
+                  <Flame className="w-5 h-5 fill-current" />
+                  <span>Otwórz Dziennik Biegu HIIT</span>
+                </button>
+              )}
+
+              {selectedDay.type === 'WEEKEND_HYROX' && (
+                <button
+                  onClick={onOpenSimulator}
+                  className="w-full py-4 px-6 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-purple-600/25 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98]"
+                  aria-label="Uruchom symulator Hyrox i stoper"
+                >
+                  <Award className="w-5 h-5" />
+                  <span>Symulator Hyrox & Stoper</span>
+                </button>
+              )}
+
+              {selectedDay.type === 'REST_RECOVERY' && (
+                <button
+                  onClick={onOpenRecovery}
+                  className="w-full py-4 px-6 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98]"
+                  aria-label="Oceń gotowość i regenerację"
+                >
+                  <Activity className="w-5 h-5" />
+                  <span>Oceń Gotowość & Sen</span>
+                </button>
+              )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Exercises To Complete Section */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1 text-xs">
+              <span className="font-black uppercase text-neutral-300 font-heading tracking-wider">
+                Ćwiczenia do wykonania ({selectedDay.exercises?.length || 0})
+              </span>
+              <span className="text-neutral-400">
+                Tonaż: <strong className="text-amber-400 font-mono-numbers">~{calculateDayPlannedTonnage(selectedDay).toLocaleString()} kg</strong>
+              </span>
+            </div>
+
+            {(!selectedDay.exercises || selectedDay.exercises.length === 0) ? (
+              <div className="p-8 text-center text-neutral-500 text-xs bg-neutral-900 rounded-3xl border border-neutral-800">
+                <Dumbbell className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
+                <p>Brak zaplanowanych ćwiczeń na ten dzień.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {selectedDay.exercises.map((exercise, index) => {
+                  const baseWeight = typeof exercise.defaultWeightKg === 'number' ? exercise.defaultWeightKg : 0;
+                  const displayWeight =
+                    baseWeight > 0
+                      ? baseWeight % 1 === 0
+                        ? String(baseWeight)
+                        : baseWeight.toFixed(1)
+                      : 'Ciało';
+
+                  // Historical comparison for this specific exercise
+                  const pastLogsForEx = workoutLogs
+                    .filter(
+                      (l) =>
+                        l.exerciseName &&
+                        l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase()
+                    )
+                    .sort((a, b) => (b.timestamp || b.dateStr).localeCompare(a.timestamp || a.dateStr));
+                  const lastExDate = pastLogsForEx[0]?.dateStr || pastLogsForEx[0]?.timestamp?.split('T')[0];
+                  const lastSets = lastExDate
+                    ? pastLogsForEx.filter(
+                        (l) => (l.dateStr || l.timestamp?.split('T')[0]) === lastExDate
+                      )
+                    : [];
+
+                  return (
+                    <div
+                      key={exercise.id}
+                      className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-3xl p-4 shadow-md space-y-3 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
+                              #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim()}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
+                              {exercise.unit || 'kg'}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-bold text-white font-heading">
+                            {exercise.name}
+                          </h3>
+                        </div>
+
+                        <button
+                          onClick={() => setChartExerciseName(exercise.name)}
+                          className="p-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 text-xs transition-colors cursor-pointer touch-manipulation"
+                          title="Wykres progresu"
+                        >
+                          <TrendingUp className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Previous result tag */}
+                      {lastSets.length > 0 && (
+                        <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800/80 text-[11px] text-amber-300 flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="truncate">
+                            Ostatnio ({lastExDate}):{' '}
+                            <strong className="text-white font-mono-numbers">
+                              {lastSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ')}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Large numeric grid */}
+                      <div className="grid grid-cols-4 gap-2 p-2.5 rounded-2xl bg-neutral-950 border border-neutral-800/80 text-center text-xs">
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Serie</span>
+                          <span className="font-extrabold text-white font-mono-numbers text-sm">
+                            {exercise.plannedSets}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Powtórzenia</span>
+                          <span className="font-extrabold text-white font-mono-numbers text-sm">
+                            {exercise.targetRepsRange}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Ciężar</span>
+                          <span className="font-black text-amber-400 font-mono-numbers text-sm">
+                            {exercise.defaultWeightKg > 0 ? `${displayWeight} ${exercise.unit || 'kg'}` : 'Ciało'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Przerwa</span>
+                          <span className="font-bold text-neutral-300 font-mono-numbers text-sm">
+                            {exercise.restSeconds}s
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Target Pace and HR if present */}
+                      {(exercise.targetPace || exercise.targetHR) && (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {exercise.targetPace && (
+                            <span className="text-emerald-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800 font-medium">
+                              Tempo: <strong>{exercise.targetPace}</strong>
+                            </span>
+                          )}
+                          {exercise.targetHR && (
+                            <span className="text-rose-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800 font-medium">
+                              HR: <strong>{exercise.targetHR} bpm</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {exercise.techniqueNotes && (
+                        <p className="text-[11px] text-neutral-400 leading-relaxed italic bg-neutral-950/40 p-2 rounded-xl">
+                          <span className="text-neutral-300 not-italic font-semibold">Wskazówka:</span> {exercise.techniqueNotes}
+                        </p>
+                      )}
+
+                      {/* Check off button */}
+                      <button
+                        onClick={() => setActiveDetailExercise(exercise)}
+                        className="w-full py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 hover:text-amber-200 border border-neutral-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[44px]"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Szczegóły & Odhacz Serie</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Modals */}
+      {activeDetailExercise && selectedDay && (
+        <ExerciseDetailModal
+          isOpen={!!activeDetailExercise}
+          onClose={() => setActiveDetailExercise(null)}
+          exercise={activeDetailExercise}
+          day={selectedDay}
+          currentWeek={currentWeek}
+          workoutLogs={workoutLogs}
+          onUpdateExercisePlan={handleUpdateExerciseInPlan}
+          onSaveExercisePerformance={handleSaveExercisePerformance}
+          onOpenChart={(exName) => setChartExerciseName(exName)}
+        />
+      )}
+
+      {chartExerciseName && (
+        <ExerciseChartModal
+          isOpen={!!chartExerciseName}
+          onClose={() => setChartExerciseName(null)}
+          exerciseName={chartExerciseName}
+          workoutLogs={workoutLogs}
+        />
+      )}
+
+      {selectedDay && isPreviousWorkoutModalOpen && (
+        <PreviousWorkoutModal
+          isOpen={isPreviousWorkoutModalOpen}
+          onClose={() => setIsPreviousWorkoutModalOpen(false)}
+          workoutTitle={`${selectedDay.dayNamePolish}: ${selectedDay.title}`}
+          previousLogs={previousWorkoutLogs}
+        />
+      )}
+    </div>
+  );
+};

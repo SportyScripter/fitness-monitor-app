@@ -439,7 +439,78 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
             </span>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Mobile Cards (Visible below md) */}
+          <div className="space-y-3 md:hidden">
+            {exerciseProgressionList.map((item) => {
+              const hasProgression = item.deltaKg > 0;
+              const isDecline = item.deltaKg < 0;
+              const isFirst = item.previousTopWeight === null;
+
+              return (
+                <div
+                  key={item.name}
+                  className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2 text-xs"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] text-neutral-400 font-sans block">
+                        {item.muscleGroup?.split('(')[0]?.trim()}
+                      </span>
+                      <h4 className="font-bold text-white text-sm font-sans">
+                        {item.name}
+                      </h4>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      {isFirst ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-400 font-sans">
+                          Baza
+                        </span>
+                      ) : hasProgression ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-sans">
+                          <TrendingUp className="w-3 h-3" />
+                          <span>+{item.deltaKg} {item.unit}</span>
+                        </span>
+                      ) : isDecline ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 font-sans">
+                          {item.deltaKg} {item.unit}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 font-sans">
+                          Utrzymanie
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-neutral-900/70 border border-neutral-800/80 text-center font-mono-numbers">
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Ostatni</span>
+                      <span className="font-bold text-white text-xs">
+                        {item.latestTopWeight}{item.unit}
+                        {item.latestReps > 0 && <span className="text-neutral-400 font-normal"> ×{item.latestReps}</span>}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Szac. 1RM</span>
+                      <span className="font-black text-amber-400 text-xs">
+                        {item.estimated1RM > 0 ? `${item.estimated1RM} ${item.unit}` : '-'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Tonaż</span>
+                      <span className="font-bold text-neutral-200 text-xs">
+                        {item.totalTonnage.toLocaleString()}{item.unit}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop Table (Hidden below md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs min-w-[650px]">
               <thead>
                 <tr className="border-b border-neutral-800 text-neutral-400 font-semibold text-[11px] pb-2">

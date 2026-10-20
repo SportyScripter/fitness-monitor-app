@@ -6,6 +6,10 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { Header } from './components/Header';
+import { BottomNavBar, MainNavTab } from './components/BottomNavBar';
+import { CycleEditView } from './components/CycleEditView';
+import { WorkoutExecutionView } from './components/WorkoutExecutionView';
+import { MoreMenuView, MoreSubView } from './components/MoreMenuView';
 import { WeeklyPlanView } from './components/WeeklyPlanView';
 import { VolumeMatrixView } from './components/VolumeMatrixView';
 import { HyroxRaceSimulator } from './components/HyroxRaceSimulator';
@@ -167,7 +171,10 @@ export default function App() {
   const weeksList = activeCycle.weeksList !== undefined ? activeCycle.weeksList : (activeCycle.id.includes('hyrox') ? MESOCYCLE_WEEKS : []);
   const currentWeekDays: WorkoutDay[] = getDaysForCycleWeek(activeCycle, currentWeek);
 
-  const [activeTab, setActiveTab] = useState<string>('plan');
+  // 4 Bottom Navigation tabs: 'edit' | 'workout' | 'calendar' | 'more'
+  const [activeTab, setActiveTab] = useState<MainNavTab>('workout');
+  const [moreSubView, setMoreSubView] = useState<MoreSubView>(null);
+  const [selectedDayId, setSelectedDayId] = useState<string>('');
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
@@ -207,6 +214,7 @@ export default function App() {
 
   // Modals & Drawers
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDay | null>(null);
+  const [isWorkoutMinimized, setIsWorkoutMinimized] = useState<boolean>(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [timerInitialSeconds, setTimerInitialSeconds] = useState(90);
@@ -223,7 +231,7 @@ export default function App() {
     }
   };
 
-  // Select another cycle as active
+  // Select another cycle as active - immediately switches to "Trening" and finds next uncompleted day
   const handleSelectCycle = (cycleId: string) => {
     setActiveCycleId(cycleId);
     try {
@@ -231,7 +239,49 @@ export default function App() {
     } catch (e) {
       console.warn(e);
     }
+
+    const selectedCycle = cyclesList.find((c) => c.id === cycleId) || cyclesList[0];
+    const targetWeek = selectedCycle.currentWeek || 1;
+    const days = getDaysForCycleWeek(selectedCycle, targetWeek);
+
+    // Find next uncompleted workout day in this cycle (non-rest day without completed logs)
+    let targetDay = days.find((d) => {
+      if (d.type === 'REST_RECOVERY') return false;
+      const hasLogs = workoutLogs.some(
+        (l) => l.dayId === d.id || (l.dayTitle === d.title && (l.dayId?.startsWith(`w${targetWeek}-`) || !l.dayId))
+      );
+      return !hasLogs;
+    });
+
+    if (!targetDay) {
+      targetDay = days.find((d) => d.type !== 'REST_RECOVERY') || days[0];
+    }
+
+    if (targetDay) {
+      setSelectedDayId(targetDay.id);
+    }
+
+    // Switch view to "Trening" (main action)
+    setActiveTab('workout');
+    setMoreSubView(null);
   };
+
+  // Synchronize selectedDayId on week or cycle change
+  useEffect(() => {
+    if (currentWeekDays && currentWeekDays.length > 0) {
+      const exists = currentWeekDays.some((d) => d && d.id === selectedDayId);
+      if (!exists) {
+        const nextUncompleted = currentWeekDays.find((d) => {
+          if (d.type === 'REST_RECOVERY') return false;
+          return !workoutLogs.some(
+            (l) => l.dayId === d.id || (l.dayTitle === d.title && (l.dayId?.startsWith(`w${currentWeek}-`) || !l.dayId))
+          );
+        }) || currentWeekDays.find((d) => d.type !== 'REST_RECOVERY') || currentWeekDays[0];
+
+        setSelectedDayId(nextUncompleted.id);
+      }
+    }
+  }, [currentWeek, activeCycleId, currentWeekDays, selectedDayId, workoutLogs]);
 
   // Create new cycle
   const handleCreateCycle = (newCycle: TrainingCycleCatalog) => {
@@ -820,7 +870,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-amber-400 selection:text-black">
-      {/* Top Header with Active Cycle Switcher & Controls */}
+      {/* Top Bar with "Zarządzaj cyklami", Quick Cycle Selector, Stoper & Sheets */}
       <Header
         activeCycle={activeCycle}
         cyclesList={cyclesList}
@@ -829,8 +879,6 @@ export default function App() {
         totalWeeksCount={weeksList.length}
         weeksList={weeksList}
         onWeekChange={handleWeekChange}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
         user={user}
         spreadsheetId={spreadsheetId}
         onGoogleSignIn={handleGoogleSignIn}
@@ -842,93 +890,109 @@ export default function App() {
         onOpenAddWeekModal={() => setIsAddWeekModalOpen(true)}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {activeTab === 'plan' && (
-          <WeeklyPlanView
+      {/* Main Content Area - All 4 main views remain mounted in DOM to guarantee ZERO state loss on tab switch */}
+      <main className="flex-1 max-w-xl w-full mx-auto px-3.5 py-4">
+        {/* 1. Edycja: Zarządzanie strukturą wybranego cyklu, dodawanie ćwiczeń, tygodnie i parametry */}
+        <div className={activeTab === 'edit' ? 'block' : 'hidden'}>
+          <CycleEditView
             activeCycle={activeCycle}
             currentWeek={currentWeek}
-            totalWeeksCount={weeksList.length}
-            weekPlan={currentWeekDays}
-            onStartWorkout={(day) => setActiveWorkoutDay(day)}
-            onOpenSimulator={() => setActiveTab('hyrox-sim')}
-            onOpenRecovery={() => setActiveTab('recovery')}
-            onUpdateDay={handleUpdateDay}
-            onResetPlanToDefault={handleResetPlanToDefault}
-            onOpenCatalog={() => setIsCatalogSidebarOpen(true)}
+            weeksList={weeksList}
+            currentWeekDays={currentWeekDays}
+            selectedDayId={selectedDayId}
+            onSelectDayId={setSelectedDayId}
+            onWeekChange={handleWeekChange}
             onOpenAddWeekModal={() => setIsAddWeekModalOpen(true)}
-            onCopyDayToWeek={handleCopyDayToWeek}
-            onCopyEntireWeekTo={handleCopyEntireWeekTo}
+            onDeleteWeek={handleDeleteWeek}
+            onUpdateDay={handleUpdateDay}
             onAddDay={handleAddDay}
             onDeleteDay={handleDeleteDay}
-            onDeleteWeek={handleDeleteWeek}
-            onWeekChange={handleWeekChange}
+            onResetPlanToDefault={handleResetPlanToDefault}
+            onCopyDayToWeek={handleCopyDayToWeek}
+            onCopyEntireWeekTo={handleCopyEntireWeekTo}
+            workoutLogs={workoutLogs}
+          />
+        </div>
+
+        {/* 2. Trening (Główna akcja): Ekran realizacji treningu, zestaw ćwiczeń do odhaczenia na dany dzień */}
+        <div className={activeTab === 'workout' ? 'block' : 'hidden'}>
+          <WorkoutExecutionView
+            activeCycle={activeCycle}
+            currentWeek={currentWeek}
+            weeksList={weeksList}
+            currentWeekDays={currentWeekDays}
+            selectedDayId={selectedDayId}
+            onSelectDayId={setSelectedDayId}
+            onStartWorkout={(day) => {
+              setActiveWorkoutDay(day);
+              setIsWorkoutMinimized(false);
+            }}
+            activeOngoingWorkoutDay={activeWorkoutDay}
+            isWorkoutMinimized={isWorkoutMinimized}
+            onMaximizeWorkout={() => setIsWorkoutMinimized(false)}
+            onOpenSimulator={() => {
+              setActiveTab('more');
+              setMoreSubView('hyrox');
+            }}
+            onOpenRecovery={() => {
+              setActiveTab('more');
+              setMoreSubView('recovery');
+            }}
+            onUpdateDay={handleUpdateDay}
             workoutLogs={workoutLogs}
             onSaveLogs={handleSaveLogs}
+            onWeekChange={handleWeekChange}
           />
-        )}
+        </div>
 
-        {activeTab === 'summary' && (
+        {/* 3. Kalendarz / Historia: Widok ukończonych treningów i historii cyklu w stylu Strava */}
+        <div className={activeTab === 'calendar' ? 'block' : 'hidden'}>
           <SummaryCalendarView
             workoutLogs={workoutLogs}
             onAddWorkoutLogs={handleSaveLogs}
             onDeleteWorkoutLogEntry={handleDeleteWorkoutLogEntry}
             onDeleteWorkoutSession={handleDeleteWorkoutSession}
           />
-        )}
+        </div>
 
-        {activeTab === 'volume' && (
-          <VolumeMatrixView
+        {/* 4. Więcej (Menu): Moduły analityczne (Strava, Tonaż, Hyrox, Progresja, Regeneracja) */}
+        <div className={activeTab === 'more' ? 'block' : 'hidden'}>
+          <MoreMenuView
             currentWeek={currentWeek}
-            workoutLogs={workoutLogs}
-            weekPlan={currentWeekDays}
-            onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
-          />
-        )}
-
-        {activeTab === 'hyrox-sim' && (
-          <HyroxRaceSimulator
-            onSaveTrial={handleSaveHyroxTrial}
-            isSheetsConnected={!!spreadsheetId}
-            onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
-          />
-        )}
-
-        {activeTab === 'progression' && (
-          <Progression1RMView
-            currentWeek={currentWeek}
-            onSelectWeek={handleWeekChange}
-            workoutLogs={workoutLogs}
-            totalWeeksCount={weeksList.length}
-            weeksList={weeksList}
-            allWeeksPlans={activeCycle.weeksPlansMap || {}}
-          />
-        )}
-
-        {activeTab === 'recovery' && (
-          <RecoveryTrackerView
+            onWeekChange={handleWeekChange}
             workoutLogs={workoutLogs}
             recoveryHistory={recoveryHistory}
             onSaveRecovery={handleSaveRecovery}
+            onSaveHyroxTrial={handleSaveHyroxTrial}
+            activeCycle={activeCycle}
+            currentWeekDays={currentWeekDays}
+            weeksList={weeksList}
+            spreadsheetId={spreadsheetId}
+            onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+            onToggleTimer={() => setIsTimerOpen(!isTimerOpen)}
+            isTimerOpen={isTimerOpen}
+            user={user}
+            onGoogleSignIn={handleGoogleSignIn}
+            onGoogleSignOut={handleGoogleSignOut}
+            onAddWorkoutLogs={handleSaveLogs}
+            onDeleteWorkoutLogEntry={handleDeleteWorkoutLogEntry}
+            onDeleteWorkoutSession={handleDeleteWorkoutSession}
+            subView={moreSubView}
+            onSubViewChange={setMoreSubView}
           />
-        )}
+        </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-neutral-900 bg-neutral-950 py-6 text-center text-xs text-neutral-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="font-bold text-neutral-400 font-heading">
-              AKTYWNY CYKL: {activeCycle.name.toUpperCase()}
-            </span>
-            <span>• Zarządzanie Cyklami Treningowymi (Hyrox / Masa / Redukcja)</span>
-          </div>
-          <div>
-            Niezależne Mezocykle • Kopiowanie Tygodni • Wykresy Progresu • Google Sheets
-          </div>
-        </div>
-      </footer>
+      {/* Sticky Bottom Navigation - 4 Touch-friendly Large Actions */}
+      <BottomNavBar
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          if (tab !== 'more') {
+            setMoreSubView(null);
+          }
+        }}
+      />
 
       {/* Left Slide-out Catalog Drawer (Training Cycles Manager) */}
       <TrainingCatalogSidebar
@@ -959,7 +1023,12 @@ export default function App() {
           day={activeWorkoutDay}
           currentWeek={currentWeek}
           isOpen={!!activeWorkoutDay}
-          onClose={() => setActiveWorkoutDay(null)}
+          onClose={() => {
+            setActiveWorkoutDay(null);
+            setIsWorkoutMinimized(false);
+          }}
+          isMinimized={isWorkoutMinimized}
+          onToggleMinimize={(min) => setIsWorkoutMinimized(min)}
           onSaveLogs={handleSaveLogs}
           onStartRestTimer={handleStartRestTimer}
           isSheetsConnected={!!spreadsheetId}
