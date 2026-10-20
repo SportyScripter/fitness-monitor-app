@@ -149,11 +149,13 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       }
 
       const setReps = prevSet?.reps || defaultReps;
+      const setRir = prevSet?.rir !== undefined ? prevSet.rir : (exercise.targetRIR ?? 2);
 
       return {
         setNumber: i + 1,
         weightKg: setWeight,
         reps: setReps,
+        rir: setRir,
         completed: false, // Fresh session: UNCOMPLETED
         unit: (prevSet?.unit as ExerciseUnit) || exUnit,
       };
@@ -202,25 +204,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handlers for Sets Table
-  const adjustWeight = (index: number, delta: number) => {
-    setSetsToLog((prev) => {
-      const next = [...prev];
-      const cur = Number(next[index].weightKg) || 0;
-      next[index] = { ...next[index], weightKg: Math.max(0, cur + delta) };
-      return next;
-    });
-  };
-
-  const adjustReps = (index: number, delta: number) => {
-    setSetsToLog((prev) => {
-      const next = [...prev];
-      const cur = Number(next[index].reps) || 0;
-      next[index] = { ...next[index], reps: Math.max(1, cur + delta) };
-      return next;
-    });
-  };
-
   const updateSetField = (index: number, field: string, val: any) => {
     setSetsToLog((prev) => {
       const next = [...prev];
@@ -246,6 +229,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           setNumber: prev.length + 1,
           weightKg: last ? last.weightKg : exercise.defaultWeightKg || 0,
           reps: last ? last.reps : 8,
+          rir: last ? last.rir : (exercise.targetRIR ?? 2),
           completed: false,
           unit: exUnit,
         },
@@ -269,6 +253,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         setNumber: idx + 1,
         weightKg: s.weightKg,
         reps: s.reps,
+        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
         completed: true,
         unit: s.unit || exUnit,
         notes: s.notes,
@@ -479,16 +464,16 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs min-w-[500px]">
+                  <div className="w-full">
+                    <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
-                          <th className="w-12 pb-1.5">Seria</th>
-                          <th className="w-36 pb-1.5">Ciężar ({exUnit})</th>
-                          <th className="w-36 pb-1.5">Powtórzenia</th>
-                          <th className="w-24 pb-1.5 text-right">Tonaż</th>
-                          <th className="w-20 pb-1.5 text-center">Zaliczona</th>
-                          <th className="w-10 pb-1.5"></th>
+                          <th className="w-10 pb-1.5">Seria</th>
+                          <th className="pb-1.5 px-1">Ciężar ({exUnit})</th>
+                          <th className="pb-1.5 px-1">Powtórzenia</th>
+                          <th className="w-16 pb-1.5 px-1 text-center">RIR</th>
+                          <th className="w-12 pb-1.5 text-center">Status</th>
+                          <th className="w-8 pb-1.5"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-900 font-mono-numbers">
@@ -497,62 +482,44 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                             <td className="py-2 text-neutral-400 font-bold">#{set.setNumber}</td>
 
                             {/* Weight */}
-                            <td className="py-2 pr-2">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => adjustWeight(idx, -2.5)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  -
-                                </button>
-                                <input
-                                  type="number"
-                                  step="2.5"
-                                  value={set.weightKg}
-                                  onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
-                                  className="w-16 bg-neutral-900 border border-neutral-800 rounded px-1.5 py-1 text-center font-bold text-white text-xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => adjustWeight(idx, 2.5)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  +
-                                </button>
-                              </div>
+                            <td className="py-2 px-1">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                step="any"
+                                min="0"
+                                value={set.weightKg}
+                                onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                              />
                             </td>
 
                             {/* Reps */}
-                            <td className="py-2 pr-2">
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => adjustReps(idx, -1)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  -
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={set.reps}
-                                  onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
-                                  className="w-14 bg-neutral-900 border border-neutral-800 rounded px-1.5 py-1 text-center font-bold text-white text-xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => adjustReps(idx, 1)}
-                                  className="w-6 h-6 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center font-bold"
-                                >
-                                  +
-                                </button>
-                              </div>
+                            <td className="py-2 px-1">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                min="1"
+                                value={set.reps}
+                                onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                              />
                             </td>
 
-                            {/* Tonnage */}
-                            <td className="py-2 text-right font-bold text-amber-400 pr-3">
-                              {(Number(set.weightKg || 0) * Number(set.reps || 0)).toLocaleString()} {exUnit}
+                            {/* Editable RIR */}
+                            <td className="py-2 px-1 text-center">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                min="0"
+                                max="10"
+                                value={set.rir !== undefined ? set.rir : 2}
+                                onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
+                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-amber-300 text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                              />
                             </td>
 
                             {/* Completed Toggle */}

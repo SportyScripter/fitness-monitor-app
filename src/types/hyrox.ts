@@ -32,6 +32,14 @@ export interface ExerciseSet {
   actualHR?: number;
 }
 
+export interface ExercisePlannedSet {
+  setNumber: number;
+  reps: number | string;
+  weightKg: number;
+  rir: number;
+  rpe: number;
+}
+
 export interface Exercise {
   id: string;
   name: string;
@@ -55,6 +63,7 @@ export interface Exercise {
   targetPace?: string;
   targetHR?: number;
   targetDurationSec?: number;
+  plannedSetsDetails?: ExercisePlannedSet[];
 }
 
 export interface RunningInterval {

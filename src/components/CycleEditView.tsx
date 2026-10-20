@@ -18,9 +18,9 @@ import {
   Info
 } from 'lucide-react';
 import { WorkoutDay, Exercise, TrainingCycleCatalog, MesocyclePhase, WorkoutLogEntry } from '../types/hyrox';
-import { DayEditorModal } from './DayEditorModal';
+import { DaySettingsModal } from './DaySettingsModal';
+import { ExerciseEditModal } from './ExerciseEditModal';
 import { CopyWorkoutModal } from './CopyWorkoutModal';
-import { ExerciseDetailModal } from './ExerciseDetailModal';
 import { ExerciseChartModal } from './ExerciseChartModal';
 
 interface CycleEditViewProps {
@@ -69,9 +69,10 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
   workoutLogs = [],
 }) => {
   // Local modals
-  const [isDayEditorOpen, setIsDayEditorOpen] = useState(false);
+  const [isDaySettingsOpen, setIsDaySettingsOpen] = useState(false);
+  const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
+  const [exerciseBeingEdited, setExerciseBeingEdited] = useState<Exercise | null>(null);
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
-  const [activeDetailExercise, setActiveDetailExercise] = useState<Exercise | null>(null);
   const [chartExerciseName, setChartExerciseName] = useState<string | null>(null);
   const [isParamsExpanded, setIsParamsExpanded] = useState(false);
 
@@ -88,7 +89,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
     isDeload: false,
   };
 
-  const handleQuickDeleteExercise = (exId: string) => {
+  const handleDeleteExercise = (exId: string) => {
     if (!selectedDay) return;
     const updatedExercises = selectedDay.exercises.filter((ex) => ex.id !== exId);
     onUpdateDay({
@@ -97,16 +98,21 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
     });
   };
 
-  const handleUpdateExerciseInPlan = (updatedExercise: Exercise) => {
+  const handleSaveExercise = (savedExercise: Exercise) => {
     if (!selectedDay) return;
-    const updatedExercises = selectedDay.exercises.map((ex) =>
-      ex.id === updatedExercise.id ? updatedExercise : ex
-    );
+    const exists = selectedDay.exercises.some((e) => e.id === savedExercise.id);
+    let updatedExercises: Exercise[];
+    if (exists) {
+      updatedExercises = selectedDay.exercises.map((e) =>
+        e.id === savedExercise.id ? savedExercise : e
+      );
+    } else {
+      updatedExercises = [...(selectedDay.exercises || []), savedExercise];
+    }
     onUpdateDay({
       ...selectedDay,
       exercises: updatedExercises,
     });
-    setActiveDetailExercise(updatedExercise);
   };
 
   return (
@@ -319,7 +325,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             {/* Quick action buttons for selected day */}
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
-                onClick={() => setIsDayEditorOpen(true)}
+                onClick={() => setIsDaySettingsOpen(true)}
                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black transition-all cursor-pointer shadow-sm touch-manipulation min-h-[44px]"
               >
                 <Edit2 className="w-3.5 h-3.5" />
@@ -343,7 +349,10 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             </span>
 
             <button
-              onClick={() => setIsDayEditorOpen(true)}
+              onClick={() => {
+                setExerciseBeingEdited(null);
+                setIsExerciseModalOpen(true);
+              }}
               className="text-xs font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer py-1"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -357,7 +366,10 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
               <Dumbbell className="w-8 h-8 mx-auto text-neutral-600" />
               <p>Brak ćwiczeń w tym dniu.</p>
               <button
-                onClick={() => setIsDayEditorOpen(true)}
+                onClick={() => {
+                  setExerciseBeingEdited(null);
+                  setIsExerciseModalOpen(true);
+                }}
                 className="px-4 py-2.5 rounded-xl bg-amber-400 text-black font-black text-xs cursor-pointer inline-flex items-center gap-1.5 shadow-md"
               >
                 <Plus className="w-4 h-4" /> Wybierz z Bazy Ćwiczeń
@@ -396,9 +408,12 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
 
                       <div className="flex items-center gap-1 shrink-0">
                         <button
-                          onClick={() => setActiveDetailExercise(exercise)}
+                          onClick={() => {
+                            setExerciseBeingEdited(exercise);
+                            setIsExerciseModalOpen(true);
+                          }}
                           className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
-                          title="Szczegóły"
+                          title="Edytuj ćwiczenie i serie"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -410,7 +425,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
                           <TrendingUp className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleQuickDeleteExercise(exercise.id)}
+                          onClick={() => handleDeleteExercise(exercise.id)}
                           className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-500 hover:text-red-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
                           title="Usuń ćwiczenie"
                         >
@@ -481,15 +496,15 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
         </div>
       )}
 
-      {/* Modals for Day Editing & Copying */}
-      {selectedDay && isDayEditorOpen && (
-        <DayEditorModal
-          isOpen={isDayEditorOpen}
-          onClose={() => setIsDayEditorOpen(false)}
+      {/* Modals for Day Settings & Exercise Management */}
+      {selectedDay && isDaySettingsOpen && (
+        <DaySettingsModal
           day={selectedDay}
-          onSaveDay={(updated) => {
+          isOpen={isDaySettingsOpen}
+          onClose={() => setIsDaySettingsOpen(false)}
+          onSaveDaySettings={(updated) => {
             onUpdateDay(updated);
-            setIsDayEditorOpen(false);
+            setIsDaySettingsOpen(false);
           }}
         />
       )}
@@ -508,17 +523,16 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
         />
       )}
 
-      {activeDetailExercise && selectedDay && (
-        <ExerciseDetailModal
-          isOpen={!!activeDetailExercise}
-          onClose={() => setActiveDetailExercise(null)}
-          exercise={activeDetailExercise}
-          day={selectedDay}
-          currentWeek={currentWeek}
-          workoutLogs={workoutLogs}
-          onUpdateExercisePlan={handleUpdateExerciseInPlan}
-          onSaveExercisePerformance={() => {}}
-          onOpenChart={(exName) => setChartExerciseName(exName)}
+      {selectedDay && isExerciseModalOpen && (
+        <ExerciseEditModal
+          isOpen={isExerciseModalOpen}
+          onClose={() => {
+            setIsExerciseModalOpen(false);
+            setExerciseBeingEdited(null);
+          }}
+          exerciseToEdit={exerciseBeingEdited}
+          onSaveExercise={handleSaveExercise}
+          onDeleteExercise={handleDeleteExercise}
         />
       )}
 
