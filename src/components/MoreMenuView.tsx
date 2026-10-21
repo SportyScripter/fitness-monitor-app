@@ -188,7 +188,7 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
     }
 
     return (
-      <div className="space-y-4 pb-24 max-w-xl mx-auto">
+      <div className="space-y-4 pb-24 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0">
         {/* Sticky Back Navigation Bar */}
         <div className="sticky top-16 z-20 bg-neutral-950/95 backdrop-blur-md py-2 flex items-center justify-between border-b border-neutral-800">
           <button
@@ -212,7 +212,7 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
 
   // Main "Więcej" Grid Menu
   return (
-    <div className="space-y-4 pb-24 max-w-xl mx-auto">
+    <div className="space-y-4 pb-24 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0">
       {/* Menu Header Card */}
       <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 shadow-xl">
         <h1 className="text-lg font-black text-white font-heading uppercase tracking-wide">

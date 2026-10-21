@@ -249,6 +249,10 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
   // Re-sync if day changes while open
   useEffect(() => {
+    setIsWorkoutFinished(false);
+    setHasWorkoutStarted(false);
+    setGarminPhase('WORK');
+    setLapSeconds(0);
     setExercisesState(buildInitialExerciseState());
   }, [day.id, currentWeek]);
 
@@ -264,6 +268,8 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   const [activeExerciseIdx, setActiveExerciseIdx] = useState(0);
   const [activeSetIdx, setActiveSetIdx] = useState(0);
   const [isRestAlertActive, setIsRestAlertActive] = useState(false);
+  const [isWorkoutFinished, setIsWorkoutFinished] = useState(false);
+  const [hasWorkoutStarted, setHasWorkoutStarted] = useState(false);
   const alertedLapRef = useRef<boolean>(false);
 
   // Modals state
@@ -290,12 +296,14 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
   // Running tick for both global session timer and active Garmin lap timer
   useEffect(() => {
+    if (isWorkoutFinished || !hasWorkoutStarted) return;
+
     const timer = setInterval(() => {
       setSessionSeconds((prev) => prev + 1);
       setLapSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isWorkoutFinished, hasWorkoutStarted]);
 
   const formatSessionTime = (sec: number) => {
     const mins = Math.floor(sec / 60);
@@ -326,8 +334,20 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   const handleGarminLap = () => {
     playGarminLapClick();
 
+    if (!hasWorkoutStarted) {
+      setHasWorkoutStarted(true);
+      setGarminPhase('WORK');
+      setLapSeconds(0);
+      setIsRestAlertActive(false);
+      alertedLapRef.current = false;
+      return;
+    }
+
     if (garminPhase === 'WORK') {
-      // Complete current set and record duration
+      let workoutIsComplete = false;
+      let nextTargetExIdx = activeExerciseIdx;
+      let nextTargetSetIdx = activeSetIdx;
+
       setExercisesState((prev) => {
         const next = [...prev];
         if (next[activeExerciseIdx]?.sets[activeSetIdx]) {
@@ -336,41 +356,56 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           s.setDurationSec = lapSeconds;
           next[activeExerciseIdx].sets[activeSetIdx] = s;
         }
+
+        workoutIsComplete = next.every((ex) => ex.sets.every((set) => set.completed));
+
+        if (!workoutIsComplete) {
+          if (activeSetIdx + 1 < next[activeExerciseIdx].sets.length) {
+            nextTargetSetIdx = activeSetIdx + 1;
+          } else if (activeExerciseIdx + 1 < next.length) {
+            nextTargetExIdx = activeExerciseIdx + 1;
+            nextTargetSetIdx = 0;
+          }
+        }
+
+        if (workoutIsComplete) {
+          setIsWorkoutFinished(true);
+          setGarminPhase('WORK');
+          setLapSeconds(0);
+          setIsRestAlertActive(false);
+          alertedLapRef.current = false;
+        }
+
         return next;
       });
 
-      // Switch to REST mode (black display)
+      if (workoutIsComplete) {
+        return;
+      }
+
+      setActiveExerciseIdx(nextTargetExIdx);
+      setActiveSetIdx(nextTargetSetIdx);
       setGarminPhase('REST');
       setLapSeconds(0);
       setIsRestAlertActive(false);
       alertedLapRef.current = false;
-    } else {
-      // Ending REST mode, record rest time and advance to next set
-      setExercisesState((prev) => {
-        const next = [...prev];
-        if (next[activeExerciseIdx]?.sets[activeSetIdx]) {
-          const s = { ...next[activeExerciseIdx].sets[activeSetIdx] };
-          s.restDurationSec = lapSeconds;
-          next[activeExerciseIdx].sets[activeSetIdx] = s;
-        }
-        return next;
-      });
-
-      // Move to next set or next exercise
-      const exSets = exercisesState[activeExerciseIdx]?.sets || [];
-      if (activeSetIdx + 1 < exSets.length) {
-        setActiveSetIdx((prev) => prev + 1);
-      } else if (activeExerciseIdx + 1 < exercisesState.length) {
-        setActiveExerciseIdx((prev) => prev + 1);
-        setActiveSetIdx(0);
-      }
-
-      // Switch to WORK mode (white display)
-      setGarminPhase('WORK');
-      setLapSeconds(0);
-      setIsRestAlertActive(false);
-      alertedLapRef.current = false;
+      return;
     }
+
+    setExercisesState((prev) => {
+      const next = [...prev];
+      if (next[activeExerciseIdx]?.sets[activeSetIdx]) {
+        const s = { ...next[activeExerciseIdx].sets[activeSetIdx] };
+        s.restDurationSec = lapSeconds;
+        next[activeExerciseIdx].sets[activeSetIdx] = s;
+      }
+      return next;
+    });
+
+    setGarminPhase('WORK');
+    setLapSeconds(0);
+    setIsRestAlertActive(false);
+    alertedLapRef.current = false;
   };
 
   // Jump/Focus directly on a specific set
@@ -497,6 +532,14 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         }
         onStartRestTimer(next[exerciseIndex].exercise.restSeconds || 90);
       }
+
+      const allCompleted = next.every((ex) => ex.sets.every((set) => set.completed));
+      if (allCompleted) {
+        setIsWorkoutFinished(true);
+        setGarminPhase('WORK');
+        setLapSeconds(0);
+      }
+
       return next;
     });
   };
@@ -635,6 +678,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
     0
   );
   const totalPlannedSets = exercisesState.reduce((acc, ex) => acc + ex.sets.length, 0);
+  const areAllSetsCompleted = exercisesState.every((ex) => ex.sets.every((set) => set.completed));
 
   const totalSessionTonnage = exercisesState.reduce((acc, ex) => {
     return (
@@ -757,53 +801,65 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   const currentSetRir = currentActiveSet?.rir ?? exercisesState[activeExerciseIdx]?.exerciseRir ?? currentActiveEx?.targetRIR ?? 2;
   const currentSetTempo = currentActiveEx?.tempo || 'Standard';
 
-  // Next set calculation
-  let nextSetInfo: {
-    setNumber: number;
-    totalSets: number;
-    weightKg: number;
-    reps: number | string;
-    rpe: number;
-    rir: number;
-    tempo: string;
-    unit: string;
-    exerciseName: string;
-    isNextExercise: boolean;
-  } | null = null;
+  // Timer is always on the active set that the user should prepare/execute.
+  // The lower card is exactly one step ahead of that target.
+  const nextSetInfo = (() => {
+    const currentEx = exercisesState[activeExerciseIdx];
+    if (!currentEx) return null;
 
-  if (activeSetIdx + 1 < currentExTotalSets) {
-    const nextSet = exercisesState[activeExerciseIdx]?.sets[activeSetIdx + 1];
-    nextSetInfo = {
-      setNumber: activeSetIdx + 2,
-      totalSets: currentExTotalSets,
-      weightKg: nextSet?.weightKg ?? currentSetWeight,
-      reps: nextSet?.reps ?? currentSetReps,
-      rpe: nextSet?.rpe ?? currentSetRpe,
-      rir: nextSet?.rir ?? currentSetRir,
-      tempo: currentSetTempo,
-      unit: nextSet?.unit || currentExUnit,
-      exerciseName: currentActiveEx?.name || '',
-      isNextExercise: false,
-    };
-  } else if (activeExerciseIdx + 1 < exercisesState.length) {
-    const nextExState = exercisesState[activeExerciseIdx + 1];
-    const nextSet = nextExState?.sets[0];
-    nextSetInfo = {
-      setNumber: 1,
-      totalSets: nextExState?.sets.length || 3,
-      weightKg: nextSet?.weightKg ?? nextExState?.exercise.defaultWeightKg ?? 0,
-      reps: nextSet?.reps ?? nextExState?.exercise.targetRepsRange ?? 8,
-      rpe: nextSet?.rpe ?? nextExState?.exerciseRpe ?? nextExState?.exercise.targetRPE ?? 8,
-      rir: nextSet?.rir ?? nextExState?.exerciseRir ?? nextExState?.exercise.targetRIR ?? 2,
-      tempo: nextExState?.exercise.tempo || 'Standard',
-      unit: nextSet?.unit || nextExState?.exercise.unit || 'kg',
-      exerciseName: nextExState?.exercise.name || '',
-      isNextExercise: true,
-    };
-  }
+    const nextSetTargetIndex = activeSetIdx + 1;
+    if (nextSetTargetIndex < currentEx.sets.length) {
+      const nextSet = currentEx.sets[nextSetTargetIndex];
+      return {
+        setNumber: nextSetTargetIndex + 1,
+        totalSets: currentEx.sets.length,
+        weightKg: nextSet?.weightKg ?? currentSetWeight,
+        reps: nextSet?.reps ?? currentSetReps,
+        rpe: nextSet?.rpe ?? currentSetRpe,
+        rir: nextSet?.rir ?? currentSetRir,
+        tempo: currentSetTempo,
+        unit: nextSet?.unit || currentExUnit,
+        exerciseName: currentEx.exercise.name || '',
+        isNextExercise: false,
+      };
+    }
+
+    if (activeExerciseIdx + 1 < exercisesState.length) {
+      const nextExState = exercisesState[activeExerciseIdx + 1];
+      const nextSet = nextExState?.sets[0];
+      return {
+        setNumber: 1,
+        totalSets: nextExState?.sets.length || 3,
+        weightKg: nextSet?.weightKg ?? nextExState?.exercise.defaultWeightKg ?? 0,
+        reps: nextSet?.reps ?? nextExState?.exercise.targetRepsRange ?? 8,
+        rpe: nextSet?.rpe ?? nextExState?.exerciseRpe ?? nextExState?.exercise.targetRPE ?? 8,
+        rir: nextSet?.rir ?? nextExState?.exerciseRir ?? nextExState?.exercise.targetRIR ?? 2,
+        tempo: nextExState?.exercise.tempo || 'Standard',
+        unit: nextSet?.unit || nextExState?.exercise.unit || 'kg',
+        exerciseName: nextExState?.exercise.name || '',
+        isNextExercise: true,
+      };
+    }
+
+    return null;
+  })();
 
   // Next exercise in queue
   const nextExerciseInQueue = exercisesState[activeExerciseIdx + 1]?.exercise || null;
+
+  const activeDisplayInfo = {
+    label: 'Obecnie',
+    exerciseName: currentActiveEx?.name || 'Ćwiczenie',
+    setNumber: activeSetIdx + 1,
+    totalSets: currentExTotalSets,
+    weightKg: currentSetWeight,
+    reps: currentSetReps,
+    rpe: currentSetRpe,
+    rir: currentSetRir,
+    tempo: currentSetTempo,
+    unit: currentExUnit,
+    notes: currentActiveEx?.techniqueNotes,
+  };
 
   return (
     <>
@@ -997,7 +1053,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               className={`rounded-2xl p-3.5 sm:p-5 transition-all duration-300 shadow-2xl relative overflow-hidden ${
                 garminPhase === 'WORK'
                   ? 'bg-white text-zinc-950 border-4 border-neutral-300 ring-4 ring-white/20'
-                  : 'bg-black text-amber-400 border-2 border-neutral-800'
+                  : 'garmin-rest-card bg-[#f5efe6] text-[#2d231a] border-2 border-[#d6c2a0]'
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1007,8 +1063,8 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                     <span
                       className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
                         garminPhase === 'WORK'
-                          ? 'bg-black text-white'
-                          : 'bg-amber-400 text-black'
+                          ? 'bg-black text-zinc-50'
+                          : 'bg-amber-400 text-black garmin-rest-badge'
                       }`}
                     >
                       {garminPhase === 'WORK' ? '🔥 SERIA W TOKU (LAP)' : '☕ PRZERWA / ODPOCZYNEK'}
@@ -1016,7 +1072,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
                     <span
                       className={`text-xs font-bold ${
-                        garminPhase === 'WORK' ? 'text-zinc-700' : 'text-neutral-400'
+                        garminPhase === 'WORK' ? 'text-zinc-700' : 'text-[#6b5b49] garmin-rest-meta'
                       }`}
                     >
                       Ćwiczenie #{activeExerciseIdx + 1} z {exercisesState.length}
@@ -1030,7 +1086,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                       className={`text-base sm:text-lg font-black font-heading cursor-pointer leading-snug select-none transition-all ${
                         isExerciseNameExpanded ? 'break-words' : 'truncate max-w-[280px] sm:max-w-lg'
                       } ${
-                        garminPhase === 'WORK' ? 'text-zinc-950 hover:text-amber-600' : 'text-white hover:text-amber-400'
+                        garminPhase === 'WORK' ? 'text-zinc-950 hover:text-amber-600' : 'text-[#2d231a] hover:text-amber-700 garmin-rest-title'
                       }`}
                       title="Kliknij, aby rozwinąć/zwinąć pełną nazwę ćwiczenia"
                     >
@@ -1041,7 +1097,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                       type="button"
                       onClick={() => setIsExerciseNameExpanded(!isExerciseNameExpanded)}
                       className={`p-0.5 rounded transition-transform cursor-pointer shrink-0 mt-0.5 ${
-                        garminPhase === 'WORK' ? 'text-zinc-700 hover:text-black' : 'text-neutral-400 hover:text-white'
+                        garminPhase === 'WORK' ? 'text-zinc-700 hover:text-black' : 'text-[#6b5b49] hover:text-[#2d231a] garmin-rest-toggle'
                       }`}
                       title={isExerciseNameExpanded ? "Zwiń nazwę" : "Rozwiń pełną nazwę"}
                       aria-label="Rozwiń pełną nazwę ćwiczenia"
@@ -1056,23 +1112,27 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
                   <div
                     className={`text-xs font-medium ${
-                      garminPhase === 'WORK' ? 'text-zinc-600' : 'text-neutral-400'
+                      garminPhase === 'WORK' ? 'text-zinc-700' : 'text-neutral-300'
                     }`}
                   >
-                    Seria #{activeSetIdx + 1} z {currentActiveEx?.plannedSets || 3} • Cel:{' '}
-                    <strong className={garminPhase === 'WORK' ? 'text-zinc-950' : 'text-amber-300'}>
-                      {currentActiveSet?.weightKg ? `${currentActiveSet.weightKg} ${currentActiveSet.unit || 'kg'} × ` : ''}
-                      {currentActiveEx?.targetRepsRange || '8'} powt
-                    </strong>
-                    {currentActiveEx?.targetDistance && Number(currentActiveEx.targetDistance) > 0 ? (
-                      <span> • Dystans: {currentActiveEx.targetDistance} {currentActiveEx.distanceUnit || 'm'}</span>
-                    ) : null}
-                    {currentActiveEx?.targetPace && currentActiveEx.targetPace.trim() !== '' && currentActiveEx.targetPace.trim() !== '0' ? (
-                      <span> • Tempo: {currentActiveEx.targetPace}</span>
-                    ) : null}
-                    {currentActiveEx?.targetHR && Number(currentActiveEx.targetHR) > 0 ? (
-                      <span> • HR: {currentActiveEx.targetHR} bpm</span>
-                    ) : null}
+                    <div className="font-black uppercase tracking-[0.12em] text-[10px] mb-1 opacity-75">
+                      {activeDisplayInfo.label}
+                    </div>
+                    <div className="leading-5">
+                      <strong className={garminPhase === 'WORK' ? 'text-zinc-950' : 'text-[#8b5e1d] garmin-rest-body'}>
+                        {activeDisplayInfo.exerciseName}
+                      </strong>
+                      {' • '}seria {activeDisplayInfo.setNumber}/{activeDisplayInfo.totalSets}
+                      {' • '}{activeDisplayInfo.weightKg > 0 ? `${activeDisplayInfo.weightKg} ${activeDisplayInfo.unit} × ${activeDisplayInfo.reps} powt` : `${activeDisplayInfo.reps} powt`}
+                      {' • '}RPE {activeDisplayInfo.rpe}
+                      {' • '}RIR {activeDisplayInfo.rir}
+                      {' • '}tempo {activeDisplayInfo.tempo}
+                    </div>
+                    {activeDisplayInfo.notes && (
+                      <div className={`mt-1 text-[11px] leading-4 ${garminPhase === 'WORK' ? 'text-zinc-600' : 'text-[#5d493a] garmin-rest-note'}`}>
+                        {activeDisplayInfo.notes}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1081,13 +1141,13 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                   <div className="flex items-baseline gap-2 font-mono-numbers">
                     <span
                       className={`text-3xl sm:text-5xl font-black tracking-tight ${
-                        garminPhase === 'WORK' ? 'text-black' : 'text-amber-400'
+                        garminPhase === 'WORK' ? 'text-black' : 'text-[#b86a00] garmin-rest-timer'
                       }`}
                     >
                       {formatSessionTime(lapSeconds)}
                     </span>
                     {garminPhase === 'REST' && (
-                      <span className="text-xs text-neutral-400 font-sans">
+                      <span className="text-xs text-[#6b5b49] font-sans garmin-rest-meta">
                         / {formatSessionTime(targetRestSeconds)}
                       </span>
                     )}
@@ -1126,229 +1186,104 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                   type="button"
                   onClick={handleGarminLap}
                   className={`w-full min-h-[48px] sm:min-h-[52px] rounded-xl font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-[0.98] ${
-                    garminPhase === 'WORK'
-                      ? 'bg-black text-white hover:bg-neutral-800 shadow-black/30'
-                      : 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
+                    !hasWorkoutStarted
+                      ? 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
+                      : garminPhase === 'WORK'
+                        ? 'bg-black text-white hover:bg-neutral-800 shadow-black/30'
+                        : 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
                   }`}
                 >
                   <RotateCcw className="w-5 h-5 shrink-0" />
                   <span>
-                    {garminPhase === 'WORK'
-                      ? 'Zakończ Serię (LAP) & Start Przerwy'
-                      : 'Rozpocznij Serię (Wcześniej / LAP)'}
+                    {!hasWorkoutStarted
+                      ? 'Rozpocznij trening'
+                      : garminPhase === 'WORK'
+                        ? 'Zakończ Serię (LAP) & Start Przerwy'
+                        : 'Rozpocznij Serię (Wcześniej / LAP)'}
                   </span>
                 </button>
               </div>
             </div>
           </div>
 
-        {/* Flat View for Current and Next Set + Next Exercise in Queue */}
+        {/* Compact View for Current and Next Set + Next Exercise in Queue */}
         <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3.5 text-xs overscroll-contain">
-          {/* Exercise Stepper / Navigation Strip */}
-          <div className="flex items-center justify-between gap-2 px-1 text-xs">
-            <button
-              type="button"
-              disabled={activeExerciseIdx === 0}
-              onClick={() => {
-                setActiveExerciseIdx((prev) => Math.max(0, prev - 1));
-                setActiveSetIdx(0);
-              }}
-              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              ← Poprzednie ćw.
-            </button>
-
-            <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 font-heading">
-              Ćw. {activeExerciseIdx + 1} z {exercisesState.length}
-            </span>
-
-            <button
-              type="button"
-              disabled={activeExerciseIdx >= exercisesState.length - 1}
-              onClick={() => {
-                setActiveExerciseIdx((prev) => Math.min(exercisesState.length - 1, prev + 1));
-                setActiveSetIdx(0);
-              }}
-              className="px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-            >
-              Następne ćw. →
-            </button>
-          </div>
-
-          {/* 1. OBECNA SERIA (Current Active Set Card) */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-amber-400/50 shadow-lg space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-800/80">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-lg bg-amber-400 text-black font-black uppercase text-[10px] tracking-wider">
-                  Obecna Seria #{activeSetIdx + 1} z {currentExTotalSets}
-                </span>
-                <span className="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-xs">
-                  {currentActiveEx?.name}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggleSetComplete(activeExerciseIdx, activeSetIdx)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  currentActiveSet?.completed
-                    ? 'bg-emerald-500 text-black shadow-md'
-                    : 'bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>{currentActiveSet?.completed ? 'Zaliczona' : 'Zalicz'}</span>
-              </button>
-            </div>
-
-            {/* 4 Parametry Obecnej Serii: Ciężar, RPE, RIR, Tempo */}
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {/* Ciężar */}
-              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
-                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
-                  Ciężar ({currentExUnit})
-                </span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  step="any"
-                  min="0"
-                  value={currentSetWeight}
-                  onChange={(e) =>
-                    updateSet(activeExerciseIdx, activeSetIdx, 'weightKg', parseFloat(e.target.value) || 0)
-                  }
-                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-amber-400 text-sm font-mono-numbers focus:outline-none"
-                />
-              </div>
-
-              {/* RPE */}
-              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
-                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
-                  RPE
-                </span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  step="0.5"
-                  min="1"
-                  max="10"
-                  value={currentSetRpe}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 8;
-                    updateSet(activeExerciseIdx, activeSetIdx, 'rpe', val);
-                    updateExerciseRpe(activeExerciseIdx, val);
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-white text-sm font-mono-numbers focus:outline-none"
-                />
-              </div>
-
-              {/* RIR */}
-              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
-                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
-                  RIR
-                </span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  min="0"
-                  max="10"
-                  value={currentSetRir}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10) || 0;
-                    updateSet(activeExerciseIdx, activeSetIdx, 'rir', val);
-                    updateExerciseRir(activeExerciseIdx, val);
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-700 focus:border-amber-400 rounded-lg py-1 text-center font-black text-amber-300 text-sm font-mono-numbers focus:outline-none"
-                />
-              </div>
-
-              {/* Tempo */}
-              <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-2 flex flex-col justify-between">
-                <span className="text-[9px] uppercase font-bold text-neutral-400 block mb-1">
-                  Tempo
-                </span>
-                <div className="py-1 px-1 bg-neutral-950 border border-neutral-800 rounded-lg text-xs font-black text-neutral-200 truncate font-mono-numbers">
-                  {currentSetTempo}
+          {isWorkoutFinished && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 sm:p-4 shadow-lg">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-black text-emerald-300">Trening zakończony</div>
+                  <div className="mt-1 text-lg font-black text-white">Sesja: {formatSessionTime(sessionSeconds)}</div>
+                </div>
+                <div className="text-right text-[11px] text-emerald-200">
+                  <div>Serii: {totalCompletedSets}/{totalPlannedSets}</div>
+                  <div className="font-mono-numbers text-emerald-100">{totalSessionTonnage.toLocaleString()} kg</div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* 2. NASTĘPNA SERIA (Next Set Card) */}
-          {nextSetInfo ? (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950/80 border border-neutral-800/90 space-y-2.5">
-              <div className="flex items-center justify-between pb-1.5 border-b border-neutral-900">
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-neutral-900 text-neutral-400 border border-neutral-800">
-                    Następna Seria #{nextSetInfo.setNumber} {nextSetInfo.isNextExercise ? `• ${nextSetInfo.exerciseName}` : ''}
-                  </span>
-                </div>
-                <span className="text-[11px] text-neutral-400 font-mono-numbers">
-                  Cel: <strong className="text-white">{nextSetInfo.reps} powt</strong>
-                </span>
+              <div className="mt-3 text-[11px] text-emerald-100 border-t border-emerald-500/20 pt-2">
+                Dobra robota. Ostatnia seria została zaliczona — timer został zatrzymany i podsumowanie treningu jest zapisane.
               </div>
-
-              {/* 4 Parametry Następnej Serii: Ciężar, RPE, RIR, Tempo */}
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
-                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">Ciężar</span>
-                  <span className="font-extrabold text-white font-mono-numbers text-sm">
-                    {nextSetInfo.weightKg > 0 ? `${nextSetInfo.weightKg} ${nextSetInfo.unit}` : 'Ciało'}
-                  </span>
-                </div>
-
-                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
-                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">RPE</span>
-                  <span className="font-extrabold text-white font-mono-numbers text-sm">
-                    {nextSetInfo.rpe}
-                  </span>
-                </div>
-
-                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
-                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">RIR</span>
-                  <span className="font-extrabold text-amber-300 font-mono-numbers text-sm">
-                    {nextSetInfo.rir}
-                  </span>
-                </div>
-
-                <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-xl p-2">
-                  <span className="text-[9px] text-neutral-500 uppercase block font-semibold mb-0.5">Tempo</span>
-                  <span className="font-bold text-neutral-300 text-xs truncate block font-mono-numbers">
-                    {nextSetInfo.tempo}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-bold">
-              🔥 To ostatnia zaplanowana seria tego treningu! Daj z siebie wszystko!
             </div>
           )}
 
-          {/* 3. POD SPODEM: Mały tekst z nazwą następnego ćwiczenia */}
-          <div className="pt-2 px-1 flex items-center justify-between text-xs text-neutral-400 border-t border-neutral-900">
-            <div className="flex items-center gap-1.5 truncate">
-              <ArrowRight className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="text-neutral-500 uppercase text-[10px] font-bold tracking-wider shrink-0">
-                Następne ćwiczenie:
-              </span>
-              <span className="text-neutral-200 font-semibold truncate">
-                {nextExerciseInQueue ? nextExerciseInQueue.name : 'Brak (to ostatnie ćwiczenie w sesji)'}
-              </span>
-            </div>
-            {nextExerciseInQueue && (
-              <span className="text-[10px] text-amber-400 font-mono-numbers shrink-0 font-bold ml-2">
-                {nextExerciseInQueue.plannedSets} serie
-              </span>
-            )}
-          </div>
+          {!isWorkoutFinished && (
+            <>
+              {nextSetInfo ? (
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3.5">
+                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800">
+                    <div className="text-[10px] uppercase tracking-[0.14em] font-black text-amber-400">
+                      Następne do zrobienia
+                    </div>
+                    <div className="text-[10px] font-bold text-neutral-400 font-mono-numbers">
+                      Seria #{nextSetInfo.setNumber}
+                    </div>
+                  </div>
+
+                  <div className="mt-2 min-w-0">
+                    <div className="text-sm font-black text-white truncate">
+                      {nextSetInfo.exerciseName || currentActiveEx?.name || 'Ćwiczenie'}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      {nextSetInfo.isNextExercise ? 'Nowe ćwiczenie' : 'Kolejna seria w tym ćwiczeniu'}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
+                      {nextSetInfo.weightKg > 0 ? `${nextSetInfo.weightKg} ${nextSetInfo.unit}` : 'Ciało'}
+                    </span>
+                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
+                      {nextSetInfo.reps} powt
+                    </span>
+                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
+                      RPE {nextSetInfo.rpe}
+                    </span>
+                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
+                      RIR {nextSetInfo.rir}
+                    </span>
+                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-neutral-200">
+                      Tempo {nextSetInfo.tempo}
+                    </span>
+                  </div>
+
+                  {(nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes) && (
+                    <div className="mt-2 text-[11px] text-neutral-400 border-t border-neutral-800 pt-2 leading-4">
+                      {nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-bold">
+                  🔥 To ostatnia zaplanowana seria tego treningu! Daj z siebie wszystko!
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Bottom Bar: Action finish */}
-        <div className="p-4 sm:p-5 border-t border-neutral-800 bg-neutral-950/90 rounded-b-3xl shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="text-xs text-neutral-400">
+        <div className="p-3 border-t border-neutral-800 bg-neutral-950/90 rounded-b-3xl shrink-0 flex flex-col gap-2.5">
+          <div className="text-[11px] text-neutral-400 leading-relaxed">
             Zaliczono <strong>{totalCompletedSets}</strong> z <strong>{totalPlannedSets}</strong> serii •
             Tonaż: <strong className="text-amber-400 font-mono-numbers">{totalSessionTonnage.toLocaleString()} kg</strong> •
             Praca/Odpoczynek: <strong className="text-white font-mono-numbers">{formatSessionTime(totalWorkDurationSec)}</strong> / <strong className="text-amber-400 font-mono-numbers">{formatSessionTime(totalRestDurationSec)}</strong>
@@ -1357,17 +1292,17 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           <div className="flex items-center gap-2.5">
             <button
               onClick={() => setIsStatsModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold transition-colors cursor-pointer"
+              className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-bold transition-colors cursor-pointer"
             >
-              Statystyki Treningu
+              Statystyki
             </button>
 
             <button
               onClick={handleFinishAndSave}
-              className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-xs tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center gap-2"
+              className="flex-1 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-[11px] tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Zakończ i Zapisz Trening</span>
+              <span>Zakończ i Zapisz</span>
             </button>
           </div>
         </div>

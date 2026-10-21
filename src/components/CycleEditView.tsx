@@ -116,7 +116,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-20 max-w-xl mx-auto">
+    <div className="space-y-4 pb-20 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0">
       {/* View Header */}
       <div className="bg-neutral-900/90 border border-neutral-800 rounded-3xl p-4 sm:p-5 shadow-lg">
         <div className="flex items-center justify-between gap-2">
