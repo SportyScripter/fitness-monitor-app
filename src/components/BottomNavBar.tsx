@@ -50,7 +50,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
       style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}
       aria-label="Dolna nawigacja mobilna"
     >
-      <div className="max-w-md md:max-w-xl mx-auto px-2 pt-1.5 flex items-center justify-around gap-1">
+      <div className="w-full max-w-[1600px] mx-auto px-2 pt-1.5 flex items-center justify-around gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

@@ -5,9 +5,8 @@ import {
   ChevronDown,
   Timer,
   FileSpreadsheet,
-  LogOut,
-  Sparkles,
-  Layers
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { MesocyclePhase, TrainingCycleCatalog } from '../types/hyrox';
 
@@ -28,6 +27,8 @@ interface HeaderProps {
   isTimerOpen: boolean;
   onOpenCatalog: () => void;
   onOpenAddWeekModal: () => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -42,10 +43,18 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleTimer,
   isTimerOpen,
   onOpenCatalog,
+  theme,
+  onToggleTheme,
 }) => {
   return (
-    <header className="sticky top-0 z-30 bg-neutral-950/95 backdrop-blur-md border-b border-neutral-800 shadow-lg">
-      <div className="max-w-xl mx-auto px-3.5 py-2.5 space-y-2">
+    <header
+      className={`sticky top-0 z-30 backdrop-blur-md border-b shadow-lg transition-colors duration-300 ${
+        theme === 'dark'
+          ? 'bg-neutral-950/95 border-neutral-800'
+          : 'bg-[#f8f5f0]/95 border-[#e7dfd2] shadow-[0_10px_30px_rgba(87,66,31,0.08)]'
+      }`}
+    >
+      <div className="w-full max-w-[1600px] mx-auto px-3.5 py-2.5 space-y-2">
         {/* Row 1: Top Bar with Primary "Zarządzaj cyklami" Button + Quick Utilities */}
         <div className="flex items-center justify-between gap-2">
           {/* Main "Zarządzaj cyklami" Button (Large, prominent, mobile-first) */}
@@ -65,7 +74,9 @@ export const Header: React.FC<HeaderProps> = ({
             className={`px-3 py-2.5 rounded-2xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[44px] ${
               isTimerOpen
                 ? 'bg-amber-400/20 text-amber-300 border-amber-400/50 shadow-sm'
-                : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                : theme === 'dark'
+                  ? 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+                  : 'bg-[#fffaf2] text-neutral-700 border-[#eadfc7] hover:border-[#d6c2a0]'
             }`}
             title="Stoper przerw treningowych"
           >
@@ -74,6 +85,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Google Sheets / Auth Quick Button */}
+          <button
+            onClick={onToggleTheme}
+            className={`p-2.5 rounded-2xl border transition-all cursor-pointer touch-manipulation min-h-[44px] ${
+              theme === 'dark'
+                ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white'
+                : 'bg-[#fffaf2] border-[#eadfc7] text-neutral-700 hover:text-neutral-900'
+            }`}
+            title={theme === 'dark' ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
+            aria-label="Przełącz motyw"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-amber-600" />}
+          </button>
+
           {user ? (
             <button
               onClick={onOpenSheetsModal}
@@ -94,7 +118,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Row 2: Quick Dropdown for Active Training Cycle Selection */}
-        <div className="relative bg-neutral-900 border border-amber-400/40 hover:border-amber-400 rounded-2xl px-3 py-1.5 shadow-sm transition-colors">
+        <div className={`relative rounded-2xl px-3 py-1.5 shadow-sm transition-colors border ${
+          theme === 'dark'
+            ? 'bg-neutral-900 border-amber-400/40 hover:border-amber-400'
+            : 'bg-[#fffaf2] border-[#e6d8ba] hover:border-[#d9b977]'
+        }`}>
           <div className="flex items-center justify-between pointer-events-none">
             <div className="flex items-center gap-2 truncate pr-6">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />

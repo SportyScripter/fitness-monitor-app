@@ -276,7 +276,7 @@ export const HyroxRaceSimulator: React.FC<HyroxRaceSimulatorProps> = ({
           </div>
 
           {/* Current Stage Indicator */}
-          <div className="max-w-xl mx-auto my-6 p-4 rounded-2xl bg-neutral-900/90 border border-neutral-700/80 shadow-lg text-left">
+          <div className="w-full max-w-xl mx-auto my-6 p-4 rounded-2xl bg-neutral-900/90 border border-neutral-700/80 shadow-lg text-left lg:max-w-none">
             <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
               <span className="uppercase font-bold text-amber-400">
                 Aktualny Segment ({Math.min(currentStageIndex + 1, stages.length)} / {stages.length})

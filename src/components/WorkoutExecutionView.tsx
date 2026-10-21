@@ -194,7 +194,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   };
 
   return (
-    <div className="space-y-4 pb-24 max-w-xl mx-auto">
+    <div className="space-y-4 pb-24 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0">
       {/* Week Header info with quick change */}
       <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-4 shadow-lg">
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -212,6 +212,42 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
               Deload
             </span>
           )}
+        </div>
+
+        <div className="pt-2 border-t border-neutral-800/80">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] uppercase font-bold text-neutral-400 tracking-wider">
+              Wybierz tydzień
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {weeksList.map((week) => {
+              const isCurrent = week.week === currentWeek;
+              return (
+                <button
+                  key={week.week}
+                  onClick={() => onWeekChange(week.week)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[42px] ${
+                    isCurrent
+                      ? 'bg-amber-400 text-black font-black shadow-md shadow-amber-400/20 ring-2 ring-amber-300'
+                      : 'bg-neutral-950 text-neutral-300 border border-neutral-800 hover:bg-neutral-800'
+                  }`}
+                >
+                  <span>Tydzień {week.week}</span>
+                  {week.isDeload && (
+                    <span
+                      className={`text-[9px] px-1 py-0.2 rounded font-black ${
+                        isCurrent ? 'bg-black text-amber-400' : 'bg-blue-500/20 text-blue-300'
+                      }`}
+                    >
+                      Deload
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Day Selector Strip - Big tactile buttons with completion status */}
