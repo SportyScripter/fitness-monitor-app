@@ -19,8 +19,8 @@ import {
   Flame,
   Zap
 } from 'lucide-react';
-import { WorkoutDay, Exercise, MuscleGroup, DayType, ExerciseType, ExerciseUnit } from '../types/hyrox';
-import { EXERCISE_CATALOG, CatalogExerciseItem } from '../data/exerciseCatalog';
+import { WorkoutDay, Exercise, MuscleGroup, DayType, ExerciseType, ExerciseUnit } from '../../types/hyrox';
+import { EXERCISE_CATALOG, CatalogExerciseItem } from '../../data/exerciseCatalog';
 
 interface DayEditorModalProps {
   day: WorkoutDay;

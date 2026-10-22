@@ -28,7 +28,7 @@ import {
   TrainingCycleCatalog,
   TrainingCycleGoal,
   WorkoutDay
-} from '../types/hyrox';
+} from '../../types/hyrox';
 
 interface TrainingCatalogSidebarProps {
   isOpen: boolean;

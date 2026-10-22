@@ -42,14 +42,14 @@ import {
   SessionActivityType,
   ExerciseType,
   ExerciseUnit
-} from '../types/hyrox';
-import { MESOCYCLE_WEEKS } from '../data/hyroxPlanData';
-import { EXERCISE_CATALOG, CatalogExerciseItem } from '../data/exerciseCatalog';
+} from '../../types/hyrox';
+import { MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
+import { EXERCISE_CATALOG, CatalogExerciseItem } from '../../data/exerciseCatalog';
 import { ExerciseChartModal } from './ExerciseChartModal';
 import { WorkoutSummaryStatsModal } from './WorkoutSummaryStatsModal';
 import { PreviousWorkoutModal } from './PreviousWorkoutModal';
-import { playGarminRestFinishBeep, playGarminLapClick } from '../utils/audioAlert';
-import { getLocalDateString, extractLogDate, compareLogsDescending } from '../utils/dateUtils';
+import { playGarminRestFinishBeep, playGarminLapClick } from '../../utils/audioAlert';
+import { getLocalDateString, extractLogDate, compareLogsDescending } from '../../utils/dateUtils';
 
 interface WorkoutLoggerModalProps {
   day: WorkoutDay;

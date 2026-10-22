@@ -8,8 +8,8 @@ import {
   Moon,
   Sun,
 } from 'lucide-react';
-import { MesocyclePhase, TrainingCycleCatalog } from '../types/hyrox';
-import { useScrollDirection } from '../hooks/useScrollDirection';
+import { MesocyclePhase, TrainingCycleCatalog } from '../../types/hyrox';
+import { useScrollDirection } from '../../hooks/useScrollDirection';
 
 interface HeaderProps {
   activeCycle: TrainingCycleCatalog;

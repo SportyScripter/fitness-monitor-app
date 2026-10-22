@@ -18,8 +18,8 @@ import {
   ExerciseType,
   ExerciseUnit,
   ExercisePlannedSet
-} from '../types/hyrox';
-import { EXERCISE_CATALOG, CatalogExerciseItem } from '../data/exerciseCatalog';
+} from '../../types/hyrox';
+import { EXERCISE_CATALOG, CatalogExerciseItem } from '../../data/exerciseCatalog';
 
 interface ExerciseEditModalProps {
   isOpen: boolean;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sliders, Dumbbell, Calendar, LayoutGrid } from 'lucide-react';
-import { useScrollDirection } from '../hooks/useScrollDirection';
+import { useScrollDirection } from '../../hooks/useScrollDirection';
 
 export type MainNavTab = 'edit' | 'workout' | 'calendar' | 'more';
 

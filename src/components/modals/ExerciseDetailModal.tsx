@@ -21,7 +21,7 @@ import {
   RotateCcw,
   Copy
 } from 'lucide-react';
-import { Exercise, WorkoutDay, WorkoutLogEntry, ExerciseSet, ExerciseUnit } from '../types/hyrox';
+import { Exercise, WorkoutDay, WorkoutLogEntry, ExerciseSet, ExerciseUnit } from '../../types/hyrox';
 
 interface ExerciseDetailModalProps {
   exercise: Exercise;

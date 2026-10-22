@@ -25,13 +25,13 @@ import {
   TrainingCycleCatalog,
   WorkoutDay,
   MesocyclePhase
-} from '../types/hyrox';
+} from '../../types/hyrox';
 import { VolumeMatrixView } from './VolumeMatrixView';
-import { HyroxRaceSimulator } from './HyroxRaceSimulator';
+import { HyroxRaceSimulator } from '../features/HyroxRaceSimulator';
 import { Progression1RMView } from './Progression1RMView';
 import { RecoveryTrackerView } from './RecoveryTrackerView';
 import { SummaryCalendarView } from './SummaryCalendarView';
-import { MeasurementsView } from './measurements/MeasurementsView';
+import { MeasurementsView } from '../measurements/MeasurementsView';
 
 export type MoreSubView = 'strava' | 'volume' | 'hyrox' | 'progression' | 'recovery' | 'measurements' | null;
 

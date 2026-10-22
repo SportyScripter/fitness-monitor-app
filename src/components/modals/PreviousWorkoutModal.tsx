@@ -8,7 +8,7 @@ import {
   TrendingUp,
   FileText
 } from 'lucide-react';
-import { WorkoutLogEntry } from '../types/hyrox';
+import { WorkoutLogEntry } from '../../types/hyrox';
 
 interface PreviousWorkoutModalProps {
   workoutTitle: string;

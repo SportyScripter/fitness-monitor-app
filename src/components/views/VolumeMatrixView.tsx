@@ -9,8 +9,8 @@ import {
   Info,
   Calendar
 } from 'lucide-react';
-import { MuscleGroup, WorkoutLogEntry, WorkoutDay } from '../types/hyrox';
-import { MUSCLE_GROUP_VOLUME_TARGETS, MASTER_HYROX_WEEK_PLAN, MESOCYCLE_WEEKS } from '../data/hyroxPlanData';
+import { MuscleGroup, WorkoutLogEntry, WorkoutDay } from '../../types/hyrox';
+import { MUSCLE_GROUP_VOLUME_TARGETS, MASTER_HYROX_WEEK_PLAN, MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
 
 interface VolumeMatrixViewProps {
   currentWeek: number;

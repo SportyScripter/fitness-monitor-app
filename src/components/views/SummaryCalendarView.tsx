@@ -21,8 +21,8 @@ import {
   Sparkles,
   Info
 } from 'lucide-react';
-import { WorkoutLogEntry, SessionActivityType, MuscleGroup } from '../types/hyrox';
-import { AddFreeWorkoutModal } from './AddFreeWorkoutModal';
+import { WorkoutLogEntry, SessionActivityType, MuscleGroup } from '../../types/hyrox';
+import { AddFreeWorkoutModal } from '../modals/AddFreeWorkoutModal';
 
 interface SummaryCalendarViewProps {
   workoutLogs: WorkoutLogEntry[];

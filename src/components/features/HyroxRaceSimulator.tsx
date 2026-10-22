@@ -15,8 +15,8 @@ import {
   ShieldCheck,
   AlertCircle
 } from 'lucide-react';
-import { HYROX_OFFICIAL_STATIONS } from '../data/hyroxPlanData';
-import { HyroxRaceTrial, HyroxRaceTrialSplit } from '../types/hyrox';
+import { HYROX_OFFICIAL_STATIONS } from '../../data/hyroxPlanData';
+import { HyroxRaceTrial, HyroxRaceTrialSplit } from '../../types/hyrox';
 
 interface HyroxRaceSimulatorProps {
   onSaveTrial: (trial: HyroxRaceTrial) => void;

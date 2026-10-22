@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Calendar, Clock, Layers, Sparkles } from 'lucide-react';
-import { WorkoutDay, DayType } from '../types/hyrox';
+import { WorkoutDay, DayType } from '../../types/hyrox';
 
 interface DaySettingsModalProps {
   day: WorkoutDay;

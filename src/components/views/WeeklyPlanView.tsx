@@ -25,13 +25,13 @@ import {
   BarChart3,
   Target
 } from 'lucide-react';
-import { WorkoutDay, DayType, Exercise, WorkoutLogEntry, TrainingCycleCatalog, ExerciseUnit } from '../types/hyrox';
-import { MESOCYCLE_WEEKS } from '../data/hyroxPlanData';
-import { DayEditorModal } from './DayEditorModal';
-import { CopyWorkoutModal } from './CopyWorkoutModal';
-import { ExerciseChartModal } from './ExerciseChartModal';
-import { PreviousWorkoutModal } from './PreviousWorkoutModal';
-import { ExerciseDetailModal } from './ExerciseDetailModal';
+import { WorkoutDay, DayType, Exercise, WorkoutLogEntry, TrainingCycleCatalog, ExerciseUnit } from '../../types/hyrox';
+import { MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
+import { DayEditorModal } from '../modals/DayEditorModal';
+import { CopyWorkoutModal } from '../modals/CopyWorkoutModal';
+import { ExerciseChartModal } from '../modals/ExerciseChartModal';
+import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
+import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
 
 interface WeeklyPlanViewProps {
   activeCycle: TrainingCycleCatalog;

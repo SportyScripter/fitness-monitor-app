@@ -12,7 +12,7 @@ import {
   Clock,
   Zap
 } from 'lucide-react';
-import { WorkoutLogEntry, DailyRecoveryData } from '../types/hyrox';
+import { WorkoutLogEntry, DailyRecoveryData } from '../../types/hyrox';
 
 interface ContributionHeatmapProps {
   workoutLogs: WorkoutLogEntry[];

@@ -11,8 +11,8 @@ import {
   Info,
   Calendar
 } from 'lucide-react';
-import { DailyRecoveryData, WorkoutLogEntry } from '../types/hyrox';
-import { ContributionHeatmap } from './ContributionHeatmap';
+import { DailyRecoveryData, WorkoutLogEntry } from '../../types/hyrox';
+import { ContributionHeatmap } from '../features/ContributionHeatmap';
 
 interface RecoveryTrackerViewProps {
   workoutLogs: WorkoutLogEntry[];

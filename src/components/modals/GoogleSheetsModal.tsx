@@ -13,8 +13,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ConfirmationModal } from './ConfirmationModal';
-import { createHyroxMasterSpreadsheet, appendWorkoutLogsToSheet } from '../services/sheets';
-import { WorkoutLogEntry } from '../types/hyrox';
+import { createHyroxMasterSpreadsheet, appendWorkoutLogsToSheet } from '../../services/sheets';
+import { WorkoutLogEntry } from '../../types/hyrox';
 
 interface GoogleSheetsModalProps {
   isOpen: boolean;

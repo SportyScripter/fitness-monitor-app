@@ -23,10 +23,10 @@ import {
   MesocyclePhase,
   WorkoutLogEntry,
   ExerciseUnit
-} from '../types/hyrox';
-import { ExerciseChartModal } from './ExerciseChartModal';
-import { PreviousWorkoutModal } from './PreviousWorkoutModal';
-import { ExerciseDetailModal } from './ExerciseDetailModal';
+} from '../../types/hyrox';
+import { ExerciseChartModal } from '../modals/ExerciseChartModal';
+import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
+import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
 
 interface WorkoutExecutionViewProps {
   activeCycle: TrainingCycleCatalog;

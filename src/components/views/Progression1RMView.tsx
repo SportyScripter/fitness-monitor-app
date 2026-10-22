@@ -17,8 +17,8 @@ import {
   Activity,
   Dumbbell
 } from 'lucide-react';
-import { RPE_RIR_SCALE_REFERENCE, MESOCYCLE_WEEKS } from '../data/hyroxPlanData';
-import { WorkoutLogEntry, MesocyclePhase, WorkoutDay, MuscleGroup } from '../types/hyrox';
+import { RPE_RIR_SCALE_REFERENCE, MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
+import { WorkoutLogEntry, MesocyclePhase, WorkoutDay, MuscleGroup } from '../../types/hyrox';
 
 interface Progression1RMViewProps {
   currentWeek: number;

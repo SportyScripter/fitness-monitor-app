@@ -12,8 +12,8 @@ import {
   FilePlus2,
   Dumbbell
 } from 'lucide-react';
-import { MesocyclePhase, WorkoutDay } from '../types/hyrox';
-import { MASTER_HYROX_WEEK_PLAN } from '../data/hyroxPlanData';
+import { MesocyclePhase, WorkoutDay } from '../../types/hyrox';
+import { MASTER_HYROX_WEEK_PLAN } from '../../data/hyroxPlanData';
 
 interface AddWeekModalProps {
   isOpen: boolean;

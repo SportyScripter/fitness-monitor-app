@@ -17,11 +17,11 @@ import {
   TrendingUp,
   Info
 } from 'lucide-react';
-import { WorkoutDay, Exercise, TrainingCycleCatalog, MesocyclePhase, WorkoutLogEntry } from '../types/hyrox';
-import { DaySettingsModal } from './DaySettingsModal';
-import { ExerciseEditModal } from './ExerciseEditModal';
-import { CopyWorkoutModal } from './CopyWorkoutModal';
-import { ExerciseChartModal } from './ExerciseChartModal';
+import { WorkoutDay, Exercise, TrainingCycleCatalog, MesocyclePhase, WorkoutLogEntry } from '../../types/hyrox';
+import { DaySettingsModal } from '../modals/DaySettingsModal';
+import { ExerciseEditModal } from '../modals/ExerciseEditModal';
+import { CopyWorkoutModal } from '../modals/CopyWorkoutModal';
+import { ExerciseChartModal } from '../modals/ExerciseChartModal';
 
 interface CycleEditViewProps {
   activeCycle: TrainingCycleCatalog;

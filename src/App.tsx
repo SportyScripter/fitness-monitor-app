@@ -5,22 +5,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
-import { Header } from './components/Header';
-import { BottomNavBar, MainNavTab } from './components/BottomNavBar';
-import { CycleEditView } from './components/CycleEditView';
-import { WorkoutExecutionView } from './components/WorkoutExecutionView';
-import { MoreMenuView, MoreSubView } from './components/MoreMenuView';
-import { WeeklyPlanView } from './components/WeeklyPlanView';
-import { VolumeMatrixView } from './components/VolumeMatrixView';
-import { HyroxRaceSimulator } from './components/HyroxRaceSimulator';
-import { Progression1RMView } from './components/Progression1RMView';
-import { RecoveryTrackerView } from './components/RecoveryTrackerView';
-import { WorkoutLoggerModal } from './components/WorkoutLoggerModal';
-import { GoogleSheetsModal } from './components/GoogleSheetsModal';
-import { RestTimer } from './components/RestTimer';
-import { TrainingCatalogSidebar } from './components/TrainingCatalogSidebar';
-import { AddWeekModal } from './components/AddWeekModal';
-import { SummaryCalendarView } from './components/SummaryCalendarView';
+import { Header } from './components/layout/Header';
+import { BottomNavBar, MainNavTab } from './components/layout/BottomNavBar';
+import { CycleEditView } from './components/views/CycleEditView';
+import { WorkoutExecutionView } from './components/views/WorkoutExecutionView';
+import { MoreMenuView, MoreSubView } from './components/views/MoreMenuView';
+import { WeeklyPlanView } from './components/views/WeeklyPlanView';
+import { VolumeMatrixView } from './components/views/VolumeMatrixView';
+import { HyroxRaceSimulator } from './components/features/HyroxRaceSimulator';
+import { Progression1RMView } from './components/views/Progression1RMView';
+import { RecoveryTrackerView } from './components/views/RecoveryTrackerView';
+import { WorkoutLoggerModal } from './components/modals/WorkoutLoggerModal';
+import { GoogleSheetsModal } from './components/modals/GoogleSheetsModal';
+import { RestTimer } from './components/features/RestTimer';
+import { TrainingCatalogSidebar } from './components/layout/TrainingCatalogSidebar';
+import { AddWeekModal } from './components/modals/AddWeekModal';
+import { SummaryCalendarView } from './components/views/SummaryCalendarView';
 import { initAuth, googleSignIn, logout } from './services/auth';
 import { appendHyroxTrialToSheet } from './services/sheets';
 import {

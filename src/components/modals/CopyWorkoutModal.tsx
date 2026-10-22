@@ -9,7 +9,7 @@ import {
   TrendingUp,
   Sparkles
 } from 'lucide-react';
-import { WorkoutDay, Exercise } from '../types/hyrox';
+import { WorkoutDay, Exercise } from '../../types/hyrox';
 
 interface CopyWorkoutModalProps {
   sourceDay: WorkoutDay;

@@ -14,7 +14,7 @@ import {
   Flame,
   HeartPulse
 } from 'lucide-react';
-import { WorkoutDay, ExerciseSet } from '../types/hyrox';
+import { WorkoutDay, ExerciseSet } from '../../types/hyrox';
 
 interface ActiveExerciseStats {
   exerciseName: string;

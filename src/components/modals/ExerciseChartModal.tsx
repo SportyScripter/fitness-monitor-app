@@ -10,7 +10,7 @@ import {
   ArrowUpRight,
   Info
 } from 'lucide-react';
-import { WorkoutLogEntry } from '../types/hyrox';
+import { WorkoutLogEntry } from '../../types/hyrox';
 
 interface ExerciseChartModalProps {
   exerciseName: string;

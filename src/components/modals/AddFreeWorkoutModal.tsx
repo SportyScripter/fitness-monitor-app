@@ -19,7 +19,7 @@ import {
   WorkoutLogEntry,
   SessionActivityType,
   MuscleGroup
-} from '../types/hyrox';
+} from '../../types/hyrox';
 
 interface AddFreeWorkoutModalProps {
   isOpen: boolean;
