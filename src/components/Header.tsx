@@ -9,6 +9,7 @@ import {
   Sun,
 } from 'lucide-react';
 import { MesocyclePhase, TrainingCycleCatalog } from '../types/hyrox';
+import { useScrollDirection } from '../hooks/useScrollDirection';
 
 interface HeaderProps {
   activeCycle: TrainingCycleCatalog;
@@ -46,9 +47,14 @@ export const Header: React.FC<HeaderProps> = ({
   theme,
   onToggleTheme,
 }) => {
+  const scrollDirection = useScrollDirection({ threshold: 10 });
+  const isHidden = scrollDirection === 'down';
+
   return (
     <header
-      className={`sticky top-0 z-30 backdrop-blur-md border-b shadow-lg transition-colors duration-300 ${
+      className={`sticky top-0 z-50 transform transition-transform duration-300 backdrop-blur-md border-b shadow-lg ${
+        isHidden ? '-translate-y-full' : 'translate-y-0'
+      } ${
         theme === 'dark'
           ? 'bg-neutral-950/95 border-neutral-800'
           : 'bg-[#f8f5f0]/95 border-[#e7dfd2] shadow-[0_10px_30px_rgba(87,66,31,0.08)]'

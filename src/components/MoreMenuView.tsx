@@ -14,7 +14,8 @@ import {
   BarChart3,
   Calendar,
   LogOut,
-  Dumbbell
+  Dumbbell,
+  Scale
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import {
@@ -30,8 +31,9 @@ import { HyroxRaceSimulator } from './HyroxRaceSimulator';
 import { Progression1RMView } from './Progression1RMView';
 import { RecoveryTrackerView } from './RecoveryTrackerView';
 import { SummaryCalendarView } from './SummaryCalendarView';
+import { MeasurementsView } from './measurements/MeasurementsView';
 
-export type MoreSubView = 'strava' | 'volume' | 'hyrox' | 'progression' | 'recovery' | null;
+export type MoreSubView = 'strava' | 'volume' | 'hyrox' | 'progression' | 'recovery' | 'measurements' | null;
 
 interface MoreMenuViewProps {
   currentWeek: number;
@@ -83,6 +85,14 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
   // Navigation menu items
   const menuItems = [
     {
+      id: 'measurements' as MoreSubView,
+      title: 'Pomiary i Sylwetka',
+      subtitle: 'Waga, obwody ciała, fałdomierz Jackson-Pollock, BF%, kalkulator BMR/TDEE',
+      icon: Scale,
+      color: 'bg-amber-400/10 text-amber-400 border-amber-400/20',
+      badge: 'BF% & Dieta',
+    },
+    {
       id: 'strava' as MoreSubView,
       title: 'Podsumowanie Strava',
       subtitle: 'Kalendarz aktywności, dystanse biegowe, łączny tonaż i czas',
@@ -123,6 +133,11 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
       badge: 'Gotowość 0-100',
     },
   ];
+
+  // If subView is measurements, render the dedicated module with its own sticky header
+  if (subView === 'measurements') {
+    return <MeasurementsView onBackToMenu={() => onSubViewChange(null)} />;
+  }
 
   // If subView is active, render the dedicated module view with top back bar
   if (subView) {
