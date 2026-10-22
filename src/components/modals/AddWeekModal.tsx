@@ -159,8 +159,8 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain">
-      <div className="w-full max-w-xl bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] my-auto overflow-hidden text-left relative animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+      <div className="w-full max-w-xl bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col h-[95dvh] max-h-[95dvh] mx-auto overflow-hidden text-left relative animate-in fade-in zoom-in-95">
         {/* Modal Header (Fixed at top) */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-800 bg-neutral-950/90 shrink-0">
           <div className="flex items-center gap-3">
@@ -185,11 +185,11 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Form Body (Smooth Mobile Scrolling with pb-28 to clear bottom nav) */}
+        {/* Scrollable Form Body */}
         <form
           id="add-week-form"
           onSubmit={handleSubmit}
-          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-28 space-y-4 text-xs overscroll-contain touch-pan-y"
+          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-12 space-y-4 text-xs overscroll-contain touch-pan-y"
         >
           {/* Week Info */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -501,31 +501,30 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
               </div>
             )}
           </div>
-        </form>
 
-        {/* Modal Footer (Fixed at bottom) */}
-        <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-neutral-800 bg-neutral-950/90 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-bold transition-colors cursor-pointer"
-          >
-            Anuluj
-          </button>
-          <button
-            type="submit"
-            form="add-week-form"
-            disabled={!isMultiplierValid}
-            className={`px-5 py-2.5 rounded-xl text-black text-xs font-black transition-all flex items-center gap-2 shadow-lg ${
-              isMultiplierValid
-                ? 'bg-amber-400 hover:bg-amber-300 shadow-amber-400/20 cursor-pointer'
-                : 'bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed opacity-50'
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span>Dodaj Tydzień {weekNumber}</span>
-          </button>
-        </div>
+          {/* Modal Footer inside scrollable form */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+            >
+              Anuluj
+            </button>
+            <button
+              type="submit"
+              disabled={!isMultiplierValid}
+              className={`px-5 py-2.5 rounded-xl text-black text-xs font-black transition-all flex items-center gap-2 shadow-lg ${
+                isMultiplierValid
+                  ? 'bg-amber-400 hover:bg-amber-300 shadow-amber-400/20 cursor-pointer'
+                  : 'bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed opacity-50'
+              }`}
+            >
+              <Plus className="w-4 h-4" />
+              <span>Dodaj Tydzień {weekNumber}</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

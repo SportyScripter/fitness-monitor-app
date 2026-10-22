@@ -164,10 +164,10 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md">
-        <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden relative text-left">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+        <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] shadow-2xl flex flex-col overflow-hidden relative text-left">
           {/* Header */}
-          <div className="flex items-center justify-between p-5 sm:p-6 border-b border-neutral-800 bg-neutral-950/70">
+          <div className="flex items-center justify-between p-5 sm:p-6 border-b border-neutral-800 bg-neutral-950/70 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold">
                 <FileSpreadsheet className="w-5 h-5" />
@@ -190,7 +190,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
             </button>
           </div>
 
-          <div className="p-5 sm:p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          <div className="p-5 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {/* Status message */}
             {statusMessage && (
               <div

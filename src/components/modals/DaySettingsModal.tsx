@@ -90,10 +90,10 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-sm flex justify-center items-center p-3 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm overflow-hidden">
+      <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-lg h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/70">
+        <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/70 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-amber-400 text-black flex items-center justify-center font-black shadow-md shadow-amber-400/20">
               <Calendar className="w-5 h-5" />
@@ -118,8 +118,8 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Form Body with pb-28 to clear mobile bottom navigation bar */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 pb-28 space-y-4 text-xs">
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 pb-12 space-y-4 text-xs flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {/* 1. Etykieta Dnia (Dzień tygodnia) */}
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase font-bold text-neutral-300 block">
@@ -130,7 +130,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
               value={dayNamePolish}
               onChange={(e) => setDayNamePolish(e.target.value)}
               placeholder="np. Poniedziałek, Dzień 1"
-              className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-amber-400"
+              className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
               required
             />
             {/* Quick Chips */}
@@ -199,7 +199,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="np. Góra Ciała (Klatka, Plecy, Barki)"
-              className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-amber-400"
+              className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
               required
             />
           </div>
@@ -214,7 +214,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
               value={subtitle}
               onChange={(e) => setSubtitle(e.target.value)}
               placeholder="np. Wyciskanie leżąc, podciąganie nachwytem, tempo 3-0-1-0"
-              className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-400"
+              className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
             />
           </div>
 
@@ -231,12 +231,12 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
               min="1"
               value={durationMinutes}
               onChange={(e) => setDurationMinutes(parseInt(e.target.value, 10) || 60)}
-              className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-white font-bold text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+              className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
             />
           </div>
 
-          {/* Footer Actions */}
-          <div className="pt-3 border-t border-neutral-800 flex items-center justify-end gap-2.5">
+          {/* Footer Actions inside scrollable form */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}

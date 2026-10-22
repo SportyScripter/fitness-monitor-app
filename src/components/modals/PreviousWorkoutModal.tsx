@@ -58,8 +58,8 @@ export const PreviousWorkoutModal: React.FC<PreviousWorkoutModalProps> = ({
   const sessionNote = previousLogs.find((l) => l.sessionNotes)?.sessionNotes;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain animate-in fade-in duration-200">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-2xl shadow-2xl p-4 sm:p-6 text-left relative space-y-4 sm:space-y-5 flex flex-col max-h-[92dvh] sm:max-h-[90vh] my-auto overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] shadow-2xl p-4 sm:p-6 text-left relative space-y-4 sm:space-y-5 flex flex-col mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-3">

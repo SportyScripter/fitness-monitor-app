@@ -311,8 +311,8 @@ interface ExerciseDetailSetItem {
   const latestMaxWeight = Math.max(...latestSets.map((s) => s.weightKg), 0);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain animate-in fade-in duration-200">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl p-4 sm:p-6 text-left relative space-y-4 my-auto overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-3xl h-[95dvh] max-h-[95dvh] shadow-2xl p-4 sm:p-6 text-left relative space-y-4 mx-auto overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-3">
@@ -456,7 +456,7 @@ interface ExerciseDetailSetItem {
                         type="date"
                         value={selectedLogDate}
                         onChange={(e) => setSelectedLogDate(e.target.value)}
-                        className="bg-neutral-900 border border-neutral-700 text-white rounded-lg px-2.5 py-1 text-xs font-mono font-bold focus:outline-none focus:border-amber-400 cursor-pointer"
+                        className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -504,7 +504,7 @@ interface ExerciseDetailSetItem {
                                 min="0"
                                 value={set.weightKg}
                                 onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
-                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </td>
 
@@ -517,7 +517,7 @@ interface ExerciseDetailSetItem {
                                 min="1"
                                 value={set.reps}
                                 onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
-                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </td>
 
@@ -531,7 +531,7 @@ interface ExerciseDetailSetItem {
                                 max="10"
                                 value={set.rir !== undefined ? set.rir : 2}
                                 onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
-                                className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-amber-300 text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                                className="w-full bg-white text-amber-600 dark:text-amber-300 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </td>
 
@@ -588,7 +588,7 @@ interface ExerciseDetailSetItem {
                     value={exerciseNotes}
                     onChange={(e) => setExerciseNotes(e.target.value)}
                     placeholder="np. Poszło lekko z zapasem 2 RIR, za tydzień +2.5kg"
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-white text-xs"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
 
@@ -715,7 +715,7 @@ interface ExerciseDetailSetItem {
                     type="number"
                     value={planPlannedSets}
                     onChange={(e) => setPlanPlannedSets(parseInt(e.target.value) || 1)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -725,7 +725,7 @@ interface ExerciseDetailSetItem {
                     type="text"
                     value={planTargetReps}
                     onChange={(e) => setPlanTargetReps(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -736,7 +736,7 @@ interface ExerciseDetailSetItem {
                     step="2.5"
                     value={planWeight}
                     onChange={(e) => setPlanWeight(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -745,7 +745,7 @@ interface ExerciseDetailSetItem {
                   <select
                     value={planUnit}
                     onChange={(e) => setPlanUnit(e.target.value as ExerciseUnit)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-bold cursor-pointer"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   >
                     <option value="kg">kg</option>
                     <option value="lb">lb</option>
@@ -762,7 +762,7 @@ interface ExerciseDetailSetItem {
                     type="number"
                     value={planRestSec}
                     onChange={(e) => setPlanRestSec(parseInt(e.target.value) || 90)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -772,7 +772,7 @@ interface ExerciseDetailSetItem {
                     type="number"
                     value={planRestAfterExSec}
                     onChange={(e) => setPlanRestAfterExSec(parseInt(e.target.value) || 120)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -783,7 +783,7 @@ interface ExerciseDetailSetItem {
                     value={planTempo}
                     onChange={(e) => setPlanTempo(e.target.value)}
                     placeholder="Opcjonalne"
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
               </div>
@@ -797,7 +797,7 @@ interface ExerciseDetailSetItem {
                       value={planTargetPace}
                       onChange={(e) => setPlanTargetPace(e.target.value)}
                       placeholder="np. 4:30 min/km"
-                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                     />
                   </div>
 
@@ -808,7 +808,7 @@ interface ExerciseDetailSetItem {
                       value={planTargetHR}
                       onChange={(e) => setPlanTargetHR(e.target.value)}
                       placeholder="np. 165"
-                      className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-white font-mono-numbers"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                     />
                   </div>
                 </div>
@@ -821,7 +821,7 @@ interface ExerciseDetailSetItem {
                     rows={2}
                     value={planTechnique}
                     onChange={(e) => setPlanTechnique(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2.5 py-1.5 text-white text-xs"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
 
@@ -831,7 +831,7 @@ interface ExerciseDetailSetItem {
                     type="text"
                     value={planRelevance}
                     onChange={(e) => setPlanRelevance(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-2.5 py-1.5 text-white text-xs"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
               </div>

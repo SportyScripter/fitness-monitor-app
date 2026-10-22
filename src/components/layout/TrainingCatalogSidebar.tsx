@@ -124,7 +124,7 @@ export const TrainingCatalogSidebar: React.FC<TrainingCatalogSidebarProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-hidden">
       {/* Sidebar Drawer Container with full mobile support */}
       <div className="w-full max-w-2xl bg-neutral-900 border-r border-neutral-700/80 shadow-2xl h-[100dvh] flex flex-col relative z-20 text-left overflow-hidden">
         {/* Header (Fixed) */}

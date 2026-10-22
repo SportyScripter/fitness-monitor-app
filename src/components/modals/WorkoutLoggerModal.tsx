@@ -939,10 +939,10 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         className={
           isMin
             ? 'hidden'
-            : 'fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 pb-28 sm:pb-4 overscroll-contain'
+            : 'fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-hidden'
         }
       >
-        <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl max-h-[94dvh] sm:max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
+        <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative mx-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
           {/* Top Sticky Header */}
           <div className="p-3.5 sm:p-5 border-b border-neutral-800 bg-neutral-950/95 shrink-0 space-y-2.5">
             {/* Row 1: Title & Close 'X' Button in Top Right */}

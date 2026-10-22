@@ -184,8 +184,8 @@ export const AddFreeWorkoutModal: React.FC<AddFreeWorkoutModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain">
-      <div className="w-full max-w-xl bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90vh] my-auto overflow-hidden text-left relative animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+      <div className="w-full max-w-xl bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col h-[95dvh] max-h-[95dvh] mx-auto overflow-hidden text-left relative animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-800 bg-neutral-950/95 shrink-0">
           <div className="flex items-center gap-3">
@@ -213,7 +213,7 @@ export const AddFreeWorkoutModal: React.FC<AddFreeWorkoutModalProps> = ({
         {/* Scrollable Form Body */}
         <form
           onSubmit={handleSubmit}
-          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs overscroll-contain touch-pan-y"
+          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-12 space-y-4 text-xs overscroll-contain touch-pan-y"
         >
           {/* Date & Time selection */}
           <div className="grid grid-cols-2 gap-3">
@@ -503,8 +503,8 @@ export const AddFreeWorkoutModal: React.FC<AddFreeWorkoutModalProps> = ({
             />
           </div>
 
-          {/* Footer Submit Button */}
-          <div className="pt-2 flex items-center justify-end gap-2 border-t border-neutral-800">
+          {/* Footer Submit Button inside scrollable form */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={onClose}

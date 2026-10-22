@@ -277,8 +277,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-sm flex justify-center items-center p-2.5 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl max-h-[94vh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-sm overflow-hidden">
+      <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/80 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -322,8 +322,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
           </div>
         </div>
 
-        {/* Scrollable Form Body with pb-28 to clear mobile bottom navigation bar */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-5 pb-28 space-y-5 text-xs overscroll-contain">
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 pb-12 space-y-5 text-xs overscroll-contain">
           {/* Quick Catalog Search / Accordion */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -454,7 +454,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       pattern="[0-9]*[.,]?[0-9]*"
                       value={set.reps}
                       onChange={(e) => handleUpdateSet(idx, 'reps', e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                     />
                   </div>
 
@@ -466,7 +466,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       pattern="[0-9]*[.,]?[0-9]*"
                       value={set.weightKg}
                       onChange={(e) => handleUpdateSet(idx, 'weightKg', e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                     />
                   </div>
 
@@ -478,7 +478,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       pattern="[0-9]*[.,]?[0-9]*"
                       value={set.rir}
                       onChange={(e) => handleUpdateSet(idx, 'rir', e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                     />
                   </div>
 
@@ -490,7 +490,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       pattern="[0-9]*[.,]?[0-9]*"
                       value={set.rpe}
                       onChange={(e) => handleUpdateSet(idx, 'rpe', e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-1 py-1.5 text-center font-bold text-white text-xs font-mono-numbers focus:outline-none focus:border-amber-400"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                     />
                   </div>
 
@@ -702,8 +702,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
             </div>
           </div>
 
-          {/* Sticky Form Footer */}
-          <div className="pt-3 border-t border-neutral-800 flex items-center justify-end gap-2.5">
+          {/* Form Action Buttons at bottom of scrollable content */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}

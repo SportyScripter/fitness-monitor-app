@@ -325,8 +325,8 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
-      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92dvh] sm:max-h-[90vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+      <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-4xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-800 bg-neutral-950/90 shrink-0">
           <div className="flex items-center gap-3">
@@ -1079,7 +1079,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'exerciseType', e.target.value as ExerciseType)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-bold"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               >
                                 <option value="STRENGTH">Siłowe</option>
                                 <option value="RUNNING">Biegowe</option>
@@ -1095,7 +1095,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'unit', e.target.value as ExerciseUnit)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-bold"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               >
                                 <option value="kg">kg</option>
                                 <option value="lb">lb</option>
@@ -1112,7 +1112,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'plannedSets', parseInt(e.target.value) || 1)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
 
@@ -1124,7 +1124,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'targetRepsRange', e.target.value)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
 
@@ -1137,7 +1137,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'defaultWeightKg', parseFloat(e.target.value) || 0)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
                           </div>
@@ -1158,7 +1158,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                     val.trim() && val.trim() !== '0' ? val : undefined
                                   );
                                 }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white text-xs"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
 
@@ -1172,7 +1172,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                   const val = parseInt(e.target.value);
                                   handleUpdateExerciseField(ex.id, 'targetHR', val > 0 ? val : undefined);
                                 }}
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white font-mono-numbers"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
 
@@ -1185,7 +1185,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                   onChange={(e) =>
                                     handleUpdateExerciseField(ex.id, 'targetRPE', parseFloat(e.target.value) || 8)
                                   }
-                                  className="w-1/2 bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white font-mono-numbers"
+                                  className="w-1/2 bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-1.5 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                                 <input
                                   type="number"
@@ -1193,7 +1193,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                   onChange={(e) =>
                                     handleUpdateExerciseField(ex.id, 'targetRIR', parseInt(e.target.value) || 2)
                                   }
-                                  className="w-1/2 bg-neutral-950 border border-neutral-700 rounded px-1.5 py-1 text-white font-mono-numbers"
+                                  className="w-1/2 bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-1.5 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </div>
                             </div>
@@ -1207,7 +1207,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'tempo', e.target.value)
                                 }
-                                className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-white text-xs"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
                           </div>
@@ -1296,36 +1296,36 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
               </div>
             )}
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 sm:p-5 border-t border-neutral-800 bg-neutral-950/90 shrink-0">
-          {onResetDayToDefault ? (
-            <button
-              type="button"
-              onClick={onResetDayToDefault}
-              className="text-xs text-neutral-400 hover:text-amber-400 underline cursor-pointer"
-            >
-              Przywróć domyślny plan dla tego dnia
-            </button>
-          ) : <span />}
+          {/* Action Buttons inside scrollable body */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {onResetDayToDefault ? (
+              <button
+                type="button"
+                onClick={onResetDayToDefault}
+                className="text-xs text-neutral-400 hover:text-amber-400 underline cursor-pointer"
+              >
+                Przywróć domyślny plan dla tego dnia
+              </button>
+            ) : <span />}
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 transition-colors cursor-pointer"
-            >
-              Anuluj
-            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 transition-colors cursor-pointer"
+              >
+                Anuluj
+              </button>
 
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-400 hover:bg-amber-300 text-black transition-all shadow-lg shadow-amber-400/20 cursor-pointer"
-            >
-              Zapisz Zmiany w Planie
-            </button>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-amber-400 hover:bg-amber-300 text-black transition-all shadow-lg shadow-amber-400/20 cursor-pointer"
+              >
+                Zapisz Zmiany w Planie
+              </button>
+            </div>
           </div>
         </div>
       </div>
