@@ -59,7 +59,7 @@ export const AddFreeWorkoutModal: React.FC<AddFreeWorkoutModalProps> = ({
   const [newExSets, setNewExSets] = useState(3);
   const [newExReps, setNewExReps] = useState(10);
   const [newExWeight, setNewExWeight] = useState(50);
-  const [newExMuscle, setNewExMuscle] = useState<MuscleGroup>('Czworogłowe (Quads)');
+  const [newExMuscle, setNewExMuscle] = useState<MuscleGroup>('Czworogłowe uda');
 
   if (!isOpen) return null;
 
@@ -140,10 +140,10 @@ export const AddFreeWorkoutModal: React.FC<AddFreeWorkoutModalProps> = ({
     } else {
       const muscleGroup: MuscleGroup =
         activityType === 'RUNNING' || activityType === 'CYCLING'
-          ? 'Silnik Biegowy & Wydolność (Cardio/Engine)'
+          ? 'Czworogłowe uda'
           : activityType === 'STRENGTH'
-          ? 'Czworogłowe (Quads)'
-          : 'Brzuch & Core';
+          ? 'Czworogłowe uda'
+          : 'Brzuch';
 
       const tonnage = activityType === 'STRENGTH' ? estimatedTonnage : 0;
 

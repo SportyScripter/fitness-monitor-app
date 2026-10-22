@@ -90,7 +90,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-sm flex justify-center items-center p-3 sm:p-4 overscroll-contain">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-sm flex justify-center items-center p-3 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
       <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-lg shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/70">
@@ -118,8 +118,8 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 text-xs">
+        {/* Form Body with pb-28 to clear mobile bottom navigation bar */}
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 pb-28 space-y-4 text-xs">
           {/* 1. Etykieta Dnia (Dzień tygodnia) */}
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase font-bold text-neutral-300 block">

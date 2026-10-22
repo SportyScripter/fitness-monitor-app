@@ -12,7 +12,7 @@ import {
   FilePlus2,
   Dumbbell
 } from 'lucide-react';
-import { MesocyclePhase, WorkoutDay } from '../../types/hyrox';
+import { MesocyclePhase, WorkoutDay, MuscleGroup, normalizeMuscleGroup } from '../../types/hyrox';
 import { MASTER_HYROX_WEEK_PLAN } from '../../data/hyroxPlanData';
 
 interface AddWeekModalProps {
@@ -40,11 +40,15 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
 
   const [weekNumber, setWeekNumber] = useState(nextWeekNumber);
   const [weekName, setWeekName] = useState(`Tydzień ${nextWeekNumber}: Faza Indywidualna`);
-  const [volumeMultiplier, setVolumeMultiplier] = useState(
-    lastPhase ? Math.min(1.3, Number((lastVolMult + 0.05).toFixed(2))) : 1.0
+  const [volumeMultiplier, setVolumeMultiplier] = useState<string>(
+    lastPhase ? String(Math.min(1.3, Number((lastVolMult + 0.05).toFixed(2)))) : '1.05'
   );
-  const [targetRPE, setTargetRPE] = useState(lastPhase ? Math.min(9.5, Number((lastTargetRPE + 0.2).toFixed(1))) : 8.0);
-  const [targetRIR, setTargetRIR] = useState(lastPhase ? Math.max(1, lastTargetRIR - 0) : 2);
+  const [targetRPE, setTargetRPE] = useState<string>(
+    lastPhase ? String(Math.min(9.5, Number((lastTargetRPE + 0.2).toFixed(1)))) : '8.0'
+  );
+  const [targetRIR, setTargetRIR] = useState<string>(
+    lastPhase ? String(Math.max(1, lastTargetRIR)) : '2'
+  );
   const [isDeload, setIsDeload] = useState(false);
   const [focusNote, setFocusNote] = useState('');
 
@@ -56,20 +60,30 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
   const safeDays = Array.isArray(currentWeekDays) ? currentWeekDays.filter(Boolean) : [];
   const hasExistingDays = safeDays.length > 0;
   const [initStrategy, setInitStrategy] = useState<'empty' | 'clean_template' | 'clone_previous' | 'hyrox_default'>('empty');
-  const [progressionDeltaKg, setProgressionDeltaKg] = useState(2.5);
+  const [progressionDeltaKg, setProgressionDeltaKg] = useState<string>('2.5');
   const [applyWeightDelta, setApplyWeightDelta] = useState(true);
+
+  // Walidacja mnożnika: zakres 1.0 - 1.5 (lub dowolny przy deloadzie)
+  const numMultiplier = parseFloat(String(volumeMultiplier).replace(',', '.'));
+  const isMultiplierValid = isDeload || (!isNaN(numMultiplier) && numMultiplier >= 1.0 && numMultiplier <= 1.5);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isMultiplierValid) return;
+
+    const parsedVol = parseFloat(String(volumeMultiplier).replace(',', '.'));
+    const parsedRPE = parseFloat(String(targetRPE).replace(',', '.'));
+    const parsedRIR = parseFloat(String(targetRIR).replace(',', '.'));
+    const parsedDelta = parseFloat(String(progressionDeltaKg).replace(',', '.'));
 
     const newPhase: MesocyclePhase = {
       week: weekNumber,
       name: weekName.trim() || `Tydzień ${weekNumber}`,
-      volumeMultiplier: isDeload ? 0.6 : (Number(volumeMultiplier) || 1.0),
-      targetRPE: Number(targetRPE) || 8.0,
-      targetRIR: Number(targetRIR) || 2,
+      volumeMultiplier: isDeload ? 0.6 : (!isNaN(parsedVol) ? parsedVol : 1.0),
+      targetRPE: !isNaN(parsedRPE) ? parsedRPE : 8.0,
+      targetRIR: !isNaN(parsedRIR) ? parsedRIR : 2,
       progressionNote: focusNote.trim() || (isDeload ? 'Tydzień deloadu - regeneracja' : 'Standardowy tydzień treningowy'),
       isDeload,
     };
@@ -98,13 +112,15 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
               ...ex,
               id: `ex-w${weekNumber}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
               name: ex.name || 'Ćwiczenie',
-              muscleGroup: ex.muscleGroup || 'Czworogłowe (Quads)',
-              plannedSets: ex.plannedSets || 3,
+              muscleGroup: normalizeMuscleGroup(ex.muscleGroup),
+              plannedSets: Number(ex.plannedSets) || 3,
               targetRepsRange: ex.targetRepsRange || '8-10',
-              defaultWeightKg: applyWeightDelta && !isDeload ? (ex.defaultWeightKg || 0) + progressionDeltaKg : (ex.defaultWeightKg || 0),
-              targetRIR: ex.targetRIR || targetRIR,
-              targetRPE: ex.targetRPE || targetRPE,
-              restSeconds: ex.restSeconds || 90,
+              defaultWeightKg: applyWeightDelta && !isDeload
+                ? (Number(ex.defaultWeightKg) || 0) + (!isNaN(parsedDelta) ? parsedDelta : 0)
+                : (Number(ex.defaultWeightKg) || 0),
+              targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
+              targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
+              restSeconds: Number(ex.restSeconds) || 90,
               hyroxRelevance: ex.hyroxRelevance || '',
               techniqueNotes: ex.techniqueNotes || '',
             }))
@@ -169,11 +185,11 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Form Body (Smooth Mobile Scrolling with min-h-0 and touch-pan-y) */}
+        {/* Scrollable Form Body (Smooth Mobile Scrolling with pb-28 to clear bottom nav) */}
         <form
           id="add-week-form"
           onSubmit={handleSubmit}
-          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs overscroll-contain touch-pan-y"
+          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-28 space-y-4 text-xs overscroll-contain touch-pan-y"
         >
           {/* Week Info */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -235,20 +251,34 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800">
               <div>
                 <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">
-                  Mnożnik Objętości:
+                  Mnożnik Objętości (1.0 - 1.5):
                 </label>
                 <div className="flex items-center gap-1.5">
                   <input
-                    type="number"
-                    step="0.05"
-                    min="0.5"
-                    max="1.5"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
                     value={volumeMultiplier}
-                    onChange={(e) => setVolumeMultiplier(Number(e.target.value))}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-amber-400 font-mono-numbers"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(',', '.');
+                      if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                        setVolumeMultiplier(val);
+                      }
+                    }}
+                    placeholder="np. 1.05"
+                    className={`w-full bg-neutral-900 border rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none font-mono-numbers ${
+                      !isMultiplierValid
+                        ? 'border-red-500 text-red-300 focus:border-red-500'
+                        : 'border-neutral-700 focus:border-amber-400'
+                    }`}
                   />
                   <span className="text-neutral-400 font-bold">x</span>
                 </div>
+                {!isMultiplierValid && (
+                  <p className="text-[11px] text-red-400 font-semibold mt-1">
+                    Mnożnik musi mieścić się w zakresie 1.0 - 1.5
+                  </p>
+                )}
               </div>
 
               <div>
@@ -256,12 +286,17 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   Średnie Celowe RPE:
                 </label>
                 <input
-                  type="number"
-                  step="0.5"
-                  min="6"
-                  max="10"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
                   value={targetRPE}
-                  onChange={(e) => setTargetRPE(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(',', '.');
+                    if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                      setTargetRPE(val);
+                    }
+                  }}
+                  placeholder="np. 8.0"
                   className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-amber-400 font-mono-numbers"
                 />
               </div>
@@ -271,12 +306,17 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   Docelowy Zapas (RIR):
                 </label>
                 <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="4"
+                  type="text"
+                  inputMode="decimal"
+                  pattern="[0-9]*[.,]?[0-9]*"
                   value={targetRIR}
-                  onChange={(e) => setTargetRIR(Number(e.target.value))}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(',', '.');
+                    if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                      setTargetRIR(val);
+                    }
+                  }}
+                  placeholder="np. 2"
                   className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-amber-400 font-mono-numbers"
                 />
               </div>
@@ -443,12 +483,16 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-neutral-400">Dodaj do każdego ćwiczenia:</span>
                     <input
-                      type="number"
-                      step="0.5"
-                      min="0.5"
-                      max="10"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[.,]?[0-9]*"
                       value={progressionDeltaKg}
-                      onChange={(e) => setProgressionDeltaKg(Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(',', '.');
+                        if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                          setProgressionDeltaKg(val);
+                        }
+                      }}
                       className="w-20 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-white font-bold text-xs font-mono-numbers focus:border-amber-400"
                     />
                     <span className="text-[10px] text-neutral-400 font-bold">kg</span>
@@ -471,7 +515,12 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
           <button
             type="submit"
             form="add-week-form"
-            className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-400/20"
+            disabled={!isMultiplierValid}
+            className={`px-5 py-2.5 rounded-xl text-black text-xs font-black transition-all flex items-center gap-2 shadow-lg ${
+              isMultiplierValid
+                ? 'bg-amber-400 hover:bg-amber-300 shadow-amber-400/20 cursor-pointer'
+                : 'bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed opacity-50'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>Dodaj Tydzień {weekNumber}</span>

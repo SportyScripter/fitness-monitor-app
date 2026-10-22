@@ -1,0 +1,6 @@
+{
+  "summary":  "Plan wdrożenia 7 poprawek UX/UI dla aplikacji treningowej na mobile (iOS):\n1. Zmiana kolejności ćwiczeń drag & drop (@dnd-kit) z uchwytem dotykowym i alternatywnymi strzałkami góra/dół.\n2. Obsługa liczb dziesiętnych na iOS w edycji tygodnia (inputMode=\"decimal\", zamiana przecinka na kropkę, obsługa pustego stringa).\n3. Poprawa przewijania modali (pb-24/pb-28) eliminująca nakładanie się paska nawigacji na przyciski akcji.\n4. Blokada auto-zoomu na iOS w tagu viewport pliku index.html.\n5. Profesjonalne nazewnictwo partii mięśniowych (Klatka piersiowa, Plecy, Barki, Biceps, Triceps, Czworogłowe uda, Dwugłowe uda, Łydki, Brzuch) w typach TS i listach wyboru.\n6. Ergonomiczna edycja wartości liczbowych oraz walidacja mnożnika (1.0 - 1.5) z komunikatem błędu i blokadą zapisu.\n7. Zabezpieczenie paska nawigacji przed overscrollem na dole strony w useScrollDirection.",
+  "updatedAt":  "2026-10-22T20:55:02.924386301Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

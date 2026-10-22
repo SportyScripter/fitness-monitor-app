@@ -284,7 +284,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   const [liveExerciseType, setLiveExerciseType] = useState<ExerciseType>('STRENGTH');
   const [liveUnit, setLiveUnit] = useState<ExerciseUnit>('kg');
   const [customExerciseName, setCustomExerciseName] = useState('');
-  const [customMuscle, setCustomMuscle] = useState<MuscleGroup>('Czworogłowe (Quads)');
+  const [customMuscle, setCustomMuscle] = useState<MuscleGroup>('Czworogłowe uda');
   const [customSets, setCustomSets] = useState(3);
   const [customReps, setCustomReps] = useState('8-10');
   const [customWeight, setCustomWeight] = useState(50);
@@ -939,7 +939,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         className={
           isMin
             ? 'hidden'
-            : 'fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain'
+            : 'fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 pb-28 sm:pb-4 overscroll-contain'
         }
       >
         <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl max-h-[94dvh] sm:max-h-[92vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
@@ -1207,7 +1207,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           </div>
 
         {/* Compact View for Current and Next Set + Next Exercise in Queue */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3.5 text-xs overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 pb-28 space-y-3.5 text-xs overscroll-contain">
           {isWorkoutFinished && (
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 sm:p-4 shadow-lg">
               <div className="flex items-center justify-between gap-3">

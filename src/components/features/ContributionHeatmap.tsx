@@ -111,7 +111,7 @@ export const ContributionHeatmap: React.FC<ContributionHeatmapProps> = ({
                 dayTitle: dayNum === 2 || dayNum === 6 ? 'Bieg HIIT' : 'FBW Siła',
                 exerciseId: 'mock-ex',
                 exerciseName: dayNum === 2 ? 'Bieg 6x800m' : 'Przysiad + Bench',
-                muscleGroup: 'Czworogłowe (Quads)',
+                muscleGroup: 'Czworogłowe uda',
                 setNumber: 4,
                 weightKg: 80,
                 reps: 8,

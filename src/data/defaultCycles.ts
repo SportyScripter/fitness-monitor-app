@@ -19,7 +19,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m1-bench',
         name: 'Wyciskanie sztangi leżąc na ławce poziomej',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 4,
         targetRepsRange: '6-8',
         defaultWeightKg: 85,
@@ -33,7 +33,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m1-pullup',
         name: 'Podciąganie na drążku nachwytem z dociążeniem',
-        muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+        muscleGroup: 'Plecy',
         plannedSets: 4,
         targetRepsRange: '6-8',
         defaultWeightKg: 10,
@@ -47,7 +47,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m1-ohp',
         name: 'Wyciskanie żołnierskie sztangi stojąc (OHP)',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Barki',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 50,
@@ -61,7 +61,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m1-row',
         name: 'Wiosłowanie hantlem jednorącz w oparciu o ławkę',
-        muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+        muscleGroup: 'Plecy',
         plannedSets: 3,
         targetRepsRange: '10-12',
         defaultWeightKg: 36,
@@ -75,7 +75,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m1-dips',
         name: 'Pompki na poręczach (Dips) z dociążeniem',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 3,
         targetRepsRange: '8-10',
         defaultWeightKg: 15,
@@ -104,7 +104,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m2-squat',
         name: 'Przysiad ze sztangą na plecach (High Bar Squat)',
-        muscleGroup: 'Czworogłowe (Quads)',
+        muscleGroup: 'Czworogłowe uda',
         plannedSets: 4,
         targetRepsRange: '6-8',
         defaultWeightKg: 105,
@@ -118,7 +118,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m2-legpress',
         name: 'Wyciskanie ciężaru na suwnicy 45 stopni',
-        muscleGroup: 'Czworogłowe (Quads)',
+        muscleGroup: 'Czworogłowe uda',
         plannedSets: 4,
         targetRepsRange: '10-12',
         defaultWeightKg: 180,
@@ -132,7 +132,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m2-lunges',
         name: 'Wykroki chodzone z hantlami',
-        muscleGroup: 'Czworogłowe (Quads)',
+        muscleGroup: 'Czworogłowe uda',
         plannedSets: 3,
         targetRepsRange: '12-14 na nogę',
         defaultWeightKg: 20,
@@ -146,7 +146,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m2-calves',
         name: 'Wspięcia na palce stojąc na maszynie / podeście',
-        muscleGroup: 'Czworogłowe (Quads)',
+        muscleGroup: 'Łydki',
         plannedSets: 4,
         targetRepsRange: '12-15',
         defaultWeightKg: 70,
@@ -160,7 +160,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m2-core',
         name: 'Allahy (Brzuch na wyciągu klęcząc)',
-        muscleGroup: 'Brzuch & Core',
+        muscleGroup: 'Brzuch',
         plannedSets: 4,
         targetRepsRange: '12-15',
         defaultWeightKg: 45,
@@ -208,7 +208,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m4-incline',
         name: 'Wyciskanie hantli na ławce skośnej dodatniej (30°)',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 32,
@@ -222,7 +222,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m4-lateral',
         name: 'Wznosy hantli bokiem stojąc (Boczny akton barku)',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Barki',
         plannedSets: 4,
         targetRepsRange: '12-15',
         defaultWeightKg: 12,
@@ -236,7 +236,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m4-cables',
         name: 'Rozpiętki na bramie z linkami wyciągu',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 3,
         targetRepsRange: '12-15',
         defaultWeightKg: 15,
@@ -250,7 +250,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m4-french',
         name: 'Wyciskanie francuskie ze sztangą łamaną leżąc',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Triceps',
         plannedSets: 4,
         targetRepsRange: '10-12',
         defaultWeightKg: 35,
@@ -279,7 +279,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m5-rdl',
         name: 'Rumuński Martwy Ciąg ze sztangą (RDL)',
-        muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+        muscleGroup: 'Dwugłowe uda',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 100,
@@ -293,7 +293,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m5-latpull',
         name: 'Ściąganie drążka wyciągu górnego do klatki',
-        muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+        muscleGroup: 'Plecy',
         plannedSets: 4,
         targetRepsRange: '10-12',
         defaultWeightKg: 65,
@@ -307,7 +307,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m5-tbar',
         name: 'Wiosłowanie półsztangą T-Bar Row',
-        muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+        muscleGroup: 'Plecy',
         plannedSets: 3,
         targetRepsRange: '8-10',
         defaultWeightKg: 55,
@@ -321,7 +321,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m5-biceps',
         name: 'Uginanie przedramion z hantlami z supinacją stojąc',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Biceps',
         plannedSets: 4,
         targetRepsRange: '10-12',
         defaultWeightKg: 16,
@@ -350,7 +350,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m6-super1',
         name: 'Uginanie na modlitewniku ze sztangą łamaną',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Biceps',
         plannedSets: 3,
         targetRepsRange: '10-12',
         defaultWeightKg: 30,
@@ -364,7 +364,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m6-super2',
         name: 'Prostowanie ramion na wyciągu z linką (Triceps)',
-        muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+        muscleGroup: 'Triceps',
         plannedSets: 3,
         targetRepsRange: '12-15',
         defaultWeightKg: 25,
@@ -378,7 +378,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m6-hanginglegs',
         name: 'Wznosy prostych nóg w zwisie na drążku',
-        muscleGroup: 'Brzuch & Core',
+        muscleGroup: 'Brzuch',
         plannedSets: 4,
         targetRepsRange: '12-15',
         defaultWeightKg: 0,
@@ -392,7 +392,7 @@ export const MASA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-m6-farmer',
         name: 'Spacer Farmera z hantlami (Farmers Walk)',
-        muscleGroup: 'Przedramiona & Chwyt (Grip)',
+        muscleGroup: 'Barki',
         plannedSets: 4,
         targetRepsRange: '50m spacer',
         defaultWeightKg: 28,
@@ -443,7 +443,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r1-frontsquat',
         name: 'Przysiad przedni ze sztangą (Front Squat)',
-        muscleGroup: 'Czworogłowe (Quads)',
+        muscleGroup: 'Czworogłowe uda',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 75,
@@ -457,7 +457,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r1-dips',
         name: 'Pompki na poręczach (Dips) z masą ciała',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 4,
         targetRepsRange: '12-15',
         defaultWeightKg: 0,
@@ -471,7 +471,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r1-kbswing',
         name: 'Kettlebell Swing oburącz (Wymach rosyjski)',
-        muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+        muscleGroup: 'Dwugłowe uda',
         plannedSets: 4,
         targetRepsRange: '20 powtórzeń',
         defaultWeightKg: 24,
@@ -485,7 +485,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r1-pullup',
         name: 'Podciąganie na drążku chwytem neutralnym',
-        muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+        muscleGroup: 'Plecy',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 0,
@@ -574,7 +574,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r4-trapbar',
         name: 'Martwy Ciąg Trap Bar (Sześciokątna sztanga)',
-        muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+        muscleGroup: 'Dwugłowe uda',
         plannedSets: 4,
         targetRepsRange: '8-10',
         defaultWeightKg: 110,
@@ -588,7 +588,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r4-dbbench',
         name: 'Wyciskanie hantli na ławce płaskiej',
-        muscleGroup: 'Klatka Piersiowa (Chest)',
+        muscleGroup: 'Klatka piersiowa',
         plannedSets: 4,
         targetRepsRange: '10-12',
         defaultWeightKg: 28,
@@ -602,7 +602,7 @@ export const REDUKCJA_WEEK_PLAN: WorkoutDay[] = [
       {
         id: 'ex-r4-burpees',
         name: 'Burpees ze skokiem w dal (Broad Jump)',
-        muscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
+        muscleGroup: 'Czworogłowe uda',
         plannedSets: 4,
         targetRepsRange: '12 powtórzeń',
         defaultWeightKg: 0,

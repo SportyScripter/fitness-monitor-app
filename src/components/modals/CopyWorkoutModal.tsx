@@ -67,7 +67,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
   const availableWeeks = Array.from({ length: maxSelectableWeek }, (_, i) => i + 1);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
       <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl p-4 sm:p-6 text-left relative space-y-4 my-auto overflow-hidden animate-in fade-in zoom-in-95">
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
           <div className="flex items-center gap-3">

@@ -37,6 +37,18 @@ export function useScrollDirection({
         return;
       }
 
+      // Sprawdzenie czy użytkownik znajduje się na samym dole dokumentu
+      // Blokuje zmianę stanu paska przy elastycznym odbiciu (bounce / overscroll) na iOS
+      const scrollHeight = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.offsetHeight || 0
+      );
+      const isAtBottom = window.innerHeight + scrollY >= scrollHeight - 15;
+      if (isAtBottom) {
+        ticking = false;
+        return;
+      }
+
       const diff = scrollY - lastScrollY;
 
       // Zastosuj minimalny próg czułości w pikselach

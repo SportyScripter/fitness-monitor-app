@@ -958,6 +958,13 @@ export default function App() {
                 onCopyDayToWeek={handleCopyDayToWeek}
                 onCopyEntireWeekTo={handleCopyEntireWeekTo}
                 workoutLogs={workoutLogs}
+                onUpdatePhase={(updatedPhase) => {
+                  const updatedWeeks = weeksList.map((w) => (w.week === updatedPhase.week ? updatedPhase : w));
+                  handleUpdateCycle({
+                    ...activeCycle,
+                    weeksList: updatedWeeks,
+                  });
+                }}
               />
             </div>
 

@@ -55,7 +55,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
   const [customExerciseType, setCustomExerciseType] = useState<ExerciseType>('STRENGTH');
   const [customUnit, setCustomUnit] = useState<ExerciseUnit>('kg');
   const [customName, setCustomName] = useState('');
-  const [customMuscle, setCustomMuscle] = useState<MuscleGroup>('Czworogłowe (Quads)');
+  const [customMuscle, setCustomMuscle] = useState<MuscleGroup>('Czworogłowe uda');
   const [customSets, setCustomSets] = useState(4);
   const [customReps, setCustomReps] = useState('8-10');
   const [customWeight, setCustomWeight] = useState(60);
@@ -123,7 +123,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomWeight(0);
       setCustomRest(60);
       setCustomRestAfterExercise(90);
-      setCustomMuscle('Silnik Biegowy & Wydolność (Cardio/Engine)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Bieg 1km pomiędzy stacjami Hyrox.');
     } else if (presetKey === 'RUN_800M') {
       setCustomName('800 m Bieg Tempowy');
@@ -139,7 +139,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomWeight(0);
       setCustomRest(90);
       setCustomRestAfterExercise(120);
-      setCustomMuscle('Silnik Biegowy & Wydolność (Cardio/Engine)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Interwał biegowy pod VO2max i próg mleczanowy.');
     } else if (presetKey === 'SKIERG') {
       setCustomName('1000 m SkiErg');
@@ -155,7 +155,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomWeight(0);
       setCustomRest(60);
       setCustomRestAfterExercise(90);
-      setCustomMuscle('Silnik Biegowy & Wydolność (Cardio/Engine)');
+      setCustomMuscle('Plecy');
       setCustomRelevance('Stacja 1 Hyrox: silnik górnych partii ciała i tętno.');
     } else if (presetKey === 'SLED_PUSH') {
       setCustomName('50 m Sled Push (Sanie)');
@@ -170,7 +170,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomReps('50 m');
       setCustomRest(90);
       setCustomRestAfterExercise(120);
-      setCustomMuscle('Czworogłowe (Quads)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Stacja 2 Hyrox: maksymalna praca nóg.');
     } else if (presetKey === 'BURPEE_BROAD') {
       setCustomName('80 m Burpee Broad Jumps');
@@ -185,7 +185,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomReps('80 m');
       setCustomRest(90);
       setCustomRestAfterExercise(120);
-      setCustomMuscle('Silnik Biegowy & Wydolność (Cardio/Engine)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Stacja 4 Hyrox: skoki i padnij-powstań.');
     } else if (presetKey === 'ROWING') {
       setCustomName('1000 m Wioślarz (Rowing)');
@@ -201,7 +201,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomWeight(0);
       setCustomRest(60);
       setCustomRestAfterExercise(90);
-      setCustomMuscle('Grzbiet & Plecy (Back/Lats)');
+      setCustomMuscle('Plecy');
       setCustomRelevance('Stacja 5 Hyrox: tlen i plecy.');
     } else if (presetKey === 'FARMERS') {
       setCustomName('200 m Farmers Carry (2x24kg)');
@@ -216,7 +216,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomReps('200 m');
       setCustomRest(90);
       setCustomRestAfterExercise(120);
-      setCustomMuscle('Przedramiona & Chwyt (Grip)');
+      setCustomMuscle('Barki');
       setCustomRelevance('Stacja 6 Hyrox: potężna próba chwytu.');
     } else if (presetKey === 'WALL_BALLS') {
       setCustomName('100x Wall Balls (9kg)');
@@ -231,7 +231,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomReps('100');
       setCustomRest(90);
       setCustomRestAfterExercise(120);
-      setCustomMuscle('Czworogłowe (Quads)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Stacja 8 Hyrox: finałowe rzuty piłką do celu.');
     } else if (presetKey === 'STRENGTH_DEFAULT') {
       setCustomName('Przysiad ze sztangą (Back Squat)');
@@ -246,7 +246,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
       setCustomReps('6-8');
       setCustomRest(120);
       setCustomRestAfterExercise(180);
-      setCustomMuscle('Czworogłowe (Quads)');
+      setCustomMuscle('Czworogłowe uda');
       setCustomRelevance('Bazowe ćwiczenie budujące siłę i moc.');
     }
   };
@@ -325,7 +325,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 overscroll-contain">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex flex-col justify-start sm:justify-center items-center p-2 sm:p-4 pb-28 sm:pb-4 overscroll-contain">
       <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92dvh] sm:max-h-[90vh] flex flex-col shadow-2xl relative my-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-800 bg-neutral-950/90 shrink-0">
@@ -354,8 +354,8 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Body with min-h-0, touch-pan-y, and overscroll-contain */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 overscroll-contain touch-pan-y">
+        {/* Scrollable Body with pb-28 to clear mobile bottom navigation bar */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 pb-28 space-y-6 overscroll-contain touch-pan-y">
           {/* Day Settings Bar */}
           <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
@@ -701,7 +701,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                             setCustomExerciseType(val);
                             if (val === 'RUNNING') {
                               setCustomUnit('km');
-                              setCustomMuscle('Silnik Biegowy & Wydolność (Cardio/Engine)');
+                              setCustomMuscle('Czworogłowe uda');
                             } else if (val === 'STRENGTH') {
                               setCustomUnit('kg');
                             }

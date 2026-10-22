@@ -9,7 +9,7 @@ import {
   Info,
   Calendar
 } from 'lucide-react';
-import { MuscleGroup, WorkoutLogEntry, WorkoutDay } from '../../types/hyrox';
+import { MuscleGroup, WorkoutLogEntry, WorkoutDay, normalizeMuscleGroup } from '../../types/hyrox';
 import { MUSCLE_GROUP_VOLUME_TARGETS, MASTER_HYROX_WEEK_PLAN, MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
 
 interface VolumeMatrixViewProps {
@@ -40,11 +40,13 @@ export const VolumeMatrixView: React.FC<VolumeMatrixViewProps> = ({
         if (!ex) return;
         const sets = typeof ex.plannedSets === 'number' ? ex.plannedSets : 3;
         if (ex.muscleGroup) {
-          plannedSetsPerGroup[ex.muscleGroup] = (plannedSetsPerGroup[ex.muscleGroup] || 0) + sets;
+          const mg = normalizeMuscleGroup(ex.muscleGroup);
+          plannedSetsPerGroup[mg] = (plannedSetsPerGroup[mg] || 0) + sets;
         }
         if (ex.secondaryMuscleGroup) {
-          plannedSetsPerGroup[ex.secondaryMuscleGroup] =
-            (plannedSetsPerGroup[ex.secondaryMuscleGroup] || 0) + Math.round(sets * 0.5);
+          const secMg = normalizeMuscleGroup(ex.secondaryMuscleGroup);
+          plannedSetsPerGroup[secMg] =
+            (plannedSetsPerGroup[secMg] || 0) + Math.round(sets * 0.5);
         }
       });
     }

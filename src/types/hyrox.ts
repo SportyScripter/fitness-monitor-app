@@ -1,12 +1,40 @@
 export type MuscleGroup =
-  | 'Czworogłowe (Quads)'
-  | 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)'
-  | 'Klatka Piersiowa (Chest)'
-  | 'Grzbiet & Plecy (Back/Lats)'
-  | 'Barki & Ramiona (Shoulders/Arms)'
-  | 'Brzuch & Core'
-  | 'Przedramiona & Chwyt (Grip)'
-  | 'Silnik Biegowy & Wydolność (Cardio/Engine)';
+  | 'Klatka piersiowa'
+  | 'Plecy'
+  | 'Barki'
+  | 'Biceps'
+  | 'Triceps'
+  | 'Czworogłowe uda'
+  | 'Dwugłowe uda'
+  | 'Łydki'
+  | 'Brzuch';
+
+export const PROFESSIONAL_MUSCLE_GROUPS: MuscleGroup[] = [
+  'Klatka piersiowa',
+  'Plecy',
+  'Barki',
+  'Biceps',
+  'Triceps',
+  'Czworogłowe uda',
+  'Dwugłowe uda',
+  'Łydki',
+  'Brzuch',
+];
+
+export const normalizeMuscleGroup = (raw?: string | null): MuscleGroup => {
+  if (!raw) return 'Klatka piersiowa';
+  const clean = raw.trim().toLowerCase();
+  if (clean.includes('klatk') || clean.includes('chest')) return 'Klatka piersiowa';
+  if (clean.includes('plec') || clean.includes('grzbiet') || clean.includes('back') || clean.includes('lats')) return 'Plecy';
+  if (clean.includes('bark') || clean.includes('ramion') || clean.includes('shoulder') || clean.includes('delts')) return 'Barki';
+  if (clean.includes('biceps')) return 'Biceps';
+  if (clean.includes('triceps')) return 'Triceps';
+  if (clean.includes('czworo') || clean.includes('quad')) return 'Czworogłowe uda';
+  if (clean.includes('dwugłow') || clean.includes('kulsz') || clean.includes('hamstring') || clean.includes('glute') || clean.includes('poślad')) return 'Dwugłowe uda';
+  if (clean.includes('łydk') || clean.includes('calf') || clean.includes('calves')) return 'Łydki';
+  if (clean.includes('brzuch') || clean.includes('core') || clean.includes('abs')) return 'Brzuch';
+  return 'Klatka piersiowa';
+};
 
 export type DayType = 'FBW' | 'RUNNING_HIIT' | 'REST_RECOVERY' | 'WEEKEND_HYROX' | 'CUSTOM';
 

@@ -79,7 +79,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-1',
             name: 'Wyciskanie sztangi leżąc (Bench Press)',
-            muscleGroup: 'Klatka Piersiowa (Chest)',
+            muscleGroup: 'Klatka piersiowa',
             plannedSets: 4,
             targetRepsRange: '6-8',
             defaultWeightKg: 85,
@@ -93,7 +93,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-2',
             name: 'Podciąganie na drążku z dociążeniem / nachwyt',
-            muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+            muscleGroup: 'Plecy',
             plannedSets: 4,
             targetRepsRange: '6-8',
             defaultWeightKg: 10,
@@ -107,7 +107,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-3',
             name: 'Wyciskanie hantli na skosie dodatnim (Incline DB)',
-            muscleGroup: 'Klatka Piersiowa (Chest)',
+            muscleGroup: 'Klatka piersiowa',
             plannedSets: 3,
             targetRepsRange: '8-10',
             defaultWeightKg: 30,
@@ -121,7 +121,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-4',
             name: 'Wiosłowanie sztangą w opadzie (Barbell Row)',
-            muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+            muscleGroup: 'Plecy',
             plannedSets: 4,
             targetRepsRange: '8-10',
             defaultWeightKg: 80,
@@ -148,7 +148,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-5',
             name: 'Przysiad ze sztangą na plecach (High Bar)',
-            muscleGroup: 'Czworogłowe (Quads)',
+            muscleGroup: 'Czworogłowe uda',
             plannedSets: 4,
             targetRepsRange: '6-8',
             defaultWeightKg: 100,
@@ -162,7 +162,7 @@ export const DEFAULT_PROGRAM_FOLDERS: TrainingProgramFolder[] = [
           {
             id: 'ex-m-6',
             name: 'Rumuński Martwy Ciąg ze sztangą (RDL)',
-            muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+            muscleGroup: 'Dwugłowe uda',
             plannedSets: 4,
             targetRepsRange: '8-10',
             defaultWeightKg: 95,

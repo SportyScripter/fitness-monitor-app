@@ -1,4 +1,4 @@
-import { Exercise, MuscleGroup } from '../types/hyrox';
+import { MuscleGroup } from '../types/hyrox';
 
 export interface CatalogExerciseItem {
   name: string;
@@ -15,11 +15,11 @@ export interface CatalogExerciseItem {
 }
 
 export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
-  // Czworogłowe (Quads)
+  // Czworogłowe uda
   {
     name: 'Przysiad ze sztangą na plecach (Back Squat)',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Dwugłowe uda',
     defaultSets: 4,
     defaultReps: '6-8',
     defaultWeight: 85,
@@ -31,8 +31,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Przysiad przedni ze sztangą (Front Squat)',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Brzuch',
     defaultSets: 4,
     defaultReps: '6-8',
     defaultWeight: 70,
@@ -44,8 +44,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Wykroki chodzone z kettlami / sztangą (Walking Lunges)',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Przedramiona & Chwyt (Grip)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Barki',
     defaultSets: 3,
     defaultReps: '20 kroków',
     defaultWeight: 20,
@@ -57,8 +57,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Przysiady bułgarskie z hantlami (Bulgarian Split Squat)',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Dwugłowe uda',
     defaultSets: 3,
     defaultReps: '10-12 / noga',
     defaultWeight: 18,
@@ -70,8 +70,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Goblet Squat z ciężkim kettlem',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Brzuch',
     defaultSets: 3,
     defaultReps: '12-15',
     defaultWeight: 28,
@@ -81,12 +81,25 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     hyroxRelevance: 'Wzorzec głębokiego przysiadu z ciężarem z przodu pod Wall Balls.',
     techniqueNotes: 'Kettle trzymany przy mostku, łokcie schodzą wewnątrz kolan.',
   },
+  {
+    name: 'Sled Push (Pchanie sań obciążeniowych)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Łydki',
+    defaultSets: 4,
+    defaultReps: '25 metrów',
+    defaultWeight: 152,
+    defaultRIR: 1,
+    defaultRPE: 9,
+    restSeconds: 90,
+    hyroxRelevance: 'Stacja 2 Hyrox (50m Sled Push).',
+    techniqueNotes: 'Niski środek ciężkości, krótkie kroki z palców.',
+  },
 
-  // Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)
+  // Dwugłowe uda
   {
     name: 'Trap Bar Deadlift (Martwy ciąg ze sztangą heksagonalną)',
-    muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
-    secondaryMuscleGroup: 'Czworogłowe (Quads)',
+    muscleGroup: 'Dwugłowe uda',
+    secondaryMuscleGroup: 'Czworogłowe uda',
     defaultSets: 4,
     defaultReps: '6-8',
     defaultWeight: 110,
@@ -98,8 +111,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Rumuński Martwy Ciąg (RDL)',
-    muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
-    secondaryMuscleGroup: 'Grzbiet & Plecy (Back/Lats)',
+    muscleGroup: 'Dwugłowe uda',
+    secondaryMuscleGroup: 'Plecy',
     defaultSets: 4,
     defaultReps: '8-10',
     defaultWeight: 90,
@@ -111,7 +124,7 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Hip Thrust ze sztangą',
-    muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+    muscleGroup: 'Dwugłowe uda',
     defaultSets: 3,
     defaultReps: '10-12',
     defaultWeight: 100,
@@ -123,8 +136,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Kettlebell Swings (Wymachy kettlem)',
-    muscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
-    secondaryMuscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Dwugłowe uda',
+    secondaryMuscleGroup: 'Brzuch',
     defaultSets: 4,
     defaultReps: '15-20',
     defaultWeight: 24,
@@ -135,11 +148,11 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     techniqueNotes: 'Dynamiczny snap z bioder, ramiona są tylko hakami.',
   },
 
-  // Grzbiet & Plecy (Back/Lats)
+  // Plecy
   {
     name: 'Podciąganie na drążku (Pull-ups)',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Przedramiona & Chwyt (Grip)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Biceps',
     defaultSets: 4,
     defaultReps: '6-10',
     defaultWeight: 0,
@@ -151,8 +164,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Wiosłowanie sztangą w opadzie tułowia',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Dwugłowe uda',
     defaultSets: 4,
     defaultReps: '8-10',
     defaultWeight: 75,
@@ -164,8 +177,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Wiosłowanie hantlem jednorącz',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Przedramiona & Chwyt (Grip)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Biceps',
     defaultSets: 4,
     defaultReps: '10-12',
     defaultWeight: 32,
@@ -177,8 +190,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Concept2 Row (Wioślarz) - Interwały 500m',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Czworogłowe uda',
     defaultSets: 4,
     defaultReps: '500m (pace 1:48)',
     defaultWeight: 0,
@@ -190,8 +203,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'SkiErg Concept2 - Interwały 500m',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Triceps',
     defaultSets: 4,
     defaultReps: '500m (pace 1:55)',
     defaultWeight: 0,
@@ -201,12 +214,25 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     hyroxRelevance: 'Stacja 1 Hyrox (1000m SkiErg). Otwarcie wyścigu.',
     techniqueNotes: 'Zgięcie w biodrach, nie tylko ciąg z ramion, praca z masą ciała.',
   },
+  {
+    name: 'Sled Pull (Przyciąganie sań na linie)',
+    muscleGroup: 'Plecy',
+    secondaryMuscleGroup: 'Dwugłowe uda',
+    defaultSets: 4,
+    defaultReps: '25 metrów',
+    defaultWeight: 103,
+    defaultRIR: 1,
+    defaultRPE: 9,
+    restSeconds: 90,
+    hyroxRelevance: 'Stacja 3 Hyrox (50m Sled Pull).',
+    techniqueNotes: 'Ciągnięcie z nóg i pośladków, pewny chwyt liny.',
+  },
 
-  // Klatka Piersiowa (Chest)
+  // Klatka piersiowa
   {
     name: 'Wyciskanie sztangi leżąc (Bench Press)',
-    muscleGroup: 'Klatka Piersiowa (Chest)',
-    secondaryMuscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+    muscleGroup: 'Klatka piersiowa',
+    secondaryMuscleGroup: 'Triceps',
     defaultSets: 4,
     defaultReps: '8-10',
     defaultWeight: 75,
@@ -218,8 +244,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Wyciskanie hantli na ławce skośnej (Incline DB Press)',
-    muscleGroup: 'Klatka Piersiowa (Chest)',
-    secondaryMuscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+    muscleGroup: 'Klatka piersiowa',
+    secondaryMuscleGroup: 'Barki',
     defaultSets: 4,
     defaultReps: '8-10',
     defaultWeight: 26,
@@ -231,8 +257,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Pompki z dociążeniem (Weighted Push-ups)',
-    muscleGroup: 'Klatka Piersiowa (Chest)',
-    secondaryMuscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Klatka piersiowa',
+    secondaryMuscleGroup: 'Brzuch',
     defaultSets: 3,
     defaultReps: '12-15',
     defaultWeight: 10,
@@ -244,8 +270,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Dips (Pompki na poręczach)',
-    muscleGroup: 'Klatka Piersiowa (Chest)',
-    secondaryMuscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
+    muscleGroup: 'Klatka piersiowa',
+    secondaryMuscleGroup: 'Triceps',
     defaultSets: 3,
     defaultReps: '8-12',
     defaultWeight: 0,
@@ -256,11 +282,11 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     techniqueNotes: 'Kąt 90° w łokciach, kontrolowane opuszczanie.',
   },
 
-  // Barki & Ramiona (Shoulders/Arms)
+  // Barki
   {
     name: 'Push Press ze sztangą (Wyciskanie z podbiciem bioder)',
-    muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
-    secondaryMuscleGroup: 'Czworogłowe (Quads)',
+    muscleGroup: 'Barki',
+    secondaryMuscleGroup: 'Czworogłowe uda',
     defaultSets: 4,
     defaultReps: '8-10',
     defaultWeight: 50,
@@ -272,8 +298,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Oficjalne Wall Balls (Piłka 6kg / 9kg)',
-    muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
-    secondaryMuscleGroup: 'Czworogłowe (Quads)',
+    muscleGroup: 'Barki',
+    secondaryMuscleGroup: 'Czworogłowe uda',
     defaultSets: 4,
     defaultReps: '20-25',
     defaultWeight: 6,
@@ -285,8 +311,8 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Wyciskanie żołnierskie nad głowę (Overhead Press)',
-    muscleGroup: 'Barki & Ramiona (Shoulders/Arms)',
-    secondaryMuscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Barki',
+    secondaryMuscleGroup: 'Brzuch',
     defaultSets: 4,
     defaultReps: '6-8',
     defaultWeight: 45,
@@ -296,39 +322,103 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     hyroxRelevance: 'Siła bezwzględna barków i stabilizacja odcinka piersiowego.',
     techniqueNotes: 'Brak pomocy z nóg, zablokowany brzuch i pośladki.',
   },
-
-  // Przedramiona & Chwyt (Grip)
   {
-    name: 'Spacer Farmera ze sztangielkami (Farmers Walk)',
-    muscleGroup: 'Przedramiona & Chwyt (Grip)',
-    secondaryMuscleGroup: 'Brzuch & Core',
-    defaultSets: 4,
-    defaultReps: '50 metrów',
-    defaultWeight: 32,
-    defaultRIR: 1,
-    defaultRPE: 8.5,
-    restSeconds: 90,
-    hyroxRelevance: 'Stacja 6 Hyrox (200m). Uodparnia przedramiona na zdrętwienie.',
-    techniqueNotes: 'Barki cofnięte, krótki szybki krok, zakaz odkładania ciężaru.',
-  },
-  {
-    name: 'Zwis na drążku na czas (Dead Hang)',
-    muscleGroup: 'Przedramiona & Chwyt (Grip)',
+    name: 'Wznosy hantli bokiem (Lateral Raises)',
+    muscleGroup: 'Barki',
     defaultSets: 3,
-    defaultReps: '45-60 sekund',
-    defaultWeight: 0,
-    defaultRIR: 1,
+    defaultReps: '12-15',
+    defaultWeight: 10,
+    defaultRIR: 2,
     defaultRPE: 8,
     restSeconds: 60,
-    hyroxRelevance: 'Wytrzymałość izometryczna chwytu pod Sled Pull i Farmers Carry.',
-    techniqueNotes: 'Pewny nachwyt, aktywne lub bierne barki.',
+    hyroxRelevance: 'Wzmocnienie bocznego aktonu barku pod kątem stabilizacji ramion.',
+    techniqueNotes: 'Lekkie ugięcie w łokciach, ruch do wysokości barków.',
   },
 
-  // Brzuch & Core
+  // Biceps
+  {
+    name: 'Uginanie przedramion z hantlami z supinacją',
+    muscleGroup: 'Biceps',
+    secondaryMuscleGroup: 'Plecy',
+    defaultSets: 3,
+    defaultReps: '10-12',
+    defaultWeight: 14,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Siła zginaczy łokcia pod Sled Pull i przyciąganie liny.',
+    techniqueNotes: 'Stabilny tułów bez bujania, pełny obrót nadgarstka na górze.',
+  },
+  {
+    name: 'Uginanie młotkowe (Hammer Curls)',
+    muscleGroup: 'Biceps',
+    defaultSets: 3,
+    defaultReps: '10-12',
+    defaultWeight: 16,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Wzmocnienie ramienno-promieniowego i chwytu pod Farmers Walk.',
+    techniqueNotes: 'Chwyt neutralny, powolne opuszczanie ciężaru.',
+  },
+
+  // Triceps
+  {
+    name: 'Wyciskanie francuskie ze sztangą łamaną (Skull Crushers)',
+    muscleGroup: 'Triceps',
+    defaultSets: 3,
+    defaultReps: '10-12',
+    defaultWeight: 30,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Końcowy wyprost ramienia w SkiErg i mocny wyrzut Wall Ball.',
+    techniqueNotes: 'Nieruchome ramiona, praca wyłącznie w stawie łokciowym.',
+  },
+  {
+    name: 'Prostowanie ramion na wyciągu (Triceps Pushdown)',
+    muscleGroup: 'Triceps',
+    defaultSets: 3,
+    defaultReps: '12-15',
+    defaultWeight: 25,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Wytrzymałość tricepsów pod 1000m SkiErg.',
+    techniqueNotes: 'Łokcie przyklejone do tułowia, mocne dopięcie na dole.',
+  },
+
+  // Łydki
+  {
+    name: 'Wspięcia na palce stojąc ze sztangą',
+    muscleGroup: 'Łydki',
+    defaultSets: 4,
+    defaultReps: '15-20',
+    defaultWeight: 50,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Amortyzacja przy 8x 1km biegu oraz sprężyste odbicie do Burpees.',
+    techniqueNotes: 'Pauza 1s na dole w rozciągnięciu i 1s w szczytowym spięciu.',
+  },
+  {
+    name: 'Wspięcia na palce jednonóż z kettlem',
+    muscleGroup: 'Łydki',
+    defaultSets: 3,
+    defaultReps: '12-15 / noga',
+    defaultWeight: 16,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Stabilizacja stawu skokowego i zapobieganie kontuzjom ścięgna Achillesa.',
+    techniqueNotes: 'Pełen zakres ruchu na podwyższeniu.',
+  },
+
+  // Brzuch
   {
     name: 'Hanging Leg Raises / Zwis z unoszeniem nóg do drążka',
-    muscleGroup: 'Brzuch & Core',
-    secondaryMuscleGroup: 'Przedramiona & Chwyt (Grip)',
+    muscleGroup: 'Brzuch',
+    secondaryMuscleGroup: 'Biceps',
     defaultSets: 3,
     defaultReps: '12-15',
     defaultWeight: 0,
@@ -340,7 +430,7 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
   },
   {
     name: 'Pallof Press z gumą oporową',
-    muscleGroup: 'Brzuch & Core',
+    muscleGroup: 'Brzuch',
     defaultSets: 3,
     defaultReps: '12 / strona',
     defaultWeight: 0,
@@ -350,12 +440,37 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     hyroxRelevance: 'Antyrotacja i ochrona kręgosłupa pod Sled Pull i Sled Push.',
     techniqueNotes: 'Biodra zablokowane, ramiona prostowane w osi mostka.',
   },
+  {
+    name: 'Plank (Deska izometryczna) z dociążeniem',
+    muscleGroup: 'Brzuch',
+    defaultSets: 3,
+    defaultReps: '45-60s',
+    defaultWeight: 10,
+    defaultRIR: 1,
+    defaultRPE: 8,
+    restSeconds: 60,
+    hyroxRelevance: 'Sztywność tułowia i transfer siły między dołem a górą ciała.',
+    techniqueNotes: 'Miednica w tyłopochyleniu, mocne spięcie pośladków i brzucha.',
+  },
 
-  // Silnik Hyrox & Specyfika
+  // Dodatkowe Hyrox
+  {
+    name: 'Spacer Farmera ze sztangielkami (Farmers Walk)',
+    muscleGroup: 'Barki',
+    secondaryMuscleGroup: 'Brzuch',
+    defaultSets: 4,
+    defaultReps: '50 metrów',
+    defaultWeight: 32,
+    defaultRIR: 1,
+    defaultRPE: 8.5,
+    restSeconds: 90,
+    hyroxRelevance: 'Stacja 6 Hyrox (200m). Uodparnia przedramiona na zdrętwienie.',
+    techniqueNotes: 'Barki cofnięte, krótki szybki krok, zakaz odkładania ciężaru.',
+  },
   {
     name: 'Burpee Broad Jumps (Skoki w dal z padem na klatkę)',
-    muscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
-    secondaryMuscleGroup: 'Czworogłowe (Quads)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Klatka piersiowa',
     defaultSets: 4,
     defaultReps: '10 powtórzeń',
     defaultWeight: 0,
@@ -366,34 +481,9 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     techniqueNotes: 'Klatka do ziemi, miękkie lądowanie na całe stopy, stały oddech.',
   },
   {
-    name: 'Sled Push (Pchanie sań obciążeniowych)',
-    muscleGroup: 'Czworogłowe (Quads)',
-    secondaryMuscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
-    defaultSets: 4,
-    defaultReps: '25 metrów',
-    defaultWeight: 152,
-    defaultRIR: 1,
-    defaultRPE: 9,
-    restSeconds: 90,
-    hyroxRelevance: 'Stacja 2 Hyrox (50m Sled Push).',
-    techniqueNotes: 'Niski środek ciężkości, krótkie kroki z palców.',
-  },
-  {
-    name: 'Sled Pull (Przyciąganie sań na linie)',
-    muscleGroup: 'Grzbiet & Plecy (Back/Lats)',
-    secondaryMuscleGroup: 'Kulszowo-Goleniowe & Pośladki (Hamstrings/Glutes)',
-    defaultSets: 4,
-    defaultReps: '25 metrów',
-    defaultWeight: 103,
-    defaultRIR: 1,
-    defaultRPE: 9,
-    restSeconds: 90,
-    hyroxRelevance: 'Stacja 3 Hyrox (50m Sled Pull).',
-    techniqueNotes: 'Ciągnięcie z nóg i pośladków, pewny chwyt liny.',
-  },
-  {
-    name: 'Bieg Interwałowy (np. 800m w tempie wyścigowym)',
-    muscleGroup: 'Silnik Biegowy & Wydolność (Cardio/Engine)',
+    name: 'Bieg Interwałowy (800m Race Pace)',
+    muscleGroup: 'Czworogłowe uda',
+    secondaryMuscleGroup: 'Łydki',
     defaultSets: 5,
     defaultReps: '800m',
     defaultWeight: 0,
