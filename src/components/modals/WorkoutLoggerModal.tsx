@@ -774,6 +774,13 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         defaultWeightKg: exItem.sets[0]?.weightKg || exItem.exercise.defaultWeightKg,
         targetRPE: exItem.exerciseRpe,
         targetRIR: exItem.exerciseRir,
+        plannedSetsDetails: exItem.sets.map((s) => ({
+          setNumber: s.setNumber,
+          reps: s.reps,
+          weightKg: s.weightKg,
+          rir: exItem.exerciseRir ?? 2,
+          rpe: exItem.exerciseRpe ?? 8,
+        })),
       }));
       onUpdateDayExercises(updatedExercises);
     }
@@ -939,7 +946,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         className={
           isMin
             ? 'hidden'
-            : 'fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-hidden'
+            : 'fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-hidden'
         }
       >
         <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative mx-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
@@ -1279,31 +1286,33 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               )}
             </>
           )}
-        </div>
 
-        {/* Bottom Bar: Action finish */}
-        <div className="p-3 border-t border-neutral-800 bg-neutral-950/90 rounded-b-3xl shrink-0 flex flex-col gap-2.5">
-          <div className="text-[11px] text-neutral-400 leading-relaxed">
-            Zaliczono <strong>{totalCompletedSets}</strong> z <strong>{totalPlannedSets}</strong> serii •
-            Tonaż: <strong className="text-amber-400 font-mono-numbers">{totalSessionTonnage.toLocaleString()} kg</strong> •
-            Praca/Odpoczynek: <strong className="text-white font-mono-numbers">{formatSessionTime(totalWorkDurationSec)}</strong> / <strong className="text-amber-400 font-mono-numbers">{formatSessionTime(totalRestDurationSec)}</strong>
-          </div>
+          {/* Action finish inside scroll container */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 bg-neutral-950/90 rounded-2xl p-3.5 flex flex-col gap-2.5">
+            <div className="text-[11px] text-neutral-400 leading-relaxed">
+              Zaliczono <strong>{totalCompletedSets}</strong> z <strong>{totalPlannedSets}</strong> serii •
+              Tonaż: <strong className="text-amber-400 font-mono-numbers">{totalSessionTonnage.toLocaleString()} kg</strong> •
+              Praca/Odpoczynek: <strong className="text-white font-mono-numbers">{formatSessionTime(totalWorkDurationSec)}</strong> / <strong className="text-amber-400 font-mono-numbers">{formatSessionTime(totalRestDurationSec)}</strong>
+            </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={() => setIsStatsModalOpen(true)}
-              className="px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-bold transition-colors cursor-pointer"
-            >
-              Statystyki
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setIsStatsModalOpen(true)}
+                className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                Statystyki
+              </button>
 
-            <button
-              onClick={handleFinishAndSave}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-[11px] tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Zakończ i Zapisz</span>
-            </button>
+              <button
+                type="button"
+                onClick={handleFinishAndSave}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-[11px] tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Zakończ i Zapisz</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

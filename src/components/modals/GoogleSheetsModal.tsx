@@ -164,7 +164,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden">
         <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] shadow-2xl flex flex-col overflow-hidden relative text-left">
           {/* Header */}
           <div className="flex items-center justify-between p-5 sm:p-6 border-b border-neutral-800 bg-neutral-950/70 shrink-0">
@@ -190,7 +190,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
             </button>
           </div>
 
-          <div className="p-5 sm:p-6 space-y-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          <div className="p-5 sm:p-6 pb-24 space-y-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {/* Status message */}
             {statusMessage && (
               <div
@@ -347,7 +347,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                       placeholder="https://docs.google.com/spreadsheets/d/1A2B3C..."
                       value={manualIdInput}
                       onChange={(e) => setManualIdInput(e.target.value)}
-                      className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                      className="flex-1 bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 placeholder:text-gray-400 dark:placeholder:text-neutral-500 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
                     />
                     <button
                       onClick={handleLinkManual}

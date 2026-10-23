@@ -39,6 +39,8 @@ interface ExerciseDetailModalProps {
       completed: boolean;
       unit: string;
       notes?: string;
+      rir?: number;
+      rpe?: number;
     }[],
     exerciseNotes?: string,
     targetDate?: string,
@@ -122,6 +124,7 @@ interface ExerciseDetailSetItem {
   weightKg: number;
   reps: number;
   rir: number;
+  rpe: number;
   completed: boolean;
   unit: ExerciseUnit;
   notes?: string;
@@ -137,6 +140,7 @@ interface ExerciseDetailSetItem {
         weightKg: l.weightKg,
         reps: l.reps,
         rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
+        rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
         completed: true,
         unit: (l.unit as ExerciseUnit) || exUnit,
         notes: l.notes || '',
@@ -161,12 +165,14 @@ interface ExerciseDetailSetItem {
 
       const setReps = prevSet?.reps || defaultReps;
       const setRir = prevSet?.rir !== undefined ? prevSet.rir : (exercise.targetRIR ?? 2);
+      const setRpe = prevSet?.rpe !== undefined ? prevSet.rpe : (exercise.targetRPE || 8);
 
       return {
         setNumber: i + 1,
         weightKg: setWeight,
         reps: setReps,
         rir: setRir,
+        rpe: setRpe,
         completed: false, // Fresh session: UNCOMPLETED
         unit: (prevSet?.unit as ExerciseUnit) || exUnit,
         notes: '',
@@ -181,10 +187,6 @@ interface ExerciseDetailSetItem {
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // 4. State for plan settings
-  const [planPlannedSets, setPlanPlannedSets] = useState(exercise.plannedSets || 3);
-  const [planTargetReps, setPlanTargetReps] = useState(exercise.targetRepsRange || '8-10');
-  const [planWeight, setPlanWeight] = useState(exercise.defaultWeightKg || 0);
-  const [planUnit, setPlanUnit] = useState<ExerciseUnit>(exercise.unit || 'kg');
   const [planRestSec, setPlanRestSec] = useState(exercise.restSeconds || 90);
   const [planRestAfterExSec, setPlanRestAfterExSec] = useState(exercise.restAfterExerciseSec || 120);
   const [planTempo, setPlanTempo] = useState(exercise.tempo || '');
@@ -201,10 +203,6 @@ interface ExerciseDetailSetItem {
     setExerciseRpe(thisDay[0]?.rpe || exercise.targetRPE || 8);
     setExerciseRir(thisDay[0]?.rir ?? exercise.targetRIR ?? 2);
 
-    setPlanPlannedSets(exercise.plannedSets || 3);
-    setPlanTargetReps(exercise.targetRepsRange || '8-10');
-    setPlanWeight(exercise.defaultWeightKg || 0);
-    setPlanUnit(exercise.unit || 'kg');
     setPlanRestSec(exercise.restSeconds || 90);
     setPlanRestAfterExSec(exercise.restAfterExerciseSec || 120);
     setPlanTempo(exercise.tempo || '');
@@ -242,6 +240,7 @@ interface ExerciseDetailSetItem {
           weightKg: last ? last.weightKg : exercise.defaultWeightKg || 0,
           reps: last ? last.reps : 8,
           rir: last ? last.rir : (exercise.targetRIR ?? 2),
+          rpe: last ? last.rpe : (exercise.targetRPE || 8),
           completed: false,
           unit: exUnit,
           notes: '',
@@ -267,6 +266,7 @@ interface ExerciseDetailSetItem {
         weightKg: s.weightKg,
         reps: s.reps,
         rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
         completed: true,
         unit: s.unit || exUnit,
         notes: s.notes,
@@ -279,7 +279,7 @@ interface ExerciseDetailSetItem {
 
   const handleSavePerformance = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveExercisePerformance(setsToLog, exerciseNotes, selectedLogDate);
+    onSaveExercisePerformance(setsToLog, exerciseNotes, selectedLogDate, exerciseRpe, exerciseRir);
     setSaveSuccessMsg(`Zapisano wykonanie serii dla daty ${selectedLogDate}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
@@ -288,10 +288,6 @@ interface ExerciseDetailSetItem {
     e.preventDefault();
     const updated: Exercise = {
       ...exercise,
-      plannedSets: Number(planPlannedSets) || 3,
-      targetRepsRange: String(planTargetReps).trim() || '8-10',
-      defaultWeightKg: Number(planWeight) || 0,
-      unit: planUnit,
       restSeconds: Number(planRestSec) || 90,
       restBetweenSetsSec: Number(planRestSec) || 90,
       restAfterExerciseSec: Number(planRestAfterExSec) || 120,
@@ -311,7 +307,7 @@ interface ExerciseDetailSetItem {
   const latestMaxWeight = Math.max(...latestSets.map((s) => s.weightKg), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
       <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-3xl h-[95dvh] max-h-[95dvh] shadow-2xl p-4 sm:p-6 text-left relative space-y-4 mx-auto overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
@@ -413,7 +409,7 @@ interface ExerciseDetailSetItem {
         </div>
 
         {/* Content Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-24 overscroll-contain">
           {/* TAB 1: QUICK LOGGING / EDIT PERFORMANCE TODAY */}
           {activeTab === 'log' && (
             <div className="space-y-4">
@@ -485,6 +481,7 @@ interface ExerciseDetailSetItem {
                           <th className="pb-1.5 px-1">Ciężar ({exUnit})</th>
                           <th className="pb-1.5 px-1">Powtórzenia</th>
                           <th className="w-16 pb-1.5 px-1 text-center">RIR</th>
+                          <th className="w-16 pb-1.5 px-1 text-center">RPE</th>
                           <th className="w-12 pb-1.5 text-center">Status</th>
                           <th className="w-8 pb-1.5"></th>
                         </tr>
@@ -531,7 +528,21 @@ interface ExerciseDetailSetItem {
                                 max="10"
                                 value={set.rir !== undefined ? set.rir : 2}
                                 onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
-                                className="w-full bg-white text-amber-600 dark:text-amber-300 border border-gray-300 dark:bg-gray-800 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                              />
+                            </td>
+
+                            {/* Editable RPE */}
+                            <td className="py-2 px-1 text-center">
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min="1"
+                                max="10"
+                                value={set.rpe !== undefined ? set.rpe : 8}
+                                onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
+                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </td>
 
@@ -593,7 +604,7 @@ interface ExerciseDetailSetItem {
                 </div>
 
                 {/* Save CTA */}
-                <div className="flex items-center justify-between pt-2">
+                <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-between">
                   <span className="text-[11px] text-neutral-400">
                     Łączny tonaż serii:{' '}
                     <strong className="text-amber-400 font-mono-numbers">
@@ -708,54 +719,7 @@ interface ExerciseDetailSetItem {
                 Dostosuj domyślne parametry tego ćwiczenia w Twoim planie:
               </span>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Serie w planie:</label>
-                  <input
-                    type="number"
-                    value={planPlannedSets}
-                    onChange={(e) => setPlanPlannedSets(parseInt(e.target.value) || 1)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Powtórzenia:</label>
-                  <input
-                    type="text"
-                    value={planTargetReps}
-                    onChange={(e) => setPlanTargetReps(e.target.value)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Ciężar bazowy:</label>
-                  <input
-                    type="number"
-                    step="2.5"
-                    value={planWeight}
-                    onChange={(e) => setPlanWeight(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Jednostka:</label>
-                  <select
-                    value={planUnit}
-                    onChange={(e) => setPlanUnit(e.target.value as ExerciseUnit)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                  >
-                    <option value="kg">kg</option>
-                    <option value="lb">lb</option>
-                    <option value="km">km</option>
-                    <option value="m">m</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-neutral-900">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
                   <label className="text-[10px] text-neutral-400 block mb-0.5">Przerwa między seriami (s):</label>
                   <input
@@ -836,10 +800,10 @@ interface ExerciseDetailSetItem {
                 </div>
               </div>
 
-              <div className="pt-2 text-right">
+              <div className="mt-8 pt-4 border-t border-neutral-800 text-right">
                 <button
                   type="submit"
-                  className="px-6 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-xs cursor-pointer shadow-md"
+                  className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-xs cursor-pointer shadow-md"
                 >
                   Zapisz Zmiany w Planie
                 </button>

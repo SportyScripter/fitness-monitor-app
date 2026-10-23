@@ -22,7 +22,8 @@ import {
   TrainingCycleCatalog,
   MesocyclePhase,
   WorkoutLogEntry,
-  ExerciseUnit
+  ExerciseUnit,
+  ExercisePlannedSet
 } from '../../types/hyrox';
 import { ExerciseChartModal } from '../modals/ExerciseChartModal';
 import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
@@ -138,6 +139,8 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
       completed: boolean;
       unit: string;
       notes?: string;
+      rir?: number;
+      rpe?: number;
     }[],
     exerciseNotes?: string,
     targetDate?: string,
@@ -163,8 +166,8 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         weightKg: Number(s.weightKg) || 0,
         reps: Number(s.reps) || 0,
         tonnageKg: (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
-        rpe: typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8),
-        rir: typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2),
+        rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+        rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
         notes: s.notes || exerciseNotes || undefined,
         sessionId,
         sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
@@ -179,6 +182,20 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     if (newEntries.length > 0 && onSaveLogs) {
       onSaveLogs(newEntries);
     }
+
+    // Also sync the updated sets into the exercise state for this day
+    const updatedPlannedDetails: ExercisePlannedSet[] = sets.map((s) => ({
+      setNumber: s.setNumber,
+      reps: s.reps,
+      weightKg: Number(s.weightKg) || 0,
+      rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
+      rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+    }));
+    handleUpdateExerciseInPlan({
+      ...activeDetailExercise,
+      plannedSets: sets.length,
+      plannedSetsDetails: updatedPlannedDetails,
+    });
   };
 
   const calculateDayPlannedTonnage = (day: WorkoutDay) => {
@@ -447,20 +464,95 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 {selectedDay.exercises.map((exercise, index) => {
                   const isExpanded = !!expandedExerciseIds[exercise.id];
 
-                  // Detailed sets for this exercise
-                  const detailedSets =
-                    exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0
-                      ? exercise.plannedSetsDetails
-                      : Array.from({ length: exercise.plannedSets || 3 }, (_, i) => {
-                          const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                          return {
-                            setNumber: i + 1,
-                            reps: baseReps,
-                            weightKg: exercise.defaultWeightKg || 0,
-                            rir: exercise.targetRIR ?? 2,
-                            rpe: exercise.targetRPE || 8,
-                          };
-                        });
+                  // Active sets for this exercise (including newly added during workout / logged today)
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const currentSessionLogs = (workoutLogs || [])
+                    .filter(
+                      (l) =>
+                        l.exerciseName &&
+                        l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase() &&
+                        (l.dayId === selectedDay.id || l.dateStr === todayStr || (l.timestamp && l.timestamp.startsWith(todayStr)))
+                    )
+                    .sort((a, b) => a.setNumber - b.setNumber);
+
+                  const activeOngoingEx = activeOngoingWorkoutDay?.exercises?.find(
+                    (e) => e.id === exercise.id || e.name.trim().toLowerCase() === exercise.name.trim().toLowerCase()
+                  );
+
+                  let detailedSets: {
+                    setNumber: number;
+                    reps: number | string;
+                    weightKg: number;
+                    rir: number;
+                    rpe: number;
+                    completed?: boolean;
+                  }[] = [];
+
+                  if (currentSessionLogs.length > 0) {
+                    detailedSets = currentSessionLogs.map((l) => ({
+                      setNumber: l.setNumber,
+                      reps: l.reps,
+                      weightKg: l.weightKg,
+                      rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
+                      rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
+                      completed: true,
+                    }));
+
+                    const plannedTotal = Math.max(
+                      exercise.plannedSets || 0,
+                      exercise.plannedSetsDetails?.length || 0,
+                      activeOngoingEx?.plannedSets || 0,
+                      activeOngoingEx?.plannedSetsDetails?.length || 0
+                    );
+                    for (let i = detailedSets.length + 1; i <= plannedTotal; i++) {
+                      const plannedItem =
+                        exercise.plannedSetsDetails?.find((p) => p.setNumber === i) ||
+                        activeOngoingEx?.plannedSetsDetails?.find((p) => p.setNumber === i);
+                      const baseReps = plannedItem
+                        ? plannedItem.reps
+                        : parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                      const baseW = plannedItem ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
+                      detailedSets.push({
+                        setNumber: i,
+                        reps: baseReps,
+                        weightKg: baseW,
+                        rir: plannedItem?.rir ?? exercise.targetRIR ?? 2,
+                        rpe: plannedItem?.rpe ?? exercise.targetRPE ?? 8,
+                        completed: false,
+                      });
+                    }
+                  } else if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0) {
+                    detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => ({
+                      setNumber: s.setNumber || idx + 1,
+                      reps: s.reps,
+                      weightKg: s.weightKg,
+                      rir: s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2),
+                      rpe: s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8),
+                      completed: false,
+                    }));
+                  } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
+                    detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
+                      setNumber: s.setNumber || idx + 1,
+                      reps: s.reps,
+                      weightKg: s.weightKg,
+                      rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+                      rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+                      completed: false,
+                    }));
+                  } else {
+                    const count = Math.max(exercise.plannedSets || 3, activeOngoingEx?.plannedSets || 3);
+                    detailedSets = Array.from({ length: count }, (_, i) => {
+                      const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                      return {
+                        setNumber: i + 1,
+                        reps: baseReps,
+                        weightKg: exercise.defaultWeightKg || 0,
+                        rir: exercise.targetRIR ?? 2,
+                        rpe: exercise.targetRPE || 8,
+                        completed: false,
+                      };
+                    });
+                  }
 
                   // Dynamic Reps Display: e.g. "2-6" if different, or "6" if all equal
                   const repsList = detailedSets
@@ -618,7 +710,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                                   className="flex items-center justify-between p-2 rounded-xl bg-neutral-900/90 border border-neutral-800/80 text-xs"
                                 >
                                   <div className="flex items-center gap-2">
-                                    <span className="w-6 h-6 rounded-lg bg-black border border-neutral-800 text-amber-400 font-bold flex items-center justify-center text-[10px]">
+                                    <span className="w-6 h-6 rounded-lg bg-gray-200 text-gray-800 border border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-neutral-700 font-bold flex items-center justify-center text-[10px]">
                                       #{set.setNumber || sIdx + 1}
                                     </span>
                                     <span className="text-white font-black">
@@ -630,11 +722,11 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                                     </span>
                                   </div>
 
-                                  <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-                                    <span className="px-1.5 py-0.5 rounded bg-black/60 text-neutral-300 font-medium">
+                                  <div className="flex items-center gap-2 text-[11px]">
+                                    <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-medium">
                                       RIR {set.rir !== undefined ? set.rir : (exercise.targetRIR ?? 2)}
                                     </span>
-                                    <span className="px-1.5 py-0.5 rounded bg-black/60 text-neutral-300 font-medium">
+                                    <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-medium">
                                       RPE {set.rpe !== undefined ? set.rpe : (exercise.targetRPE || 8)}
                                     </span>
                                   </div>

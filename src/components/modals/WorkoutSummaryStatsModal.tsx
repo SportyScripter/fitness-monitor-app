@@ -105,7 +105,7 @@ export const WorkoutSummaryStatsModal: React.FC<WorkoutSummaryStatsModalProps> =
     previousSessionTonnage > 0 ? Math.round((tonnageDelta / previousSessionTonnage) * 100) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
       <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-3xl h-[95dvh] max-h-[95dvh] shadow-2xl p-4 sm:p-6 text-left relative space-y-4 sm:space-y-5 flex flex-col mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
@@ -135,7 +135,7 @@ export const WorkoutSummaryStatsModal: React.FC<WorkoutSummaryStatsModalProps> =
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 overscroll-contain touch-pan-y">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-24 overscroll-contain touch-pan-y">
           {/* Main KPI Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 text-center">
@@ -348,16 +348,16 @@ export const WorkoutSummaryStatsModal: React.FC<WorkoutSummaryStatsModalProps> =
               <p className="text-neutral-300 italic">&quot;{sessionNotes}&quot;</p>
             </div>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="pt-2 text-right shrink-0">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 rounded-xl bg-amber-400 text-black font-black uppercase text-xs tracking-wider cursor-pointer shadow-md shadow-amber-400/20 hover:bg-amber-300 transition-colors"
-          >
-            Zamknij Podsumowanie
-          </button>
+          {/* Footer inside scroll container */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 text-right">
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl bg-amber-400 text-black font-black uppercase text-xs tracking-wider cursor-pointer shadow-md shadow-amber-400/20 hover:bg-amber-300 transition-colors"
+            >
+              Zamknij Podsumowanie
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -145,6 +145,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.style.colorScheme = theme;
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);

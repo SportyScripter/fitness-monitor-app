@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *, .dark, .dark *));
+
+html[data-theme='light'] input:not([type='checkbox']):not([type='radio']),
+html[data-theme='light'] textarea,
+html[data-theme='light'] select {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+html[data-theme='light'] input::placeholder,
+html[data-theme='light'] textarea::placeholder {
+  color: #9ca3af !important;
+}
+
 :root {
   --app-bg: #070b12;
   --app-panel: #0e1520;

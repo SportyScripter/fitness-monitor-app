@@ -58,7 +58,7 @@ export const PreviousWorkoutModal: React.FC<PreviousWorkoutModalProps> = ({
   const sessionNote = previousLogs.find((l) => l.sessionNotes)?.sessionNotes;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
       <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] shadow-2xl p-4 sm:p-6 text-left relative space-y-4 sm:space-y-5 flex flex-col mx-auto overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
@@ -118,7 +118,7 @@ export const PreviousWorkoutModal: React.FC<PreviousWorkoutModalProps> = ({
         )}
 
         {/* Exercises List */}
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 text-xs overscroll-contain touch-pan-y">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 pb-24 text-xs overscroll-contain touch-pan-y">
           {exercises.length === 0 ? (
             <div className="py-12 text-center text-neutral-500">
               <Dumbbell className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
@@ -171,16 +171,16 @@ export const PreviousWorkoutModal: React.FC<PreviousWorkoutModalProps> = ({
               </div>
             ))
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="pt-2 text-right shrink-0">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 rounded-xl bg-amber-400 text-black font-black uppercase text-xs tracking-wider cursor-pointer shadow-md shadow-amber-400/20"
-          >
-            Zamknij Podgląd
-          </button>
+          {/* Footer inside scroll container */}
+          <div className="mt-8 pt-4 border-t border-neutral-800 text-right">
+            <button
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl bg-amber-400 text-black font-black uppercase text-xs tracking-wider cursor-pointer shadow-md shadow-amber-400/20"
+            >
+              Zamknij Podgląd
+            </button>
+          </div>
         </div>
       </div>
     </div>

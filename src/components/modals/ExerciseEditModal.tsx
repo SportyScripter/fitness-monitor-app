@@ -277,7 +277,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-sm overflow-hidden">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2.5 sm:p-4 bg-black/85 backdrop-blur-sm overflow-hidden">
       <div className="bg-neutral-900 border border-neutral-700 rounded-3xl w-full max-w-2xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 text-left">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/80 shrink-0">
@@ -323,7 +323,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         </div>
 
         {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 pb-12 space-y-5 text-xs overscroll-contain">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 pb-24 space-y-5 text-xs overscroll-contain">
           {/* Quick Catalog Search / Accordion */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -348,7 +348,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                     placeholder="Filtruj np. Przysiad, Wyciskanie, Lunges, SkiErg..."
                     value={catalogSearch}
                     onChange={(e) => setCatalogSearch(e.target.value)}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-xl pl-8 pr-3 py-2 text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:border-amber-400"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl pl-8 pr-3 py-2 text-xs placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                 </div>
 
@@ -390,7 +390,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                 placeholder="np. Wyciskanie sztangi leżąc"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-2 text-white font-bold text-xs focus:outline-none focus:border-amber-400"
+                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
               />
             </div>
 
@@ -401,7 +401,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
               <select
                 value={muscleGroup}
                 onChange={(e) => setMuscleGroup(e.target.value as MuscleGroup)}
-                className="w-full bg-neutral-950 border border-neutral-700 rounded-xl px-2.5 py-2 text-white text-xs focus:outline-none focus:border-amber-400 cursor-pointer"
+                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
               >
                 {PROFESSIONAL_MUSCLE_GROUPS.map((mg) => (
                   <option key={mg} value={mg}>
@@ -533,7 +533,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                 <select
                   value={exerciseType}
                   onChange={(e) => setExerciseType(e.target.value as ExerciseType)}
-                  className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-white text-xs"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
                 >
                   <option value="STRENGTH">Siłowe (FBW)</option>
                   <option value="RUNNING">Biegowe</option>
@@ -550,7 +550,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as ExerciseUnit)}
-                  className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-white text-xs"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
                 >
                   <option value="kg">kg (kilogramy)</option>
                   <option value="lb">lb (funty)</option>
@@ -573,7 +573,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       const val = e.target.value.replace(',', '.');
                       if (val === '' || /^[0-9]*$/.test(val)) setRestBetweenSetsSec(val);
                     }}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-white text-xs font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                   <span className="text-[10px] text-neutral-400 font-bold">s</span>
                 </div>
@@ -593,7 +593,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       const val = e.target.value.replace(',', '.');
                       if (val === '' || /^[0-9]*$/.test(val)) setRestAfterExerciseSec(val);
                     }}
-                    className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2 py-1.5 text-white text-xs font-mono-numbers"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                   />
                   <span className="text-[10px] text-neutral-400 font-bold">s</span>
                 </div>
@@ -611,7 +611,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   placeholder="np. 3-1-1-0"
                   value={tempo}
                   onChange={(e) => setTempo(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white text-xs font-mono-numbers"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                 />
               </div>
 
@@ -624,7 +624,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   placeholder="np. Retrakcja łopatek, pełny wyprost w biodrze..."
                   value={techniqueNotes}
                   onChange={(e) => setTechniqueNotes(e.target.value)}
-                  className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white text-xs"
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                 />
               </div>
             </div>
@@ -636,7 +636,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   type="checkbox"
                   checked={enableRunningMetrics}
                   onChange={(e) => setEnableRunningMetrics(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-400 bg-neutral-900 border-neutral-700 focus:ring-0 cursor-pointer"
+                  className="w-4 h-4 rounded text-amber-400 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-0 cursor-pointer"
                 />
                 <span className="text-xs font-bold text-neutral-200">
                   Włącz parametry biegowe / cardio (Dystans, Tempo, Docelowe HR)
@@ -657,13 +657,13 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                           const val = e.target.value.replace(',', '.');
                           if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) setTargetDistance(val);
                         }}
-                        className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white text-xs font-mono-numbers"
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                         placeholder="np. 800"
                       />
                       <select
                         value={distanceUnit}
                         onChange={(e) => setDistanceUnit(e.target.value as 'km' | 'm')}
-                        className="bg-neutral-950 border border-neutral-700 rounded-lg px-1.5 py-1 text-white text-xs cursor-pointer"
+                        className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                       >
                         <option value="m">m</option>
                         <option value="km">km</option>
@@ -677,7 +677,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       type="text"
                       value={targetPace}
                       onChange={(e) => setTargetPace(e.target.value)}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white text-xs font-mono-numbers"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                       placeholder="np. 4:15 min/km"
                     />
                   </div>
@@ -693,7 +693,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                         const val = e.target.value.replace(',', '.');
                         if (val === '' || /^[0-9]*$/.test(val)) setTargetHR(val);
                       }}
-                      className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2 py-1 text-white text-xs font-mono-numbers"
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                       placeholder="np. 165"
                     />
                   </div>
