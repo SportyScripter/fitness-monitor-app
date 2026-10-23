@@ -274,6 +274,7 @@ export interface WorkoutLogEntry {
   totalWorkoutDurationSec?: number;
   totalWorkDurationSec?: number;
   totalRestDurationSec?: number;
+  completed?: boolean;
 }
 
 export interface HyroxRaceTrialSplit {

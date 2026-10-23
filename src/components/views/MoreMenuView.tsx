@@ -163,7 +163,10 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
             currentWeek={currentWeek}
             workoutLogs={workoutLogs}
             weekPlan={currentWeekDays}
+            weeksList={weeksList}
+            activeCycle={activeCycle}
             onOpenSheetsModal={onOpenSheetsModal}
+            onWeekChange={onWeekChange}
           />
         );
         break;

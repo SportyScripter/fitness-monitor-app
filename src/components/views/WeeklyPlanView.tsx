@@ -1087,6 +1087,8 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
           workoutLogs={workoutLogs}
           isOpen={!!chartExerciseName}
           onClose={() => setChartExerciseName(null)}
+          category={selectedDay?.exercises?.find((e) => e.name.trim().toLowerCase() === chartExerciseName.trim().toLowerCase())?.category}
+          exercise={selectedDay?.exercises?.find((e) => e.name.trim().toLowerCase() === chartExerciseName.trim().toLowerCase())}
         />
       )}
 

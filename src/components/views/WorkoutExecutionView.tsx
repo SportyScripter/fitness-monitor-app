@@ -883,6 +883,8 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
           onClose={() => setChartExerciseName(null)}
           exerciseName={chartExerciseName}
           workoutLogs={workoutLogs}
+          category={selectedDay?.exercises?.find((e) => e.name.trim().toLowerCase() === chartExerciseName.trim().toLowerCase())?.category}
+          exercise={selectedDay?.exercises?.find((e) => e.name.trim().toLowerCase() === chartExerciseName.trim().toLowerCase())}
         />
       )}
 

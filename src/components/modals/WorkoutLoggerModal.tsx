@@ -1034,12 +1034,12 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           </div>
 
           {/* ========================================================================= */}
-          {/* GARMIN DUAL-TIMER DECK (STOPER SERII I PRZERWY W STYLU GARMINA)          */}
+          {/* UNIFIED SCROLL CONTAINER (STOPPER, KOLEJKA SERII I ZAKOŃCZENIE)           */}
           {/* ========================================================================= */}
-          <div className="p-3 sm:p-5 border-b border-neutral-800/80 bg-neutral-950/40 shrink-0">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3.5 sm:p-5 pb-12 space-y-4">
             {/* Rest Alert Banner */}
             {isRestAlertActive && (
-              <div className="mb-2.5 p-3 rounded-2xl bg-amber-400 text-black font-black flex items-center justify-between gap-3 shadow-xl animate-bounce">
+              <div className="p-3 rounded-2xl bg-amber-400 text-black font-black flex items-center justify-between gap-3 shadow-xl animate-bounce">
                 <div className="flex items-center gap-2">
                   <BellRing className="w-5 h-5 text-black shrink-0 animate-spin" />
                   <span className="text-xs sm:text-sm">
@@ -1123,18 +1123,24 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                       garminPhase === 'WORK' ? 'text-zinc-700' : 'text-neutral-300'
                     }`}
                   >
-                    <div className="font-black uppercase tracking-[0.12em] text-[10px] mb-1 opacity-75">
-                      {activeDisplayInfo.label}
-                    </div>
                     <div className="leading-5">
-                      <strong className={garminPhase === 'WORK' ? 'text-zinc-950' : 'text-[#8b5e1d] garmin-rest-body'}>
-                        {activeDisplayInfo.exerciseName}
-                      </strong>
-                      {' • '}seria {activeDisplayInfo.setNumber}/{activeDisplayInfo.totalSets}
-                      {' • '}{activeDisplayInfo.weightKg > 0 ? `${activeDisplayInfo.weightKg} ${activeDisplayInfo.unit} × ${activeDisplayInfo.reps} powt` : `${activeDisplayInfo.reps} powt`}
-                      {' • '}RPE {activeDisplayInfo.rpe}
-                      {' • '}RIR {activeDisplayInfo.rir}
-                      {' • '}tempo {activeDisplayInfo.tempo}
+                      {currentActiveEx?.category === 'cardio' ? (
+                        <>
+                          <span className="font-bold">Seria {activeDisplayInfo.setNumber}/{activeDisplayInfo.totalSets}</span>
+                          {currentActiveSet?.distance ? ` • ${currentActiveSet.distance} ${currentActiveSet.distanceUnit || 'km'}` : ''}
+                          {currentActiveSet?.pace ? ` • tempo ${currentActiveSet.pace} min/km` : ''}
+                          {currentActiveSet?.targetHr ? ` • HR ${currentActiveSet.targetHr} bpm` : ''}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold">Seria {activeDisplayInfo.setNumber}/{activeDisplayInfo.totalSets}</span>
+                          {' • '}
+                          {activeDisplayInfo.weightKg > 0 ? `${activeDisplayInfo.weightKg} ${activeDisplayInfo.unit} × ${activeDisplayInfo.reps} powt` : `${activeDisplayInfo.reps} powt`}
+                          {' • '}RPE {activeDisplayInfo.rpe}
+                          {' • '}RIR {activeDisplayInfo.rir}
+                          {' • '}tempo {activeDisplayInfo.tempo}
+                        </>
+                      )}
                     </div>
                     {activeDisplayInfo.notes && (
                       <div className={`mt-1 text-[11px] leading-4 ${garminPhase === 'WORK' ? 'text-zinc-600' : 'text-[#5d493a] garmin-rest-note'}`}>
@@ -1193,16 +1199,16 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleGarminLap}
-                  className={`w-full min-h-[48px] sm:min-h-[52px] rounded-xl font-black text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-[0.98] ${
+                  className={`w-full min-h-[48px] sm:min-h-[52px] rounded-xl text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all shadow-xl cursor-pointer active:scale-[0.98] ${
                     !hasWorkoutStarted
-                      ? 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
+                      ? 'bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold shadow-amber-400/20'
                       : garminPhase === 'WORK'
-                        ? 'bg-black text-white hover:bg-neutral-800 shadow-black/30'
-                        : 'bg-amber-400 text-black hover:bg-amber-300 shadow-amber-400/20'
+                        ? 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 border-2 border-neutral-300 dark:border-neutral-700 text-gray-900 dark:text-gray-100 font-bold shadow-md'
+                        : 'bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold shadow-amber-400/20'
                   }`}
                 >
-                  <RotateCcw className="w-5 h-5 shrink-0" />
-                  <span>
+                  <RotateCcw className={`w-5 h-5 shrink-0 ${garminPhase === 'WORK' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-900'}`} />
+                  <span className={garminPhase === 'WORK' ? 'text-gray-900 dark:text-gray-100 font-bold' : 'text-gray-900 font-bold'}>
                     {!hasWorkoutStarted
                       ? 'Rozpocznij trening'
                       : garminPhase === 'WORK'
@@ -1212,111 +1218,111 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                 </button>
               </div>
             </div>
-          </div>
 
-        {/* Compact View for Current and Next Set + Next Exercise in Queue */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 pb-28 space-y-3.5 text-xs overscroll-contain">
-          {isWorkoutFinished && (
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 sm:p-4 shadow-lg">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-wider font-black text-emerald-300">Trening zakończony</div>
-                  <div className="mt-1 text-lg font-black text-white">Sesja: {formatSessionTime(sessionSeconds)}</div>
-                </div>
-                <div className="text-right text-[11px] text-emerald-200">
-                  <div>Serii: {totalCompletedSets}/{totalPlannedSets}</div>
-                  <div className="font-mono-numbers text-emerald-100">{totalSessionTonnage.toLocaleString()} kg</div>
-                </div>
-              </div>
-              <div className="mt-3 text-[11px] text-emerald-100 border-t border-emerald-500/20 pt-2">
-                Dobra robota. Ostatnia seria została zaliczona — timer został zatrzymany i podsumowanie treningu jest zapisane.
-              </div>
-            </div>
-          )}
-
-          {!isWorkoutFinished && (
-            <>
-              {nextSetInfo ? (
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3.5">
-                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800">
-                    <div className="text-[10px] uppercase tracking-[0.14em] font-black text-amber-400">
-                      Następne do zrobienia
+            {/* Compact View for Current and Next Set + Next Exercise in Queue */}
+            <div className="space-y-3.5 text-xs">
+              {isWorkoutFinished && (
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3.5 sm:p-4 shadow-lg">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider font-black text-emerald-300">Trening zakończony</div>
+                      <div className="mt-1 text-lg font-black text-white">Sesja: {formatSessionTime(sessionSeconds)}</div>
                     </div>
-                    <div className="text-[10px] font-bold text-neutral-400 font-mono-numbers">
-                      Seria #{nextSetInfo.setNumber}
+                    <div className="text-right text-[11px] text-emerald-200">
+                      <div>Serii: {totalCompletedSets}/{totalPlannedSets}</div>
+                      <div className="font-mono-numbers text-emerald-100">{totalSessionTonnage.toLocaleString()} kg</div>
                     </div>
                   </div>
-
-                  <div className="mt-2 min-w-0">
-                    <div className="text-sm font-black text-white truncate">
-                      {nextSetInfo.exerciseName || currentActiveEx?.name || 'Ćwiczenie'}
-                    </div>
-                    <div className="text-[11px] text-neutral-400 mt-0.5">
-                      {nextSetInfo.isNextExercise ? 'Nowe ćwiczenie' : 'Kolejna seria w tym ćwiczeniu'}
-                    </div>
+                  <div className="mt-3 text-[11px] text-emerald-100 border-t border-emerald-500/20 pt-2">
+                    Dobra robota. Ostatnia seria została zaliczona — timer został zatrzymany i podsumowanie treningu jest zapisane.
                   </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
-                      {nextSetInfo.weightKg > 0 ? `${nextSetInfo.weightKg} ${nextSetInfo.unit}` : 'Ciało'}
-                    </span>
-                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
-                      {nextSetInfo.reps} powt
-                    </span>
-                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
-                      RPE {nextSetInfo.rpe}
-                    </span>
-                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
-                      RIR {nextSetInfo.rir}
-                    </span>
-                    <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-neutral-200">
-                      Tempo {nextSetInfo.tempo}
-                    </span>
-                  </div>
-
-                  {(nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes) && (
-                    <div className="mt-2 text-[11px] text-neutral-400 border-t border-neutral-800 pt-2 leading-4">
-                      {nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-bold">
-                  🔥 To ostatnia zaplanowana seria tego treningu! Daj z siebie wszystko!
                 </div>
               )}
-            </>
-          )}
 
-          {/* Action finish inside scroll container */}
-          <div className="mt-8 pt-4 border-t border-neutral-800 bg-neutral-950/90 rounded-2xl p-3.5 flex flex-col gap-2.5">
-            <div className="text-[11px] text-neutral-400 leading-relaxed">
-              Zaliczono <strong>{totalCompletedSets}</strong> z <strong>{totalPlannedSets}</strong> serii •
-              Tonaż: <strong className="text-amber-400 font-mono-numbers">{totalSessionTonnage.toLocaleString()} kg</strong> •
-              Praca/Odpoczynek: <strong className="text-white font-mono-numbers">{formatSessionTime(totalWorkDurationSec)}</strong> / <strong className="text-amber-400 font-mono-numbers">{formatSessionTime(totalRestDurationSec)}</strong>
-            </div>
+              {!isWorkoutFinished && (
+                <>
+                  {nextSetInfo ? (
+                    <div className="rounded-2xl border border-neutral-800 bg-neutral-950/80 p-3.5">
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800">
+                        <div className="text-[10px] uppercase tracking-[0.14em] font-black text-amber-400">
+                          Następne do zrobienia
+                        </div>
+                        <div className="text-[10px] font-bold text-neutral-400 font-mono-numbers">
+                          Seria #{nextSetInfo.setNumber}
+                        </div>
+                      </div>
 
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setIsStatsModalOpen(true)}
-                className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-bold transition-colors cursor-pointer"
-              >
-                Statystyki
-              </button>
+                      <div className="mt-2 min-w-0">
+                        <div className="text-sm font-black text-white truncate">
+                          {nextSetInfo.exerciseName || currentActiveEx?.name || 'Ćwiczenie'}
+                        </div>
+                        <div className="text-[11px] text-neutral-400 mt-0.5">
+                          {nextSetInfo.isNextExercise ? 'Nowe ćwiczenie' : 'Kolejna seria w tym ćwiczeniu'}
+                        </div>
+                      </div>
 
-              <button
-                type="button"
-                onClick={handleFinishAndSave}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-[11px] tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Zakończ i Zapisz</span>
-              </button>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                        <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
+                          {nextSetInfo.weightKg > 0 ? `${nextSetInfo.weightKg} ${nextSetInfo.unit}` : 'Ciało'}
+                        </span>
+                        <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-white">
+                          {nextSetInfo.reps} powt
+                        </span>
+                        <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
+                          RPE {nextSetInfo.rpe}
+                        </span>
+                        <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-amber-300">
+                          RIR {nextSetInfo.rir}
+                        </span>
+                        <span className="rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 font-mono-numbers font-bold text-neutral-200">
+                          Tempo {nextSetInfo.tempo}
+                        </span>
+                      </div>
+
+                      {(nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes) && (
+                        <div className="mt-2 text-[11px] text-neutral-400 border-t border-neutral-800 pt-2 leading-4">
+                          {nextExerciseInQueue?.techniqueNotes || currentActiveEx?.techniqueNotes}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs text-center font-bold">
+                      🔥 To ostatnia zaplanowana seria tego treningu! Daj z siebie wszystko!
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Action finish inside scroll container - bottom-most element */}
+              <div className="mt-6 pt-4 border-t border-neutral-800 bg-neutral-950/90 rounded-2xl p-3.5 flex flex-col gap-2.5">
+                <div className="text-[11px] text-neutral-400 leading-relaxed">
+                  Zaliczono <strong>{totalCompletedSets}</strong> z <strong>{totalPlannedSets}</strong> serii •
+                  Tonaż: <strong className="text-amber-400 font-mono-numbers">{totalSessionTonnage.toLocaleString()} kg</strong> •
+                  Praca/Odpoczynek: <strong className="text-white font-mono-numbers">{formatSessionTime(totalWorkDurationSec)}</strong> / <strong className="text-amber-400 font-mono-numbers">{formatSessionTime(totalRestDurationSec)}</strong>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsStatsModalOpen(true)}
+                    className="px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-bold transition-colors cursor-pointer"
+                  >
+                    Statystyki
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFinishAndSave}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-[11px] tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Zakończ i Zapisz</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Individual Exercise Chart Modal */}
       {selectedChartExerciseName && (
