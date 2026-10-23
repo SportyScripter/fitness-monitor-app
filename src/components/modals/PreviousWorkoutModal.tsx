@@ -42,7 +42,7 @@ export const PreviousWorkoutModal: React.FC<PreviousWorkoutModalProps> = ({
     if (!exerciseMap[l.exerciseName]) {
       exerciseMap[l.exerciseName] = {
         name: l.exerciseName,
-        muscleGroup: l.muscleGroup,
+        muscleGroup: l.muscleGroup || (l.activityType === 'RUNNING' ? 'Cardio / Bieg' : 'Ogólne'),
         sets: [],
         rpe: l.rpe,
         rir: l.rir,

@@ -39,7 +39,19 @@ export const normalizeMuscleGroup = (raw?: string | null): MuscleGroup => {
 export type DayType = 'FBW' | 'RUNNING_HIIT' | 'REST_RECOVERY' | 'WEEKEND_HYROX' | 'CUSTOM';
 
 export type ExerciseType = 'STRENGTH' | 'RUNNING' | 'HYROX_STATION' | 'INTERVAL_CARDIO' | 'MOBILITY';
+export type ExerciseCategory = 'strength' | 'cardio';
 export type ExerciseUnit = 'kg' | 'lb' | 'km' | 'm';
+
+export const RUNNING_TYPES = [
+  'Easy Run',
+  'Long Run',
+  'Intervals',
+  'Tempo Run',
+  'Fartlek',
+  'Recovery Run',
+  'Hill Repeats',
+] as const;
+export type RunningType = (typeof RUNNING_TYPES)[number];
 
 export interface ExerciseSet {
   setNumber: number;
@@ -53,25 +65,36 @@ export interface ExerciseSet {
   setDurationSec?: number;
   restDurationSec?: number;
   targetDistance?: number;
+  distance?: number;
   distanceUnit?: 'km' | 'm';
   targetPace?: string;
+  pace?: string;
   actualPace?: string;
   targetHR?: number;
+  targetHr?: number;
   actualHR?: number;
 }
 
+export type WorkoutSet = ExerciseSet;
+
 export interface ExercisePlannedSet {
   setNumber: number;
-  reps: number | string;
-  weightKg: number;
-  rir: number;
-  rpe: number;
+  reps?: number | string;
+  weightKg?: number;
+  rir?: number;
+  rpe?: number;
+  distance?: number;
+  distanceUnit?: 'km' | 'm';
+  pace?: string;
+  targetHr?: number;
+  targetHR?: number;
 }
 
 export interface Exercise {
   id: string;
   name: string;
-  muscleGroup: MuscleGroup;
+  category?: ExerciseCategory;
+  muscleGroup?: MuscleGroup;
   secondaryMuscleGroup?: MuscleGroup;
   plannedSets: number;
   targetRepsRange: string; // e.g. "6-8" or "10-12" or "20-25"
@@ -225,7 +248,7 @@ export interface WorkoutLogEntry {
   dayTitle: string;
   exerciseId: string;
   exerciseName: string;
-  muscleGroup: MuscleGroup;
+  muscleGroup?: MuscleGroup;
   setNumber: number;
   weightKg: number;
   reps: number;

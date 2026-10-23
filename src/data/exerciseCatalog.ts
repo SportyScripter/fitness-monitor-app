@@ -1,8 +1,9 @@
-import { MuscleGroup } from '../types/hyrox';
+import { MuscleGroup, ExerciseCategory } from '../types/hyrox';
 
 export interface CatalogExerciseItem {
   name: string;
-  muscleGroup: MuscleGroup;
+  category?: ExerciseCategory;
+  muscleGroup?: MuscleGroup;
   secondaryMuscleGroup?: MuscleGroup;
   defaultSets: number;
   defaultReps: string;
@@ -12,6 +13,10 @@ export interface CatalogExerciseItem {
   restSeconds: number;
   hyroxRelevance: string;
   techniqueNotes: string;
+  distance?: number;
+  distanceUnit?: 'm' | 'km';
+  pace?: string;
+  targetHr?: number;
 }
 
 export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
@@ -492,5 +497,118 @@ export const EXERCISE_CATALOG: CatalogExerciseItem[] = [
     restSeconds: 90,
     hyroxRelevance: 'Budowa tempa wyścigowego (Race Pace) pomiędzy 8 stacjami.',
     techniqueNotes: 'Równa kadencja, rozluźnione ramiona, kontrola oddechu.',
+  },
+  // Typy Biegów / Cardio (Dedykowany moduł)
+  {
+    name: 'Easy Run',
+    category: 'cardio',
+    defaultSets: 1,
+    defaultReps: '1',
+    defaultWeight: 0,
+    defaultRIR: 4,
+    defaultRPE: 6,
+    restSeconds: 0,
+    distance: 5,
+    distanceUnit: 'km',
+    pace: '5:30',
+    targetHr: 135,
+    hyroxRelevance: 'Budowanie bazy tlenowej (Strefa 2 / Z2), fundament regeneracji i objętości tlenowej pod Hyrox.',
+    techniqueNotes: 'Spokojne, konwersacyjne tempo (strefa 2). Kadencja ~170-180 spm, lądowanie na śródstopiu.',
+  },
+  {
+    name: 'Long Run',
+    category: 'cardio',
+    defaultSets: 1,
+    defaultReps: '1',
+    defaultWeight: 0,
+    defaultRIR: 3,
+    defaultRPE: 7,
+    restSeconds: 0,
+    distance: 10,
+    distanceUnit: 'km',
+    pace: '5:20',
+    targetHr: 145,
+    hyroxRelevance: 'Wytrzymałość tempowa i adaptacja mięśniowa do długotrwałego wysiłku biegowego.',
+    techniqueNotes: 'Równe tempo przez cały bieg, kontrola nawodnienia i oddechu.',
+  },
+  {
+    name: 'Intervals',
+    category: 'cardio',
+    defaultSets: 4,
+    defaultReps: '4',
+    defaultWeight: 0,
+    defaultRIR: 1,
+    defaultRPE: 9,
+    restSeconds: 90,
+    distance: 800,
+    distanceUnit: 'm',
+    pace: '3:50',
+    targetHr: 175,
+    hyroxRelevance: 'Kluczowe pod stacje biegowe Hyrox (8x1km) — podnoszenie pułapu VO2max i odporności na zakwaszenie.',
+    techniqueNotes: 'Wysoka intensywność, pełne zaangażowanie w fazie pracy, aktywny odpoczynek w truchcie w przerwie.',
+  },
+  {
+    name: 'Tempo Run',
+    category: 'cardio',
+    defaultSets: 1,
+    defaultReps: '1',
+    defaultWeight: 0,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 0,
+    distance: 6,
+    distanceUnit: 'km',
+    pace: '4:20',
+    targetHr: 165,
+    hyroxRelevance: 'Przesuwanie progu mleczanowego (LT2) — specyficzne tempo startowe w zawodach Hyrox.',
+    techniqueNotes: 'Bieg w tempie progowym ("komfortowo ciężko"), stały rytm i kontrola tętna.',
+  },
+  {
+    name: 'Fartlek',
+    category: 'cardio',
+    defaultSets: 5,
+    defaultReps: '5',
+    defaultWeight: 0,
+    defaultRIR: 2,
+    defaultRPE: 8,
+    restSeconds: 60,
+    distance: 500,
+    distanceUnit: 'm',
+    pace: '4:05',
+    targetHr: 170,
+    hyroxRelevance: 'Zabawa biegowa imitująca zmienne tempo i zrywy po wyjściu ze stacji siłowych.',
+    techniqueNotes: 'Przeplatane odcinki przyspieszeń z luźnym wybieganiem w urozmaiconym terenie.',
+  },
+  {
+    name: 'Recovery Run',
+    category: 'cardio',
+    defaultSets: 1,
+    defaultReps: '1',
+    defaultWeight: 0,
+    defaultRIR: 5,
+    defaultRPE: 5,
+    restSeconds: 0,
+    distance: 4,
+    distanceUnit: 'km',
+    pace: '6:00',
+    targetHr: 125,
+    hyroxRelevance: 'Aktywna regeneracja potreningowa, pobudzenie krążenia i drenaż metabolitów z nóg.',
+    techniqueNotes: 'Bardzo lekki trucht, bez presji na tempo, pełen luz w barkach i biodrach.',
+  },
+  {
+    name: 'Hill Repeats',
+    category: 'cardio',
+    defaultSets: 6,
+    defaultReps: '6',
+    defaultWeight: 0,
+    defaultRIR: 1,
+    defaultRPE: 9,
+    restSeconds: 90,
+    distance: 200,
+    distanceUnit: 'm',
+    pace: '3:45',
+    targetHr: 178,
+    hyroxRelevance: 'Budowanie siły biegowej, mocy napędowej bioder pod Sled Push i Lunges.',
+    techniqueNotes: 'Mocna praca ramion, wysokie unoszenie kolan, bezpieczny zbieg w marszu jako odpoczynek.',
   },
 ];

@@ -41,6 +41,10 @@ interface ExerciseDetailModalProps {
       notes?: string;
       rir?: number;
       rpe?: number;
+      distance?: number;
+      distanceUnit?: 'm' | 'km';
+      pace?: string;
+      targetHr?: number;
     }[],
     exerciseNotes?: string,
     targetDate?: string,
@@ -48,6 +52,21 @@ interface ExerciseDetailModalProps {
     rir?: number
   ) => void;
   onOpenChart?: (exerciseName: string) => void;
+}
+
+export interface ExerciseDetailSetItem {
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+  rir: number;
+  rpe: number;
+  completed: boolean;
+  unit: ExerciseUnit;
+  notes?: string;
+  distance?: number;
+  distanceUnit?: 'm' | 'km';
+  pace?: string;
+  targetHr?: number;
 }
 
 export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
@@ -64,6 +83,10 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'log' | 'history' | 'settings'>('log');
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedLogDate, setSelectedLogDate] = useState<string>(todayStr);
+
+  const isCardio =
+    exercise.category === 'cardio' ||
+    exercise.exerciseType === 'RUNNING';
 
   // 1. All historical logs for this exercise name
   const exerciseLogs = (workoutLogs || [])
@@ -117,18 +140,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       ? Number((baseWeight - prevFirstWeight).toFixed(1))
       : 0;
 
-  const exUnit = exercise.unit || 'kg';
-
-interface ExerciseDetailSetItem {
-  setNumber: number;
-  weightKg: number;
-  reps: number;
-  rir: number;
-  rpe: number;
-  completed: boolean;
-  unit: ExerciseUnit;
-  notes?: string;
-}
+  const exUnit = exercise.unit || (isCardio ? 'm' : 'kg');
 
   // Helper to construct sets for selectedLogDate
   const buildInitialSets = (targetDate: string): ExerciseDetailSetItem[] => {
@@ -144,11 +156,33 @@ interface ExerciseDetailSetItem {
         completed: true,
         unit: (l.unit as ExerciseUnit) || exUnit,
         notes: l.notes || '',
+        distance: l.targetDistance ?? exercise.targetDistance ?? 800,
+        distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+        pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
+        targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
+      }));
+    }
+
+    // Load from plannedSetsDetails if defined
+    if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
+      return exercise.plannedSetsDetails.map((s, idx) => ({
+        setNumber: s.setNumber || idx + 1,
+        weightKg: Number(s.weightKg) || 0,
+        reps: typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps), 10) || 8,
+        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+        completed: false,
+        unit: exUnit,
+        notes: '',
+        distance: s.distance ?? exercise.targetDistance ?? 800,
+        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+        pace: s.pace || exercise.targetPace || '4:20',
+        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
       }));
     }
 
     // Fresh session: compute target weights with progression applied
-    const plannedCount = Math.max(exercise.plannedSets || 3, latestSets.length);
+    const plannedCount = Math.max(exercise.plannedSets || 1, latestSets.length);
     const defaultReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
 
     return Array.from({ length: plannedCount }, (_, i) => {
@@ -156,7 +190,6 @@ interface ExerciseDetailSetItem {
       let setWeight = baseWeight;
 
       if (prevSet && typeof prevSet.weightKg === 'number') {
-        // Adjust previously performed set weight by progression delta (e.g. 80+2.5=82.5, 90+2.5=92.5, 100+2.5=102.5)
         setWeight = Number((prevSet.weightKg + progressionDelta).toFixed(1));
       } else if (latestSets.length > 0) {
         const lastW = latestSets[latestSets.length - 1]?.weightKg || baseWeight;
@@ -173,9 +206,13 @@ interface ExerciseDetailSetItem {
         reps: setReps,
         rir: setRir,
         rpe: setRpe,
-        completed: false, // Fresh session: UNCOMPLETED
+        completed: false,
         unit: (prevSet?.unit as ExerciseUnit) || exUnit,
         notes: '',
+        distance: prevSet?.targetDistance ?? exercise.targetDistance ?? 800,
+        distanceUnit: (prevSet?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+        pace: prevSet?.actualPace || prevSet?.targetPace || exercise.targetPace || '4:20',
+        targetHr: prevSet?.actualHR || prevSet?.targetHR || exercise.targetHR || 165,
       };
     });
   };
@@ -186,7 +223,7 @@ interface ExerciseDetailSetItem {
   const [exerciseRir, setExerciseRir] = useState<number>(() => getThisDayLogs(selectedLogDate)[0]?.rir ?? exercise.targetRIR ?? 2);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
-  // 4. State for plan settings
+  // State for plan settings
   const [planRestSec, setPlanRestSec] = useState(exercise.restSeconds || 90);
   const [planRestAfterExSec, setPlanRestAfterExSec] = useState(exercise.restAfterExerciseSec || 120);
   const [planTempo, setPlanTempo] = useState(exercise.tempo || '');
@@ -214,7 +251,7 @@ interface ExerciseDetailSetItem {
 
   if (!isOpen) return null;
 
-  const updateSetField = (index: number, field: string, val: any) => {
+  const updateSetField = (index: number, field: keyof ExerciseDetailSetItem, val: any) => {
     setSetsToLog((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: val };
@@ -244,6 +281,10 @@ interface ExerciseDetailSetItem {
           completed: false,
           unit: exUnit,
           notes: '',
+          distance: last?.distance ?? exercise.targetDistance ?? 800,
+          distanceUnit: (last?.distanceUnit ?? exercise.distanceUnit ?? 'm') as 'm' | 'km',
+          pace: last?.pace ?? exercise.targetPace ?? '4:20',
+          targetHr: last?.targetHr ?? exercise.targetHR ?? 165,
         },
       ];
     });
@@ -270,6 +311,10 @@ interface ExerciseDetailSetItem {
         completed: true,
         unit: s.unit || exUnit,
         notes: s.notes,
+        distance: s.targetDistance ?? exercise.targetDistance ?? 800,
+        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+        pace: s.actualPace || s.targetPace || exercise.targetPace || '4:20',
+        targetHr: s.actualHR || s.targetHR || exercise.targetHR || 165,
       }))
     );
     setActiveTab('log');
@@ -304,7 +349,11 @@ interface ExerciseDetailSetItem {
 
   // Last session quick stats
   const latestTonnage = latestSets.reduce((sum, s) => sum + (s.tonnageKg || s.weightKg * s.reps), 0);
-  const latestMaxWeight = Math.max(...latestSets.map((s) => s.weightKg), 0);
+  const totalCompletedDistMeters = setsToLog.reduce((sum, s) => {
+    if (!s.completed) return sum;
+    const d = s.distance || 0;
+    return sum + (s.distanceUnit === 'km' ? d * 1000 : d);
+  }, 0);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-200">
@@ -313,12 +362,12 @@ interface ExerciseDetailSetItem {
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black shadow-lg shadow-amber-400/20 shrink-0">
-              <Dumbbell className="w-6 h-6" />
+              {isCardio ? <Activity className="w-6 h-6" /> : <Dumbbell className="w-6 h-6" />}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black">
-                  {exercise.muscleGroup.split('(')[0].trim()}
+                  {exercise.muscleGroup?.split('(')[0]?.trim() || (isCardio ? 'Cardio / Bieg' : 'Ogólne')}
                 </span>
                 {exercise.exerciseType && (
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20">
@@ -346,7 +395,7 @@ interface ExerciseDetailSetItem {
               <button
                 onClick={() => onOpenChart(exercise.name)}
                 className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-neutral-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                title="Wykres progresu i 1RM"
+                title="Wykres progresu"
               >
                 <TrendingUp className="w-4 h-4" />
                 <span className="hidden sm:inline">Wykres</span>
@@ -422,15 +471,19 @@ interface ExerciseDetailSetItem {
                       Wynik z poprzedniego treningu ({latestPrevDate}):
                     </span>
                     <div className="font-mono-numbers font-bold text-white text-sm">
-                      {latestSets.map((s) => `${s.weightKg}${s.unit || 'kg'} × ${s.reps}`).join(' | ')}
+                      {isCardio
+                        ? latestSets.map((s) => `${s.targetDistance || 800}${s.distanceUnit || 'm'} @ ${s.actualPace || s.targetPace || '4:20'}`).join(' | ')
+                        : latestSets.map((s) => `${s.weightKg}${s.unit || 'kg'} × ${s.reps}`).join(' | ')}
                     </div>
                   </div>
-                  <div className="text-right sm:text-right shrink-0">
-                    <span className="text-[10px] text-neutral-400 uppercase font-bold block">Tonaż poprz.:</span>
-                    <span className="text-amber-300 font-mono-numbers font-black text-sm">
-                      {latestTonnage.toLocaleString()} kg
-                    </span>
-                  </div>
+                  {!isCardio && (
+                    <div className="text-right sm:text-right shrink-0">
+                      <span className="text-[10px] text-neutral-400 uppercase font-bold block">Tonaż poprz.:</span>
+                      <span className="text-amber-300 font-mono-numbers font-black text-sm">
+                        {latestTonnage.toLocaleString()} kg
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-400 flex items-center gap-2">
@@ -461,7 +514,7 @@ interface ExerciseDetailSetItem {
                           type="button"
                           onClick={() => handleCopyPastSetsToCurrent(latestSets)}
                           className="px-2.5 py-1 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                          title="Wypełnij tabelę ciężarami z poprzedniego treningu"
+                          title="Wypełnij tabelę danymi z poprzedniego treningu"
                         >
                           <Copy className="w-3 h-3 text-amber-400" />
                           <span>Kopiuj z poprz. ({latestPrevDate})</span>
@@ -473,110 +526,224 @@ interface ExerciseDetailSetItem {
                     </div>
                   </div>
 
-                  <div className="w-full">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
-                          <th className="w-10 pb-1.5">Seria</th>
-                          <th className="pb-1.5 px-1">Ciężar ({exUnit})</th>
-                          <th className="pb-1.5 px-1">Powtórzenia</th>
-                          <th className="w-16 pb-1.5 px-1 text-center">RIR</th>
-                          <th className="w-16 pb-1.5 px-1 text-center">RPE</th>
-                          <th className="w-12 pb-1.5 text-center">Status</th>
-                          <th className="w-8 pb-1.5"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-900 font-mono-numbers">
-                        {setsToLog.map((set, idx) => (
-                          <tr key={idx} className="hover:bg-neutral-900/40">
-                            <td className="py-2 text-neutral-400 font-bold">#{set.setNumber}</td>
+                  <div className="w-full overflow-x-auto">
+                    {isCardio ? (
+                      /* CARDIO / BIEG: Dystans, Tempo, HR, RPE, Status, Delete */
+                      <table className="w-full text-left text-xs min-w-[500px]">
+                        <thead>
+                          <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
+                            <th className="w-10 pb-1.5">Seria</th>
+                            <th className="pb-1.5 px-1">Dystans</th>
+                            <th className="pb-1.5 px-1">Tempo docelowe</th>
+                            <th className="w-24 pb-1.5 px-1 text-center">HR (bpm)</th>
+                            <th className="w-16 pb-1.5 px-1 text-center">RPE</th>
+                            <th className="w-12 pb-1.5 text-center">Status</th>
+                            <th className="w-8 pb-1.5"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-900 font-mono-numbers">
+                          {setsToLog.map((set, idx) => (
+                            <tr key={idx} className="hover:bg-neutral-900/40">
+                              <td className="py-2 text-neutral-400 font-bold">#{set.setNumber}</td>
 
-                            {/* Weight */}
-                            <td className="py-2 px-1">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                step="any"
-                                min="0"
-                                value={set.weightKg}
-                                onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
-                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                              />
-                            </td>
+                              {/* Dystans input + unit */}
+                              <td className="py-2 px-1">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    min="0"
+                                    value={set.distance ?? 800}
+                                    onChange={(e) => updateSetField(idx, 'distance', parseFloat(e.target.value) || 0)}
+                                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                  />
+                                  <select
+                                    value={set.distanceUnit || 'm'}
+                                    onChange={(e) => updateSetField(idx, 'distanceUnit', e.target.value as 'm' | 'km')}
+                                    className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                  >
+                                    <option value="m">m</option>
+                                    <option value="km">km</option>
+                                  </select>
+                                </div>
+                              </td>
 
-                            {/* Reps */}
-                            <td className="py-2 px-1">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                min="1"
-                                value={set.reps}
-                                onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
-                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                              />
-                            </td>
+                              {/* Tempo */}
+                              <td className="py-2 px-1">
+                                <input
+                                  type="text"
+                                  value={set.pace || '4:20'}
+                                  onChange={(e) => updateSetField(idx, 'pace', e.target.value)}
+                                  placeholder="np. 4:20"
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                                />
+                              </td>
 
-                            {/* Editable RIR */}
-                            <td className="py-2 px-1 text-center">
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                min="0"
-                                max="10"
-                                value={set.rir !== undefined ? set.rir : 2}
-                                onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
-                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                              />
-                            </td>
+                              {/* HR */}
+                              <td className="py-2 px-1 text-center">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  min="50"
+                                  max="220"
+                                  value={set.targetHr ?? 165}
+                                  onChange={(e) => updateSetField(idx, 'targetHr', parseInt(e.target.value, 10) || 165)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
 
-                            {/* Editable RPE */}
-                            <td className="py-2 px-1 text-center">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                step="0.5"
-                                min="1"
-                                max="10"
-                                value={set.rpe !== undefined ? set.rpe : 8}
-                                onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
-                                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                              />
-                            </td>
+                              {/* RPE */}
+                              <td className="py-2 px-1 text-center">
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.5"
+                                  min="1"
+                                  max="10"
+                                  value={set.rpe !== undefined ? set.rpe : 8}
+                                  onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
 
-                            {/* Completed Toggle */}
-                            <td className="py-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => toggleSetComplete(idx)}
-                                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer mx-auto ${
-                                  set.completed
-                                    ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
-                                    : 'bg-neutral-900 text-neutral-500 border border-neutral-800 hover:border-neutral-700'
-                                }`}
-                              >
-                                <Check className="w-3.5 h-3.5 stroke-[3]" />
-                              </button>
-                            </td>
-
-                            {/* Delete */}
-                            <td className="py-2 text-right">
-                              {setsToLog.length > 1 && (
+                              {/* Completed Toggle */}
+                              <td className="py-2 text-center">
                                 <button
                                   type="button"
-                                  onClick={() => removeSet(idx)}
-                                  className="text-neutral-600 hover:text-red-400 p-1 cursor-pointer"
+                                  onClick={() => toggleSetComplete(idx)}
+                                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer mx-auto ${
+                                    set.completed
+                                      ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
+                                      : 'bg-neutral-900 text-neutral-500 border border-neutral-800 hover:border-neutral-700'
+                                  }`}
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
                                 </button>
-                              )}
-                            </td>
+                              </td>
+
+                              {/* Delete */}
+                              <td className="py-2 text-right">
+                                {setsToLog.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSet(idx)}
+                                    className="text-neutral-600 hover:text-red-400 p-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      /* SIŁA: Ciężar, Powtórzenia, RIR, RPE, Status, Delete */
+                      <table className="w-full text-left text-xs min-w-[500px]">
+                        <thead>
+                          <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
+                            <th className="w-10 pb-1.5">Seria</th>
+                            <th className="pb-1.5 px-1">Ciężar ({exUnit})</th>
+                            <th className="pb-1.5 px-1">Powtórzenia</th>
+                            <th className="w-16 pb-1.5 px-1 text-center">RIR</th>
+                            <th className="w-16 pb-1.5 px-1 text-center">RPE</th>
+                            <th className="w-12 pb-1.5 text-center">Status</th>
+                            <th className="w-8 pb-1.5"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-900 font-mono-numbers">
+                          {setsToLog.map((set, idx) => (
+                            <tr key={idx} className="hover:bg-neutral-900/40">
+                              <td className="py-2 text-neutral-400 font-bold">#{set.setNumber}</td>
+
+                              {/* Weight */}
+                              <td className="py-2 px-1">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  step="any"
+                                  min="0"
+                                  value={set.weightKg}
+                                  onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
+
+                              {/* Reps */}
+                              <td className="py-2 px-1">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  min="1"
+                                  value={set.reps}
+                                  onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
+
+                              {/* Editable RIR */}
+                              <td className="py-2 px-1 text-center">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  min="0"
+                                  max="10"
+                                  value={set.rir !== undefined ? set.rir : 2}
+                                  onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
+
+                              {/* Editable RPE */}
+                              <td className="py-2 px-1 text-center">
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  step="0.5"
+                                  min="1"
+                                  max="10"
+                                  value={set.rpe !== undefined ? set.rpe : 8}
+                                  onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
+                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                />
+                              </td>
+
+                              {/* Completed Toggle */}
+                              <td className="py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSetComplete(idx)}
+                                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer mx-auto ${
+                                    set.completed
+                                      ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/20'
+                                      : 'bg-neutral-900 text-neutral-500 border border-neutral-800 hover:border-neutral-700'
+                                  }`}
+                                >
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </button>
+                              </td>
+
+                              {/* Delete */}
+                              <td className="py-2 text-right">
+                                {setsToLog.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSet(idx)}
+                                    className="text-neutral-600 hover:text-red-400 p-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
 
                   <button
@@ -585,20 +752,20 @@ interface ExerciseDetailSetItem {
                     className="px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Dodaj kolejną serię</span>
+                    <span>{isCardio ? 'Dodaj kolejny odcinek' : 'Dodaj kolejną serię'}</span>
                   </button>
                 </div>
 
                 {/* Session / Exercise Notes */}
                 <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800">
                   <label className="text-[10px] uppercase font-bold text-neutral-400 block mb-1">
-                    Notatka do tego ćwiczenia (np. czucie mięśniowe, technika):
+                    Notatka do tego treningu (np. czucie mięśniowe, tempo, warunki):
                   </label>
                   <input
                     type="text"
                     value={exerciseNotes}
                     onChange={(e) => setExerciseNotes(e.target.value)}
-                    placeholder="np. Poszło lekko z zapasem 2 RIR, za tydzień +2.5kg"
+                    placeholder="np. Dobry rytm, tętno w strefie Z2, za tydzień +200m"
                     className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
@@ -606,13 +773,26 @@ interface ExerciseDetailSetItem {
                 {/* Save CTA */}
                 <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-between">
                   <span className="text-[11px] text-neutral-400">
-                    Łączny tonaż serii:{' '}
-                    <strong className="text-amber-400 font-mono-numbers">
-                      {setsToLog
-                        .reduce((sum, s) => sum + (s.completed ? s.weightKg * s.reps : 0), 0)
-                        .toLocaleString()}{' '}
-                      {exUnit}
-                    </strong>
+                    {isCardio ? (
+                      <>
+                        Łączny pokonany dystans:{' '}
+                        <strong className="text-amber-400 font-mono-numbers">
+                          {totalCompletedDistMeters >= 1000
+                            ? (totalCompletedDistMeters / 1000).toFixed(2) + ' km'
+                            : totalCompletedDistMeters + ' m'}
+                        </strong>
+                      </>
+                    ) : (
+                      <>
+                        Łączny tonaż serii:{' '}
+                        <strong className="text-amber-400 font-mono-numbers">
+                          {setsToLog
+                            .reduce((sum, s) => sum + (s.completed ? s.weightKg * s.reps : 0), 0)
+                            .toLocaleString()}{' '}
+                          {exUnit}
+                        </strong>
+                      </>
+                    )}
                   </span>
 
                   <button
@@ -665,19 +845,27 @@ interface ExerciseDetailSetItem {
 
                         <div className="flex items-center gap-3">
                           <div className="text-[11px] font-mono-numbers text-right">
-                            <span className="text-neutral-400 mr-2">
-                              Max: <strong className="text-white">{dayMaxWeight} {exUnit}</strong>
-                            </span>
-                            <span className="text-amber-400 font-bold">
-                              Tonaż: {dayTonnage.toLocaleString()} {exUnit}
-                            </span>
+                            {isCardio ? (
+                              <span className="text-amber-400 font-bold">
+                                {dayEntries.length} odcinków
+                              </span>
+                            ) : (
+                              <>
+                                <span className="text-neutral-400 mr-2">
+                                  Max: <strong className="text-white">{dayMaxWeight} {exUnit}</strong>
+                                </span>
+                                <span className="text-amber-400 font-bold">
+                                  Tonaż: {dayTonnage.toLocaleString()} {exUnit}
+                                </span>
+                              </>
+                            )}
                           </div>
 
                           <button
                             type="button"
                             onClick={() => handleCopyPastSetsToCurrent(dayEntries)}
                             className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-amber-400 hover:text-black text-amber-400 border border-neutral-800 hover:border-amber-400 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0"
-                            title="Wstaw te ciężary i powtórzenia do formularza zapisu"
+                            title="Wstaw te serie do formularza zapisu"
                           >
                             <Copy className="w-3 h-3" />
                             <span>Użyj tych serii</span>
@@ -692,9 +880,12 @@ interface ExerciseDetailSetItem {
                             className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between"
                           >
                             <span className="text-neutral-400 text-[11px]">S{entry.setNumber}:</span>
-                            <span className="font-bold text-white">
-                              {entry.weightKg > 0 ? `${entry.weightKg}${entry.unit || exUnit} × ` : ''}
-                              {entry.reps} powt
+                            <span className="font-bold text-white truncate ml-1">
+                              {isCardio ? (
+                                `${entry.targetDistance || 800}${entry.distanceUnit || 'm'} @ ${entry.actualPace || entry.targetPace || '4:20'}`
+                              ) : (
+                                `${entry.weightKg > 0 ? `${entry.weightKg}${entry.unit || exUnit} × ` : ''}${entry.reps} powt`
+                              )}
                             </span>
                           </div>
                         ))}
@@ -752,60 +943,48 @@ interface ExerciseDetailSetItem {
                 </div>
               </div>
 
-              {(exercise.exerciseType === 'RUNNING' || exercise.exerciseType === 'HYROX_STATION' || exercise.exerciseType === 'INTERVAL_CARDIO') && (
-                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-neutral-900">
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5">Tempo celowe (opcjonalne):</label>
-                    <input
-                      type="text"
-                      value={planTargetPace}
-                      onChange={(e) => setPlanTargetPace(e.target.value)}
-                      placeholder="np. 4:30 min/km"
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5">Tętno HR (bpm, opcjonalne):</label>
-                    <input
-                      type="number"
-                      value={planTargetHR}
-                      onChange={(e) => setPlanTargetHR(e.target.value)}
-                      placeholder="np. 165"
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-2 border-t border-neutral-900">
+              {/* Running metrics for cardio exercises */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                 <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Wskazówki techniczne:</label>
-                  <textarea
-                    rows={2}
-                    value={planTechnique}
-                    onChange={(e) => setPlanTechnique(e.target.value)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                  <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowe tempo (min/km):</label>
+                  <input
+                    type="text"
+                    value={planTargetPace}
+                    onChange={(e) => setPlanTargetPace(e.target.value)}
+                    placeholder="np. 4:20"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-neutral-400 block mb-0.5">Cel / Zastosowanie w Hyrox:</label>
+                  <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowe tętno HR (bpm):</label>
                   <input
-                    type="text"
-                    value={planRelevance}
-                    onChange={(e) => setPlanRelevance(e.target.value)}
-                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                    type="number"
+                    value={planTargetHR}
+                    onChange={(e) => setPlanTargetHR(e.target.value)}
+                    placeholder="np. 165"
+                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1.5 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                   />
                 </div>
               </div>
 
-              <div className="mt-8 pt-4 border-t border-neutral-800 text-right">
+              <div>
+                <label className="text-[10px] text-neutral-400 block mb-0.5">Wskazówki techniczne / taktyka:</label>
+                <textarea
+                  rows={2}
+                  value={planTechnique}
+                  onChange={(e) => setPlanTechnique(e.target.value)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-xs cursor-pointer shadow-md"
+                  className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-black uppercase text-xs tracking-wider cursor-pointer shadow-md transition-all flex items-center gap-1.5"
                 >
-                  Zapisz Zmiany w Planie
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Zapisz Zmiany w Planie</span>
                 </button>
               </div>
             </form>

@@ -31,7 +31,8 @@ import {
   MesocyclePhase,
   TrainingCycleCatalog,
   Exercise,
-  DayType
+  DayType,
+  normalizeMuscleGroup
 } from './types/hyrox';
 import { MASTER_HYROX_WEEK_PLAN, MESOCYCLE_WEEKS } from './data/hyroxPlanData';
 import { DEFAULT_TRAINING_CYCLES, MASA_WEEK_PLAN, REDUKCJA_WEEK_PLAN } from './data/defaultCycles';
@@ -661,7 +662,7 @@ export default function App() {
                 ...ex,
                 id: ex?.id || `ex-w${newPhase.week}-${exIdx + 1}-${Date.now()}`,
                 name: ex?.name || `Ćwiczenie ${exIdx + 1}`,
-                muscleGroup: ex?.muscleGroup || 'Inne',
+                muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
                 plannedSets: ex?.plannedSets ?? 3,
                 targetRepsRange: ex?.targetRepsRange || '8-10',
                 defaultWeightKg: ex?.defaultWeightKg ?? 20,

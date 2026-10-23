@@ -141,6 +141,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
       notes?: string;
       rir?: number;
       rpe?: number;
+      distance?: number;
+      distanceUnit?: 'm' | 'km';
+      pace?: string;
+      targetHr?: number;
     }[],
     exerciseNotes?: string,
     targetDate?: string,
@@ -150,6 +154,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     if (!selectedDay || !activeDetailExercise) return;
     const dateStr = targetDate || new Date().toISOString().split('T')[0];
     const sessionId = `manual-session-${dateStr}-${selectedDay.id}`;
+    const isExCardio = activeDetailExercise.category === 'cardio' || activeDetailExercise.exerciseType === 'RUNNING';
 
     const newEntries: WorkoutLogEntry[] = sets
       .filter((s) => s.completed)
@@ -165,18 +170,20 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         setNumber: s.setNumber,
         weightKg: Number(s.weightKg) || 0,
         reps: Number(s.reps) || 0,
-        tonnageKg: (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
+        tonnageKg: isExCardio ? 0 : (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
         rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
         rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
         notes: s.notes || exerciseNotes || undefined,
         sessionId,
         sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
-        activityType: 'STRENGTH',
-        unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || 'kg',
-        targetDistance: activeDetailExercise.targetDistance,
-        distanceUnit: activeDetailExercise.distanceUnit,
-        targetPace: activeDetailExercise.targetPace,
-        targetHR: activeDetailExercise.targetHR,
+        activityType: isExCardio ? 'RUNNING' : 'STRENGTH',
+        unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || (isExCardio ? 'm' : 'kg'),
+        targetDistance: s.distance || activeDetailExercise.targetDistance,
+        distanceUnit: s.distanceUnit || activeDetailExercise.distanceUnit || 'm',
+        targetPace: s.pace || activeDetailExercise.targetPace,
+        actualPace: s.pace || activeDetailExercise.targetPace,
+        targetHR: s.targetHr || activeDetailExercise.targetHR,
+        actualHR: s.targetHr || activeDetailExercise.targetHR,
       }));
 
     if (newEntries.length > 0 && onSaveLogs) {
@@ -190,6 +197,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
       weightKg: Number(s.weightKg) || 0,
       rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
       rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+      distance: s.distance,
+      distanceUnit: s.distanceUnit,
+      pace: s.pace,
+      targetHr: s.targetHr,
     }));
     handleUpdateExerciseInPlan({
       ...activeDetailExercise,
@@ -479,6 +490,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                     (e) => e.id === exercise.id || e.name.trim().toLowerCase() === exercise.name.trim().toLowerCase()
                   );
 
+                  const isCardio =
+                    exercise.category === 'cardio' ||
+                    exercise.exerciseType === 'RUNNING';
+
                   let detailedSets: {
                     setNumber: number;
                     reps: number | string;
@@ -486,6 +501,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                     rir: number;
                     rpe: number;
                     completed?: boolean;
+                    distance?: number;
+                    distanceUnit?: 'm' | 'km';
+                    pace?: string;
+                    targetHr?: number;
                   }[] = [];
 
                   if (currentSessionLogs.length > 0) {
@@ -496,6 +515,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
                       rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
                       completed: true,
+                      distance: l.targetDistance ?? exercise.targetDistance ?? 800,
+                      distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                      pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
+                      targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
                     }));
 
                     const plannedTotal = Math.max(
@@ -508,39 +531,51 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       const plannedItem =
                         exercise.plannedSetsDetails?.find((p) => p.setNumber === i) ||
                         activeOngoingEx?.plannedSetsDetails?.find((p) => p.setNumber === i);
-                      const baseReps = plannedItem
+                      const baseReps = (plannedItem && plannedItem.reps !== undefined)
                         ? plannedItem.reps
                         : parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                      const baseW = plannedItem ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
+                      const baseW = (plannedItem && plannedItem.weightKg !== undefined) ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
                       detailedSets.push({
                         setNumber: i,
                         reps: baseReps,
                         weightKg: baseW,
                         rir: plannedItem?.rir ?? exercise.targetRIR ?? 2,
                         rpe: plannedItem?.rpe ?? exercise.targetRPE ?? 8,
+                        distance: plannedItem?.distance ?? exercise.targetDistance ?? 800,
+                        distanceUnit: (plannedItem?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                        pace: plannedItem?.pace || exercise.targetPace || '4:20',
+                        targetHr: plannedItem?.targetHr || plannedItem?.targetHR || exercise.targetHR || 165,
                         completed: false,
                       });
                     }
                   } else if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0) {
                     detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => ({
                       setNumber: s.setNumber || idx + 1,
-                      reps: s.reps,
-                      weightKg: s.weightKg,
+                      reps: s.reps ?? 8,
+                      weightKg: s.weightKg ?? 0,
                       rir: s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2),
                       rpe: s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8),
+                      distance: s.distance ?? exercise.targetDistance ?? 800,
+                      distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                      pace: s.pace || exercise.targetPace || '4:20',
+                      targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
                       completed: false,
                     }));
                   } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
                     detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
                       setNumber: s.setNumber || idx + 1,
-                      reps: s.reps,
-                      weightKg: s.weightKg,
+                      reps: s.reps ?? 8,
+                      weightKg: s.weightKg ?? 0,
                       rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
                       rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+                      distance: s.distance ?? exercise.targetDistance ?? 800,
+                      distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                      pace: s.pace || exercise.targetPace || '4:20',
+                      targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
                       completed: false,
                     }));
                   } else {
-                    const count = Math.max(exercise.plannedSets || 3, activeOngoingEx?.plannedSets || 3);
+                    const count = Math.max(exercise.plannedSets || 1, activeOngoingEx?.plannedSets || 1);
                     detailedSets = Array.from({ length: count }, (_, i) => {
                       const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
                       return {
@@ -549,6 +584,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                         weightKg: exercise.defaultWeightKg || 0,
                         rir: exercise.targetRIR ?? 2,
                         rpe: exercise.targetRPE || 8,
+                        distance: exercise.targetDistance || 800,
+                        distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
+                        pace: exercise.targetPace || '4:20',
+                        targetHr: exercise.targetHR || 165,
                         completed: false,
                       };
                     });
@@ -603,10 +642,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap mb-1">
                             <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                              #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim()}
+                              #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim() || (isCardio ? 'Cardio / Bieg' : 'Ogólne')}
                             </span>
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
-                              {exercise.unit || 'kg'}
+                              {isCardio ? (exercise.distanceUnit || 'm') : (exercise.unit || 'kg')}
                             </span>
                           </div>
                           <h3 className="text-base font-bold text-white font-heading">
@@ -630,7 +669,9 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                           <span className="truncate">
                             Ostatnio ({lastExDate}):{' '}
                             <strong className="text-white font-mono-numbers">
-                              {lastSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ')}
+                              {isCardio
+                                ? lastSets.map((s) => `${s.targetDistance || 800}${s.distanceUnit || 'm'} @ ${s.actualPace || s.targetPace || '4:20'}`).join(' | ')
+                                : lastSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ')}
                             </strong>
                           </span>
                         </div>
@@ -645,15 +686,23 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                           </span>
                         </div>
                         <div>
-                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Powtórzenia</span>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">
+                            {isCardio ? 'Dystans' : 'Powtórzenia'}
+                          </span>
                           <span className="font-extrabold text-white font-mono-numbers text-sm">
-                            {displayReps}
+                            {isCardio
+                              ? `${detailedSets[0]?.distance || exercise.targetDistance || 800} ${detailedSets[0]?.distanceUnit || exercise.distanceUnit || 'm'}`
+                              : displayReps}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Ciężar</span>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">
+                            {isCardio ? 'Tempo' : 'Ciężar'}
+                          </span>
                           <span className="font-black text-amber-400 font-mono-numbers text-sm">
-                            {displayWeightDynamic}
+                            {isCardio
+                              ? (detailedSets[0]?.pace || exercise.targetPace || '4:20')
+                              : displayWeightDynamic}
                           </span>
                         </div>
                         <div
@@ -703,6 +752,43 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
                           <div className="space-y-1.5 font-mono-numbers">
                             {detailedSets.map((set, sIdx) => {
+                              if (isCardio) {
+                                const sDist = set.distance ?? exercise.targetDistance ?? 800;
+                                const sUnit = set.distanceUnit || exercise.distanceUnit || 'm';
+                                const sPace = set.pace || exercise.targetPace || '4:20';
+                                const sHr = set.targetHr || exercise.targetHR || 165;
+                                return (
+                                  <div
+                                    key={sIdx}
+                                    className="flex items-center justify-between p-2 rounded-xl bg-neutral-900/90 border border-neutral-800/80 text-xs"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-6 h-6 rounded-lg bg-gray-200 text-gray-800 border border-gray-300 dark:bg-gray-800 dark:text-gray-200 dark:border-neutral-700 font-bold flex items-center justify-center text-[10px]">
+                                        #{set.setNumber || sIdx + 1}
+                                      </span>
+                                      <span className="text-white font-black">
+                                        {sDist} {sUnit}
+                                      </span>
+                                      <span className="text-neutral-500">•</span>
+                                      <span className="text-amber-300 font-black">
+                                        {sPace} min/km
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-[11px]">
+                                      <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-bold">
+                                        {sHr} bpm
+                                      </span>
+                                      {set.rpe !== undefined && (
+                                        <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-medium">
+                                          RPE {set.rpe}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               const sWeight = Number(set.weightKg) || 0;
                               return (
                                 <div

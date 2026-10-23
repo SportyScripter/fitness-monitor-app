@@ -355,7 +355,7 @@ export const VolumeMatrixView: React.FC<VolumeMatrixViewProps> = ({
                     <tr key={entry.id} className="hover:bg-neutral-800/30 transition-colors">
                       <td className="py-2.5 px-3 text-neutral-400 font-mono-numbers">{entry.dateStr}</td>
                       <td className="py-2.5 px-3 font-semibold text-white">{entry.exerciseName}</td>
-                      <td className="py-2.5 px-3 text-neutral-400">{entry.muscleGroup.split('(')[0]}</td>
+                      <td className="py-2.5 px-3 text-neutral-400">{entry.muscleGroup?.split('(')[0] || (entry.activityType === 'RUNNING' ? 'Cardio' : 'Ogólne')}</td>
                       <td className="py-2.5 px-3 font-mono-numbers text-neutral-400">#{entry.setNumber}</td>
                       <td className="py-2.5 px-3 font-mono-numbers font-bold text-white">{entry.weightKg} kg</td>
                       <td className="py-2.5 px-3 font-mono-numbers text-white">{entry.reps}</td>

@@ -790,7 +790,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
                             <div>
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">
                                 <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
-                                  #{index + 1} • {exercise.muscleGroup.split('(')[0].trim()}
+                                  #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim() || (exercise.category === 'cardio' ? 'Cardio / Bieg' : 'Ogólne')}
                                 </span>
                                 {exercise.exerciseType && (
                                   <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20">

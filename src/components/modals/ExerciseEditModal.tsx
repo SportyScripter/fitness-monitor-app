@@ -16,8 +16,11 @@ import {
   Exercise,
   MuscleGroup,
   ExerciseType,
+  ExerciseCategory,
   ExerciseUnit,
   ExercisePlannedSet,
+  RUNNING_TYPES,
+  RunningType,
   PROFESSIONAL_MUSCLE_GROUPS,
   normalizeMuscleGroup
 } from '../../types/hyrox';
@@ -37,6 +40,10 @@ export interface FormPlannedSet {
   weightKg: string;
   rir: string;
   rpe: string;
+  distance: string;
+  distanceUnit: 'm' | 'km';
+  pace: string;
+  targetHr: string;
 }
 
 export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
@@ -48,6 +55,10 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 }) => {
   const isEditing = !!exerciseToEdit;
 
+  // Category: 'strength' | 'cardio'
+  const [category, setCategory] = useState<ExerciseCategory>('strength');
+  const [runningType, setRunningType] = useState<RunningType>('Easy Run');
+
   // Basic Info
   const [name, setName] = useState('');
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>('Klatka piersiowa');
@@ -56,7 +67,17 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
   // Rows of Planned Sets with string values for ergonomic cursor & decimal typing
   const [sets, setSets] = useState<FormPlannedSet[]>([
-    { setNumber: 1, reps: '8', weightKg: '60', rir: '2', rpe: '8' },
+    {
+      setNumber: 1,
+      reps: '8',
+      weightKg: '60',
+      rir: '2',
+      rpe: '8',
+      distance: '800',
+      distanceUnit: 'm',
+      pace: '4:20',
+      targetHr: '165',
+    },
   ]);
 
   // Bottom Toggles & Settings
@@ -77,10 +98,27 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   // Initialize or reset state when modal opens or exerciseToEdit changes
   useEffect(() => {
     if (exerciseToEdit) {
+      const isCardio =
+        exerciseToEdit.category === 'cardio' ||
+        exerciseToEdit.exerciseType === 'RUNNING' ||
+        RUNNING_TYPES.includes(exerciseToEdit.name as RunningType);
+
+      setCategory(isCardio ? 'cardio' : 'strength');
+      if (isCardio) {
+        const matchRunning = RUNNING_TYPES.find(
+          (rt) => rt.toLowerCase() === exerciseToEdit.name.toLowerCase()
+        ) || RUNNING_TYPES.find(
+          (rt) => exerciseToEdit.name.toLowerCase().includes(rt.toLowerCase())
+        );
+        setRunningType(matchRunning || 'Easy Run');
+      }
+
       setName(exerciseToEdit.name);
-      setMuscleGroup(normalizeMuscleGroup(exerciseToEdit.muscleGroup));
-      setExerciseType(exerciseToEdit.exerciseType || 'STRENGTH');
-      setUnit(exerciseToEdit.unit || 'kg');
+      if (exerciseToEdit.muscleGroup) {
+        setMuscleGroup(normalizeMuscleGroup(exerciseToEdit.muscleGroup));
+      }
+      setExerciseType(exerciseToEdit.exerciseType || (isCardio ? 'RUNNING' : 'STRENGTH'));
+      setUnit(exerciseToEdit.unit || (isCardio ? (exerciseToEdit.distanceUnit || 'm') : 'kg'));
 
       // Populate sets from plannedSetsDetails or fallback to plannedSets
       if (exerciseToEdit.plannedSetsDetails && exerciseToEdit.plannedSetsDetails.length > 0) {
@@ -91,6 +129,10 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
             weightKg: String(s.weightKg ?? '0'),
             rir: String(s.rir ?? '2'),
             rpe: String(s.rpe ?? '8'),
+            distance: String(s.distance ?? exerciseToEdit.targetDistance ?? '800'),
+            distanceUnit: (s.distanceUnit || exerciseToEdit.distanceUnit || 'm') as 'm' | 'km',
+            pace: String(s.pace ?? exerciseToEdit.targetPace ?? '4:20'),
+            targetHr: String(s.targetHr ?? s.targetHR ?? exerciseToEdit.targetHR ?? '165'),
           }))
         );
       } else {
@@ -102,6 +144,10 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
           weightKg: String(exerciseToEdit.defaultWeightKg || 0),
           rir: String(exerciseToEdit.targetRIR ?? 2),
           rpe: String(exerciseToEdit.targetRPE || 8),
+          distance: String(exerciseToEdit.targetDistance || '800'),
+          distanceUnit: (exerciseToEdit.distanceUnit || 'm') as 'm' | 'km',
+          pace: exerciseToEdit.targetPace || '4:20',
+          targetHr: String(exerciseToEdit.targetHR || '165'),
         }));
         setSets(initialSets);
       }
@@ -123,12 +169,26 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       setTempo(exerciseToEdit.tempo || '');
       setTechniqueNotes(exerciseToEdit.techniqueNotes || '');
     } else {
+      setCategory('strength');
+      setRunningType('Easy Run');
       setName('');
       setMuscleGroup('Klatka piersiowa');
       setExerciseType('STRENGTH');
       setUnit('kg');
       // Default to 1 set on clean creation
-      setSets([{ setNumber: 1, reps: '8', weightKg: '60', rir: '2', rpe: '8' }]);
+      setSets([
+        {
+          setNumber: 1,
+          reps: '8',
+          weightKg: '60',
+          rir: '2',
+          rpe: '8',
+          distance: '800',
+          distanceUnit: 'm',
+          pace: '4:20',
+          targetHr: '165',
+        },
+      ]);
       setRestBetweenSetsSec('90');
       setRestAfterExerciseSec('120');
       setEnableRunningMetrics(false);
@@ -143,21 +203,77 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Catalog items filtered by search
+  // Switch between Strength and Cardio modes
+  const handleSwitchCategory = (newCat: ExerciseCategory) => {
+    setCategory(newCat);
+    if (newCat === 'cardio') {
+      setExerciseType('RUNNING');
+      setUnit('m');
+      if (!name || !RUNNING_TYPES.includes(name as RunningType)) {
+        setName(runningType);
+      }
+      setSets((prev) =>
+        prev.map((s, idx) => ({
+          ...s,
+          setNumber: idx + 1,
+          distance: s.distance || '800',
+          distanceUnit: s.distanceUnit || 'm',
+          pace: s.pace || '4:20',
+          targetHr: s.targetHr || '165',
+        }))
+      );
+    } else {
+      setExerciseType('STRENGTH');
+      setUnit('kg');
+      if (RUNNING_TYPES.includes(name as RunningType)) {
+        setName('');
+      }
+    }
+  };
+
+  const handleRunningTypeSelect = (rt: RunningType) => {
+    setRunningType(rt);
+    setName(rt);
+  };
+
+  // Catalog items filtered by search and current active tab
   const filteredCatalog = EXERCISE_CATALOG.filter((item) => {
+    if (category === 'cardio') {
+      if (item.category !== 'cardio' && !RUNNING_TYPES.includes(item.name as RunningType)) {
+        return false;
+      }
+    } else {
+      if (item.category === 'cardio' || RUNNING_TYPES.includes(item.name as RunningType)) {
+        return false;
+      }
+    }
     if (!catalogSearch) return true;
     const q = catalogSearch.toLowerCase();
     return (
       item.name.toLowerCase().includes(q) ||
-      item.muscleGroup.toLowerCase().includes(q) ||
+      (item.muscleGroup && item.muscleGroup.toLowerCase().includes(q)) ||
       (item.hyroxRelevance && item.hyroxRelevance.toLowerCase().includes(q))
     );
   });
 
   // Pick an exercise from catalog
   const handleSelectCatalogItem = (catItem: CatalogExerciseItem) => {
+    const isCardio = catItem.category === 'cardio' || RUNNING_TYPES.includes(catItem.name as RunningType);
+    if (isCardio) {
+      setCategory('cardio');
+      setRunningType((catItem.name as RunningType) || 'Easy Run');
+      setExerciseType('RUNNING');
+      setUnit((catItem.distanceUnit as ExerciseUnit) || 'm');
+    } else {
+      setCategory('strength');
+      setExerciseType('STRENGTH');
+      setUnit('kg');
+    }
+
     setName(catItem.name);
-    setMuscleGroup(normalizeMuscleGroup(catItem.muscleGroup));
+    if (catItem.muscleGroup) {
+      setMuscleGroup(normalizeMuscleGroup(catItem.muscleGroup));
+    }
     setTempo(catItem.techniqueNotes.includes('tempo') ? '3-0-1-0' : '');
 
     const initialReps = parseInt(String(catItem.defaultReps).split('-')[0]) || 8;
@@ -168,6 +284,10 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         weightKg: String(catItem.defaultWeight || 0),
         rir: String(catItem.defaultRIR ?? 2),
         rpe: String(catItem.defaultRPE || 8),
+        distance: String(catItem.distance || 800),
+        distanceUnit: catItem.distanceUnit || 'm',
+        pace: catItem.pace || '4:20',
+        targetHr: String(catItem.targetHr || 165),
       },
     ];
     setSets(newSets);
@@ -186,6 +306,10 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         weightKg: last ? last.weightKg : '50',
         rir: last ? last.rir : '2',
         rpe: last ? last.rpe : '8',
+        distance: last ? last.distance : '800',
+        distanceUnit: last ? last.distanceUnit : 'm',
+        pace: last ? last.pace : '4:20',
+        targetHr: last ? last.targetHr : '165',
       };
       return [...prev, newSet];
     });
@@ -200,6 +324,15 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   };
 
   const handleUpdateSet = (index: number, field: keyof FormPlannedSet, val: string) => {
+    if (field === 'pace' || field === 'distanceUnit') {
+      setSets((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], [field]: val };
+        return next;
+      });
+      return;
+    }
+
     const normalized = val.replace(',', '.');
     if (normalized === '' || /^[0-9]*\.?[0-9]*$/.test(normalized)) {
       setSets((prev) => {
@@ -212,66 +345,127 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-
-    const plannedSetsDetails: ExercisePlannedSet[] = sets.map((s, idx) => {
-      const parsedReps = parseInt(s.reps, 10);
-      const parsedWeight = parseFloat(s.weightKg);
-      const parsedRir = parseFloat(s.rir);
-      const parsedRpe = parseFloat(s.rpe);
-
-      return {
-        setNumber: idx + 1,
-        reps: isNaN(parsedReps) ? (s.reps.trim() || 8) : parsedReps,
-        weightKg: !isNaN(parsedWeight) ? parsedWeight : 0,
-        rir: !isNaN(parsedRir) ? parsedRir : 2,
-        rpe: !isNaN(parsedRpe) ? parsedRpe : 8,
-      };
-    });
-
-    // Derive summary metrics from sets
-    const plannedSetsCount = sets.length;
-    const firstSet = plannedSetsDetails[0] || { reps: 8, weightKg: 0, rir: 2, rpe: 8 };
-    const defaultWeightKg = firstSet.weightKg;
-    const targetRIR = firstSet.rir;
-    const targetRPE = firstSet.rpe;
-
-    // Rep range representation
-    const repsList = plannedSetsDetails.map((s) => s.reps);
-    const minReps = Math.min(...repsList.map((r) => (typeof r === 'number' ? r : parseInt(String(r), 10) || 8)));
-    const maxReps = Math.max(...repsList.map((r) => (typeof r === 'number' ? r : parseInt(String(r), 10) || 8)));
-    const targetRepsRange = minReps === maxReps ? `${minReps}` : `${minReps}-${maxReps}`;
+    const finalName = category === 'cardio' ? (name.trim() || runningType) : name.trim();
+    if (!finalName) return;
 
     const restSec = parseInt(restBetweenSetsSec, 10) || 90;
     const restAfterSec = parseInt(restAfterExerciseSec, 10) || 120;
-    const parsedDist = targetDistance ? parseFloat(targetDistance.replace(',', '.')) : undefined;
-    const parsedHR = targetHR ? parseInt(targetHR, 10) : undefined;
 
-    const savedExercise: Exercise = {
-      id: exerciseToEdit ? exerciseToEdit.id : `ex-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      name: name.trim(),
-      muscleGroup: normalizeMuscleGroup(muscleGroup),
-      exerciseType,
-      unit,
-      plannedSets: plannedSetsCount,
-      targetRepsRange,
-      defaultWeightKg,
-      targetRIR,
-      targetRPE,
-      restSeconds: restSec,
-      restBetweenSetsSec: restSec,
-      restAfterExerciseSec: restAfterSec,
-      tempo: tempo.trim() || undefined,
-      techniqueNotes: techniqueNotes.trim(),
-      hyroxRelevance: exerciseToEdit?.hyroxRelevance || 'Dostosowane ćwiczenie w planie.',
-      plannedSetsDetails,
-      ...(enableRunningMetrics && {
-        targetDistance: !isNaN(Number(parsedDist)) ? parsedDist : undefined,
-        distanceUnit,
-        targetPace: targetPace.trim() || undefined,
-        targetHR: !isNaN(Number(parsedHR)) ? parsedHR : undefined,
-      }),
-    };
+    let savedExercise: Exercise;
+
+    if (category === 'cardio') {
+      const plannedSetsDetails: ExercisePlannedSet[] = sets.map((s, idx) => {
+        const parsedDist = parseFloat(s.distance.replace(',', '.'));
+        const parsedHR = parseInt(s.targetHr, 10);
+        return {
+          setNumber: idx + 1,
+          reps: 1,
+          weightKg: 0,
+          rir: 2,
+          rpe: 8,
+          distance: !isNaN(parsedDist) ? parsedDist : 800,
+          distanceUnit: s.distanceUnit || 'm',
+          pace: s.pace.trim() || '4:20',
+          targetHr: !isNaN(parsedHR) ? parsedHR : undefined,
+          targetHR: !isNaN(parsedHR) ? parsedHR : undefined,
+        };
+      });
+
+      const firstSet = plannedSetsDetails[0] || {
+        distance: 800,
+        distanceUnit: 'm' as const,
+        pace: '4:20',
+        targetHr: 165,
+      };
+
+      const distList = plannedSetsDetails.map((s) => s.distance || 800);
+      const minDist = Math.min(...distList);
+      const maxDist = Math.max(...distList);
+      const targetRepsRange =
+        minDist === maxDist
+          ? `${minDist} ${firstSet.distanceUnit || 'm'}`
+          : `${minDist}-${maxDist} ${firstSet.distanceUnit || 'm'}`;
+
+      savedExercise = {
+        id: exerciseToEdit ? exerciseToEdit.id : `ex-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        name: finalName,
+        category: 'cardio',
+        exerciseType: 'RUNNING',
+        unit: (firstSet.distanceUnit as ExerciseUnit) || 'm',
+        plannedSets: sets.length,
+        targetRepsRange,
+        defaultWeightKg: 0,
+        targetRIR: 2,
+        targetRPE: 8,
+        restSeconds: restSec,
+        restBetweenSetsSec: restSec,
+        restAfterExerciseSec: restAfterSec,
+        targetDistance: firstSet.distance,
+        distanceUnit: firstSet.distanceUnit,
+        targetPace: firstSet.pace,
+        targetHR: firstSet.targetHr,
+        tempo: tempo.trim() || undefined,
+        techniqueNotes: techniqueNotes.trim() || `Typ biegu: ${runningType}`,
+        hyroxRelevance: 'Trening biegowy / cardio.',
+        plannedSetsDetails,
+      };
+    } else {
+      const plannedSetsDetails: ExercisePlannedSet[] = sets.map((s, idx) => {
+        const parsedReps = parseInt(s.reps, 10);
+        const parsedWeight = parseFloat(s.weightKg);
+        const parsedRir = parseFloat(s.rir);
+        const parsedRpe = parseFloat(s.rpe);
+
+        return {
+          setNumber: idx + 1,
+          reps: isNaN(parsedReps) ? (s.reps.trim() || 8) : parsedReps,
+          weightKg: !isNaN(parsedWeight) ? parsedWeight : 0,
+          rir: !isNaN(parsedRir) ? parsedRir : 2,
+          rpe: !isNaN(parsedRpe) ? parsedRpe : 8,
+        };
+      });
+
+      const plannedSetsCount = sets.length;
+      const firstSet = plannedSetsDetails[0] || { reps: 8, weightKg: 0, rir: 2, rpe: 8 };
+      const defaultWeightKg = firstSet.weightKg;
+      const targetRIR = firstSet.rir;
+      const targetRPE = firstSet.rpe;
+
+      const repsList = plannedSetsDetails.map((s) => s.reps);
+      const minReps = Math.min(...repsList.map((r) => (typeof r === 'number' ? r : parseInt(String(r), 10) || 8)));
+      const maxReps = Math.max(...repsList.map((r) => (typeof r === 'number' ? r : parseInt(String(r), 10) || 8)));
+      const targetRepsRange = minReps === maxReps ? `${minReps}` : `${minReps}-${maxReps}`;
+
+      const parsedDist = targetDistance ? parseFloat(targetDistance.replace(',', '.')) : undefined;
+      const parsedHR = targetHR ? parseInt(targetHR, 10) : undefined;
+
+      savedExercise = {
+        id: exerciseToEdit ? exerciseToEdit.id : `ex-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        name: finalName,
+        category: 'strength',
+        muscleGroup: normalizeMuscleGroup(muscleGroup),
+        exerciseType,
+        unit,
+        plannedSets: plannedSetsCount,
+        targetRepsRange,
+        defaultWeightKg: defaultWeightKg ?? 0,
+        targetRIR: targetRIR ?? 2,
+        targetRPE: targetRPE ?? 8,
+        restSeconds: restSec,
+        restBetweenSetsSec: restSec,
+        restAfterExerciseSec: restAfterSec,
+        tempo: tempo.trim() || undefined,
+        techniqueNotes: techniqueNotes.trim(),
+        hyroxRelevance: exerciseToEdit?.hyroxRelevance || 'Dostosowane ćwiczenie w planie.',
+        plannedSetsDetails,
+        ...(enableRunningMetrics && {
+          targetDistance: !isNaN(Number(parsedDist)) ? parsedDist : undefined,
+          distanceUnit,
+          targetPace: targetPace.trim() || undefined,
+          targetHR: !isNaN(Number(parsedHR)) ? parsedHR : undefined,
+        }),
+      };
+    }
 
     onSaveExercise(savedExercise);
   };
@@ -283,14 +477,16 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between gap-3 bg-neutral-950/80 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black shadow-md shadow-amber-400/20 shrink-0">
-              <Dumbbell className="w-5 h-5" />
+              {category === 'cardio' ? <Activity className="w-5 h-5" /> : <Dumbbell className="w-5 h-5" />}
             </div>
             <div className="min-w-0">
               <h3 className="text-base font-black text-white font-heading truncate">
-                {isEditing ? `Edytuj: ${exerciseToEdit.name}` : 'Dodaj Nowe Ćwiczenie'}
+                {isEditing ? `Edytuj: ${exerciseToEdit.name}` : category === 'cardio' ? 'Dodaj Trening Biegowy' : 'Dodaj Nowe Ćwiczenie'}
               </h3>
               <p className="text-[11px] text-neutral-400 truncate">
-                Konfiguracja serii, ciężaru, RIR, RPE i partii mięśniowej
+                {category === 'cardio'
+                  ? 'Konfiguracja odcinków biegowych, tempa, HR i przerw'
+                  : 'Konfiguracja serii, ciężaru, RIR, RPE i partii mięśniowej'}
               </p>
             </div>
           </div>
@@ -324,18 +520,46 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 pb-24 space-y-5 text-xs overscroll-contain">
+          {/* Top Category Tabs: "Siła" vs "Cardio/Bieg" */}
+          <div className="flex rounded-2xl bg-neutral-950 p-1 border border-neutral-800 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleSwitchCategory('strength')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                category === 'strength'
+                  ? 'bg-amber-400 text-black shadow-md font-black'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Dumbbell className="w-4 h-4" />
+              <span>Siła</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchCategory('cardio')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                category === 'cardio'
+                  ? 'bg-amber-400 text-black shadow-md font-black'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              <span>Cardio / Bieg</span>
+            </button>
+          </div>
+
           {/* Quick Catalog Search / Accordion */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-[11px] uppercase font-bold text-neutral-300">
-                Wyszukaj z bazy ćwiczeń:
+                Wyszukaj z bazy ({category === 'cardio' ? 'biegi' : 'ćwiczenia siłowe'}):
               </label>
               <button
                 type="button"
                 onClick={() => setShowCatalog(!showCatalog)}
                 className="text-[11px] text-amber-400 font-bold hover:underline cursor-pointer"
               >
-                {showCatalog ? 'Ukryj bazę' : 'Rozwiń katalog (+50 ćwiczeń)'}
+                {showCatalog ? 'Ukryj bazę' : `Rozwiń katalog (${filteredCatalog.length})`}
               </button>
             </div>
 
@@ -345,7 +569,11 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                   <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Filtruj np. Przysiad, Wyciskanie, Lunges, SkiErg..."
+                    placeholder={
+                      category === 'cardio'
+                        ? 'Filtruj np. Easy Run, Intervals, Tempo Run, Hill Repeats...'
+                        : 'Filtruj np. Przysiad, Wyciskanie, Lunges, SkiErg...'
+                    }
                     value={catalogSearch}
                     onChange={(e) => setCatalogSearch(e.target.value)}
                     className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl pl-8 pr-3 py-2 text-xs placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
@@ -365,7 +593,9 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                           {item.name}
                         </div>
                         <div className="text-[10px] text-neutral-400">
-                          {item.muscleGroup} • {item.defaultSets} serie x {item.defaultReps} • {item.defaultWeight}kg
+                          {item.category === 'cardio'
+                            ? `Bieg • ${item.distance || 800}${item.distanceUnit || 'm'} • Tempo: ${item.pace || '4:20'}`
+                            : `${item.muscleGroup} • ${item.defaultSets} serie x ${item.defaultReps} • ${item.defaultWeight}kg`}
                         </div>
                       </div>
                       <span className="px-2 py-1 rounded bg-amber-400/10 text-amber-400 text-[10px] font-black shrink-0">
@@ -378,186 +608,330 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
             )}
           </div>
 
-          {/* Nazwa i Partia Mięśniowa (Profesjonalne nazewnictwo) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-[11px] uppercase font-bold text-neutral-300 block">
-                Nazwa Ćwiczenia:
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="np. Wyciskanie sztangi leżąc"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] uppercase font-bold text-neutral-300 block">
-                Partia Mięśniowa:
-              </label>
-              <select
-                value={muscleGroup}
-                onChange={(e) => setMuscleGroup(e.target.value as MuscleGroup)}
-                className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
-              >
-                {PROFESSIONAL_MUSCLE_GROUPS.map((mg) => (
-                  <option key={mg} value={mg}>
-                    {mg}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* STRUKTURA DODAWANIA SERII (Ergonomiczne pola decimal, edycja liczb bez kasowania wszystkiego) */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
-              <span className="text-xs font-black uppercase text-amber-400 tracking-wider font-heading">
-                Zaplanowane Serie ({sets.length})
-              </span>
-              <span className="text-[11px] text-neutral-400">
-                Wartości powtórzeń, ciężaru, RIR i RPE dla każdej serii
-              </span>
-            </div>
-
-            {/* Table of Sets */}
-            <div className="space-y-2">
-              {/* Header row */}
-              <div className="grid grid-cols-12 gap-1.5 text-[10px] uppercase font-bold text-neutral-400 px-1">
-                <div className="col-span-2">Seria</div>
-                <div className="col-span-3">Powtórzenia</div>
-                <div className="col-span-3">Ciężar ({unit})</div>
-                <div className="col-span-2">RIR</div>
-                <div className="col-span-1">RPE</div>
-                <div className="col-span-1 text-right"></div>
+          {/* Conditional Name and Classification */}
+          {category === 'strength' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase font-bold text-neutral-300 block">
+                  Nazwa Ćwiczenia:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="np. Wyciskanie sztangi leżąc"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                />
               </div>
 
-              {/* Rows */}
-              {sets.map((set, idx) => (
-                <div
-                  key={idx}
-                  className="grid grid-cols-12 gap-1.5 items-center p-1.5 rounded-xl bg-neutral-900 border border-neutral-800"
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase font-bold text-neutral-300 block">
+                  Partia Mięśniowa:
+                </label>
+                <select
+                  value={muscleGroup}
+                  onChange={(e) => setMuscleGroup(e.target.value as MuscleGroup)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
                 >
-                  {/* Set Index */}
-                  <div className="col-span-2 font-black text-amber-400 text-xs px-1">
-                    #{set.setNumber}
-                  </div>
+                  {PROFESSIONAL_MUSCLE_GROUPS.map((mg) => (
+                    <option key={mg} value={mg}>
+                      {mg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase font-bold text-neutral-300 block">
+                  Typ biegu (wymagany):
+                </label>
+                <select
+                  value={runningType}
+                  onChange={(e) => handleRunningTypeSelect(e.target.value as RunningType)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-2.5 py-2 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
+                >
+                  {RUNNING_TYPES.map((rt) => (
+                    <option key={rt} value={rt}>
+                      {rt}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  {/* Reps input */}
-                  <div className="col-span-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      value={set.reps}
-                      onChange={(e) => handleUpdateSet(idx, 'reps', e.target.value)}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                    />
-                  </div>
+              <div className="space-y-1">
+                <label className="text-[11px] uppercase font-bold text-neutral-300 block">
+                  Nazwa / Oznaczenie biegu:
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="np. Easy Run, Interwały 6x800m"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                />
+              </div>
+            </div>
+          )}
 
-                  {/* Weight input */}
-                  <div className="col-span-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      value={set.weightKg}
-                      onChange={(e) => handleUpdateSet(idx, 'weightKg', e.target.value)}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                    />
-                  </div>
+          {/* STRUKTURA SERII: KONDYCYJNIE DLA SIŁY I CARDIO */}
+          {category === 'strength' ? (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
+                <span className="text-xs font-black uppercase text-amber-400 tracking-wider font-heading">
+                  Zaplanowane Serie ({sets.length})
+                </span>
+                <span className="text-[11px] text-neutral-400">
+                  Wartości powtórzeń, ciężaru, RIR i RPE dla każdej serii
+                </span>
+              </div>
 
-                  {/* RIR input */}
-                  <div className="col-span-2">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      value={set.rir}
-                      onChange={(e) => handleUpdateSet(idx, 'rir', e.target.value)}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                    />
-                  </div>
-
-                  {/* RPE input */}
-                  <div className="col-span-1">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      value={set.rpe}
-                      onChange={(e) => handleUpdateSet(idx, 'rpe', e.target.value)}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                    />
-                  </div>
-
-                  {/* Delete row */}
-                  <div className="col-span-1 text-right">
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSet(idx)}
-                      disabled={sets.length <= 1}
-                      className="p-1 rounded text-neutral-500 hover:text-red-400 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                      title="Usuń serię"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mx-auto" />
-                    </button>
-                  </div>
+              {/* Table of Sets */}
+              <div className="space-y-2">
+                {/* Header row */}
+                <div className="grid grid-cols-12 gap-1.5 text-[10px] uppercase font-bold text-neutral-400 px-1">
+                  <div className="col-span-2">Seria</div>
+                  <div className="col-span-3">Powtórzenia</div>
+                  <div className="col-span-3">Ciężar ({unit})</div>
+                  <div className="col-span-2">RIR</div>
+                  <div className="col-span-1">RPE</div>
+                  <div className="col-span-1 text-right"></div>
                 </div>
-              ))}
-            </div>
 
-            {/* "+ Dodaj serię" Button */}
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={handleAddSet}
-                className="w-full py-2.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-amber-300 border border-dashed border-amber-400/40 hover:border-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
-              >
-                <Plus className="w-4 h-4 text-amber-400" />
-                <span>+ Dodaj serię (kopiuj z poprzedniej)</span>
-              </button>
-            </div>
-          </div>
+                {/* Rows */}
+                {sets.map((set, idx) => (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-12 gap-1.5 items-center p-1.5 rounded-xl bg-neutral-900 border border-neutral-800"
+                  >
+                    {/* Set Index */}
+                    <div className="col-span-2 font-black text-amber-400 text-xs px-1">
+                      #{set.setNumber}
+                    </div>
 
-          {/* Typ ćwiczenia, jednostka i przerwy */}
+                    {/* Reps input */}
+                    <div className="col-span-3">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
+                        value={set.reps}
+                        onChange={(e) => handleUpdateSet(idx, 'reps', e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                      />
+                    </div>
+
+                    {/* Weight input */}
+                    <div className="col-span-3">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
+                        value={set.weightKg}
+                        onChange={(e) => handleUpdateSet(idx, 'weightKg', e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                      />
+                    </div>
+
+                    {/* RIR input */}
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
+                        value={set.rir}
+                        onChange={(e) => handleUpdateSet(idx, 'rir', e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                      />
+                    </div>
+
+                    {/* RPE input */}
+                    <div className="col-span-1">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
+                        value={set.rpe}
+                        onChange={(e) => handleUpdateSet(idx, 'rpe', e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                      />
+                    </div>
+
+                    {/* Delete row */}
+                    <div className="col-span-1 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSet(idx)}
+                        disabled={sets.length <= 1}
+                        className="p-1 rounded text-neutral-500 hover:text-red-400 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                        title="Usuń serię"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* "+ Dodaj serię" Button */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddSet}
+                  className="w-full py-2.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-amber-300 border border-dashed border-amber-400/40 hover:border-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <Plus className="w-4 h-4 text-amber-400" />
+                  <span>+ Dodaj serię (kopiuj z poprzedniej)</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* CARDIO / BIEG: Kolumny Dystans (input + select m/km), Tempo docelowe (input tekstowy), Docelowe HR (input bpm) */
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
+                <span className="text-xs font-black uppercase text-amber-400 tracking-wider font-heading">
+                  Zaplanowane Odcinki / Serie Biegowe ({sets.length})
+                </span>
+                <span className="text-[11px] text-neutral-400">
+                  Dystans, tempo docelowe i HR dla każdego odcinka
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {/* Header row */}
+                <div className="grid grid-cols-12 gap-1.5 text-[10px] uppercase font-bold text-neutral-400 px-1">
+                  <div className="col-span-2">Seria</div>
+                  <div className="col-span-4">Dystans</div>
+                  <div className="col-span-3">Tempo docelowe</div>
+                  <div className="col-span-2">Docelowe HR</div>
+                  <div className="col-span-1 text-right"></div>
+                </div>
+
+                {sets.map((set, idx) => (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-12 gap-1.5 items-center p-1.5 rounded-xl bg-neutral-900 border border-neutral-800"
+                  >
+                    <div className="col-span-2 font-black text-amber-400 text-xs px-1">
+                      #{set.setNumber}
+                    </div>
+
+                    {/* Dystans: numeric input + select m/km */}
+                    <div className="col-span-4 flex items-center gap-1">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*[.,]?[0-9]*"
+                        value={set.distance}
+                        onChange={(e) => handleUpdateSet(idx, 'distance', e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                        placeholder="np. 800"
+                      />
+                      <select
+                        value={set.distanceUnit}
+                        onChange={(e) => handleUpdateSet(idx, 'distanceUnit', e.target.value)}
+                        className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                      >
+                        <option value="m">m</option>
+                        <option value="km">km</option>
+                      </select>
+                    </div>
+
+                    {/* Tempo docelowe: text input (np. 4:20) */}
+                    <div className="col-span-3">
+                      <input
+                        type="text"
+                        value={set.pace}
+                        onChange={(e) => handleUpdateSet(idx, 'pace', e.target.value)}
+                        placeholder="np. 4:20"
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                      />
+                    </div>
+
+                    {/* Docelowe HR: numeric input */}
+                    <div className="col-span-2">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*"
+                        value={set.targetHr}
+                        onChange={(e) => handleUpdateSet(idx, 'targetHr', e.target.value)}
+                        placeholder="bpm"
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                      />
+                    </div>
+
+                    {/* Delete row */}
+                    <div className="col-span-1 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSet(idx)}
+                        disabled={sets.length <= 1}
+                        className="p-1 rounded text-neutral-500 hover:text-red-400 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                        title="Usuń odcinek"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* "+ Dodaj odcinek / serię" Button */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddSet}
+                  className="w-full py-2.5 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-amber-300 border border-dashed border-amber-400/40 hover:border-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <Plus className="w-4 h-4 text-amber-400" />
+                  <span>+ Dodaj odcinek (kopiuj z poprzedniego)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Przerwy i parametry uzupełniające */}
           <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div>
-                <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
-                  Typ ćwiczenia:
-                </label>
-                <select
-                  value={exerciseType}
-                  onChange={(e) => setExerciseType(e.target.value as ExerciseType)}
-                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
-                >
-                  <option value="STRENGTH">Siłowe (FBW)</option>
-                  <option value="RUNNING">Biegowe</option>
-                  <option value="HYROX_STATION">Stacja Hyrox</option>
-                  <option value="INTERVAL_CARDIO">Interwał / Cardio</option>
-                  <option value="MOBILITY">Mobility</option>
-                </select>
-              </div>
+              {category === 'strength' && (
+                <>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
+                      Typ ćwiczenia:
+                    </label>
+                    <select
+                      value={exerciseType}
+                      onChange={(e) => setExerciseType(e.target.value as ExerciseType)}
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
+                    >
+                      <option value="STRENGTH">Siłowe (FBW)</option>
+                      <option value="HYROX_STATION">Stacja Hyrox</option>
+                      <option value="INTERVAL_CARDIO">Interwał / Kardio</option>
+                      <option value="MOBILITY">Mobility</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
-                  Jednostka ciężaru:
-                </label>
-                <select
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value as ExerciseUnit)}
-                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
-                >
-                  <option value="kg">kg (kilogramy)</option>
-                  <option value="lb">lb (funty)</option>
-                  <option value="m">m (metry)</option>
-                  <option value="km">km (kilometry)</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
+                      Jednostka ciężaru:
+                    </label>
+                    <select
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value as ExerciseUnit)}
+                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 cursor-pointer"
+                    >
+                      <option value="kg">kg (kilogramy)</option>
+                      <option value="lb">lb (funty)</option>
+                      <option value="m">m (metry)</option>
+                      <option value="km">km (kilometry)</option>
+                    </select>
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
@@ -604,7 +978,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               <div>
                 <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
-                  Tempo (np. 3-0-1-0 lub 2s pauza):
+                  Tempo / Rytm (np. 3-0-1-0 lub Narastające):
                 </label>
                 <input
                   type="text"
@@ -617,11 +991,15 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
 
               <div>
                 <label className="text-[10px] text-neutral-400 uppercase font-semibold block mb-0.5">
-                  Wskazówka techniczna:
+                  Wskazówka techniczna / taktyka:
                 </label>
                 <input
                   type="text"
-                  placeholder="np. Retrakcja łopatek, pełny wyprost w biodrze..."
+                  placeholder={
+                    category === 'cardio'
+                      ? 'np. Stała kadencja 180 spm, strefa tlenowa Z2'
+                      : 'np. Retrakcja łopatek, pełny wyprost w biodrze...'
+                  }
                   value={techniqueNotes}
                   onChange={(e) => setTechniqueNotes(e.target.value)}
                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
@@ -629,77 +1007,79 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
               </div>
             </div>
 
-            {/* Parametry Biegowe / Cardio Toggle */}
-            <div className="pt-2 border-t border-neutral-800/80">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={enableRunningMetrics}
-                  onChange={(e) => setEnableRunningMetrics(e.target.checked)}
-                  className="w-4 h-4 rounded text-amber-400 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-0 cursor-pointer"
-                />
-                <span className="text-xs font-bold text-neutral-200">
-                  Włącz parametry biegowe / cardio (Dystans, Tempo, Docelowe HR)
-                </span>
-              </label>
+            {/* Opcjonalne dodatkowe parametry biegowe dla ćwiczeń siłowych / hybrydowych */}
+            {category === 'strength' && (
+              <div className="pt-2 border-t border-neutral-800/80">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={enableRunningMetrics}
+                    onChange={(e) => setEnableRunningMetrics(e.target.checked)}
+                    className="w-4 h-4 rounded text-amber-400 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-0 cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-neutral-200">
+                    Włącz dodatkowe parametry biegowe (Dystans, Tempo, HR)
+                  </span>
+                </label>
 
-              {enableRunningMetrics && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2.5 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 animate-in fade-in">
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5">Dystans:</label>
-                    <div className="flex items-center gap-1">
+                {enableRunningMetrics && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2.5 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 animate-in fade-in">
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Dystans:</label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*[.,]?[0-9]*"
+                          value={targetDistance}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(',', '.');
+                            if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) setTargetDistance(val);
+                          }}
+                          className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                          placeholder="np. 800"
+                        />
+                        <select
+                          value={distanceUnit}
+                          onChange={(e) => setDistanceUnit(e.target.value as 'km' | 'm')}
+                          className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                        >
+                          <option value="m">m</option>
+                          <option value="km">km</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Tempo docelowe:</label>
+                      <input
+                        type="text"
+                        value={targetPace}
+                        onChange={(e) => setTargetPace(e.target.value)}
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                        placeholder="np. 4:15 min/km"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowe HR (bpm):</label>
                       <input
                         type="text"
                         inputMode="decimal"
                         pattern="[0-9]*[.,]?[0-9]*"
-                        value={targetDistance}
+                        value={targetHR}
                         onChange={(e) => {
                           const val = e.target.value.replace(',', '.');
-                          if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) setTargetDistance(val);
+                          if (val === '' || /^[0-9]*$/.test(val)) setTargetHR(val);
                         }}
-                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                        placeholder="np. 800"
+                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                        placeholder="np. 165"
                       />
-                      <select
-                        value={distanceUnit}
-                        onChange={(e) => setDistanceUnit(e.target.value as 'km' | 'm')}
-                        className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1 text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                      >
-                        <option value="m">m</option>
-                        <option value="km">km</option>
-                      </select>
                     </div>
                   </div>
-
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5">Tempo docelowe:</label>
-                    <input
-                      type="text"
-                      value={targetPace}
-                      onChange={(e) => setTargetPace(e.target.value)}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                      placeholder="np. 4:15 min/km"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-neutral-400 block mb-0.5">Docelowe HR (bpm):</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      value={targetHR}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(',', '.');
-                        if (val === '' || /^[0-9]*$/.test(val)) setTargetHR(val);
-                      }}
-                      className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                      placeholder="np. 165"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Form Action Buttons at bottom of scrollable content */}
@@ -716,7 +1096,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
               className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-400/20 cursor-pointer flex items-center gap-1.5"
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>{isEditing ? 'Zapisz Zmiany Ćwiczenia' : 'Wstaw Ćwiczenie do Planu'}</span>
+              <span>{isEditing ? 'Zapisz Zmiany' : 'Wstaw do Planu'}</span>
             </button>
           </div>
         </form>

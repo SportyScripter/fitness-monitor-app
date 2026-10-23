@@ -593,6 +593,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
     const newEx: Exercise = {
       id: `ex-live-${Date.now()}`,
       name: catItem.name,
+      category: catItem.category || 'strength',
       muscleGroup: catItem.muscleGroup,
       plannedSets: catItem.defaultSets,
       targetRepsRange: catItem.defaultReps,
@@ -602,8 +603,8 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
       restSeconds: catItem.restSeconds,
       hyroxRelevance: catItem.hyroxRelevance,
       techniqueNotes: catItem.techniqueNotes,
-      unit: 'kg',
-      exerciseType: 'STRENGTH',
+      unit: (catItem.distanceUnit as ExerciseUnit) || 'kg',
+      exerciseType: catItem.category === 'cardio' ? 'RUNNING' : 'STRENGTH',
     };
 
     const initialReps = parseInt(catItem.defaultReps.split('-')[0]) || 8;
@@ -1334,7 +1335,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           currentWeek={currentWeek}
           exercisesState={exercisesState.map((ex) => ({
             exerciseName: ex.exercise.name,
-            muscleGroup: ex.exercise.muscleGroup,
+            muscleGroup: ex.exercise.muscleGroup || (ex.exercise.category === 'cardio' ? 'Cardio / Bieg' : 'Ogólne'),
             sets: ex.sets,
             exerciseRpe: ex.exerciseRpe,
             exerciseRir: ex.exerciseRir,

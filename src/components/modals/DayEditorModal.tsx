@@ -93,7 +93,10 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
     const newExercise: Exercise = {
       id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: catItem.name,
+      category: catItem.category || 'strength',
       muscleGroup: catItem.muscleGroup,
+      exerciseType: catItem.category === 'cardio' ? 'RUNNING' : 'STRENGTH',
+      unit: (catItem.distanceUnit as ExerciseUnit) || 'kg',
       secondaryMuscleGroup: catItem.secondaryMuscleGroup,
       plannedSets: catItem.defaultSets,
       targetRepsRange: catItem.defaultReps,
@@ -1020,7 +1023,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                           )}
 
                           <span className="px-2 py-0.5 rounded text-[10px] bg-neutral-900 text-neutral-400">
-                            {ex.muscleGroup.split('(')[0]}
+                            {ex.muscleGroup?.split('(')[0] || (ex.category === 'cardio' ? 'Cardio / Bieg' : 'Ogólne')}
                           </span>
 
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-mono-numbers font-bold bg-neutral-800 text-neutral-300">
