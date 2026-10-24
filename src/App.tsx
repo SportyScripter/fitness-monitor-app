@@ -556,14 +556,32 @@ export default function App() {
     const clonedDays: WorkoutDay[] = sourceDays.map((d, dIdx) => ({
       ...d,
       id: `w${targetWeek}-day-${d.dayNumber || dIdx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      exercises: (d.exercises || []).map((ex) => ({
-        ...ex,
-        id: `ex-w${targetWeek}-${(ex.name || 'ex').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
-        defaultWeightKg:
-          progressionDeltaKg > 0 && (ex.defaultWeightKg || 0) > 0
-            ? Number(((ex.defaultWeightKg || 0) + progressionDeltaKg).toFixed(1))
-            : ex.defaultWeightKg,
-      })),
+      exercises: (d.exercises || []).map((ex) => {
+        const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
+        const hasDelta = progressionDeltaKg > 0 && !isCardio;
+        const newWeight = hasDelta
+          ? Number(((ex.defaultWeightKg || 0) + progressionDeltaKg).toFixed(2))
+          : ex.defaultWeightKg;
+        const updatedDetails = Array.isArray(ex.plannedSetsDetails)
+          ? ex.plannedSetsDetails.map((s, sIdx) => ({
+              ...s,
+              setNumber: s.setNumber || sIdx + 1,
+              weightKg: hasDelta
+                ? Number(((s.weightKg ?? s.weight ?? ex.defaultWeightKg ?? 0) + progressionDeltaKg).toFixed(2))
+                : s.weightKg,
+              weight: hasDelta
+                ? Number(((s.weight ?? s.weightKg ?? ex.defaultWeightKg ?? 0) + progressionDeltaKg).toFixed(2))
+                : s.weight,
+            }))
+          : undefined;
+
+        return {
+          ...ex,
+          id: `ex-w${targetWeek}-${(ex.name || 'ex').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
+          defaultWeightKg: newWeight,
+          plannedSetsDetails: updatedDetails,
+        };
+      }),
     }));
 
     const updatedCycle: TrainingCycleCatalog = {
@@ -665,12 +683,15 @@ export default function App() {
                 muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
                 plannedSets: ex?.plannedSets ?? 3,
                 targetRepsRange: ex?.targetRepsRange || '8-10',
-                defaultWeightKg: ex?.defaultWeightKg ?? 20,
+                defaultWeightKg: (ex?.defaultWeightKg !== undefined) ? ex.defaultWeightKg : 20,
                 targetRIR: ex?.targetRIR ?? (newPhase.targetRIR ?? 2),
                 targetRPE: ex?.targetRPE ?? (newPhase.targetRPE ?? 8),
                 restSeconds: ex?.restSeconds ?? 90,
                 hyroxRelevance: ex?.hyroxRelevance || '',
                 techniqueNotes: ex?.techniqueNotes || '',
+                plannedSetsDetails: Array.isArray(ex?.plannedSetsDetails)
+                  ? ex.plannedSetsDetails.map((s) => ({ ...s }))
+                  : undefined,
               }))
             : [],
           runningSession: d?.runningSession,

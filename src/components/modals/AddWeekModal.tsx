@@ -12,7 +12,7 @@ import {
   FilePlus2,
   Dumbbell
 } from 'lucide-react';
-import { MesocyclePhase, WorkoutDay, MuscleGroup, normalizeMuscleGroup } from '../../types/hyrox';
+import { MesocyclePhase, WorkoutDay, MuscleGroup, normalizeMuscleGroup, ExercisePlannedSet } from '../../types/hyrox';
 import { MASTER_HYROX_WEEK_PLAN } from '../../data/hyroxPlanData';
 
 interface AddWeekModalProps {
@@ -94,7 +94,17 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
       // 100% empty week: user will add each day manually!
       generatedDays = [];
     } else if (initStrategy === 'clone_previous' && hasExistingDays) {
-      // Clone from current week: keeps exercise names, sets, reps, but resets logs
+      // Oblicz efektywny mnożnik objętości (np. 1.25):
+      const multiplier = isDeload
+        ? 0.6
+        : (!isNaN(parsedVol) && parsedVol > 0 ? parsedVol : 1.0);
+
+      // Oblicz wartość progresji ciężaru (+ kg):
+      const deltaWeight = (applyWeightDelta && !isDeload && !isNaN(parsedDelta))
+        ? parsedDelta
+        : 0;
+
+      // Kopiowanie głębokie (deep copy) dni i ćwiczeń ze skalowaniem serii i progresją ciężaru:
       generatedDays = safeDays.map((d) => ({
         ...d,
         id: `w${weekNumber}-${d.dayNumber ?? 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -108,22 +118,101 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
         targetRpeRange: d.targetRpeRange || `${targetRPE}`,
         targetRirRange: d.targetRirRange || `${targetRIR}`,
         exercises: Array.isArray(d.exercises)
-          ? d.exercises.filter(Boolean).map((ex) => ({
-              ...ex,
-              id: `ex-w${weekNumber}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
-              name: ex.name || 'Ćwiczenie',
-              muscleGroup: normalizeMuscleGroup(ex.muscleGroup),
-              plannedSets: Number(ex.plannedSets) || 3,
-              targetRepsRange: ex.targetRepsRange || '8-10',
-              defaultWeightKg: applyWeightDelta && !isDeload
-                ? (Number(ex.defaultWeightKg) || 0) + (!isNaN(parsedDelta) ? parsedDelta : 0)
-                : (Number(ex.defaultWeightKg) || 0),
-              targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
-              targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
-              restSeconds: Number(ex.restSeconds) || 90,
-              hyroxRelevance: ex.hyroxRelevance || '',
-              techniqueNotes: ex.techniqueNotes || '',
-            }))
+          ? d.exercises.filter(Boolean).map((ex) => {
+              const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
+
+              // 1. Ustal bazową tablicę zaplanowanych serii (stareSerie)
+              let stareSerie: ExercisePlannedSet[] = [];
+              if (Array.isArray(ex.plannedSetsDetails) && ex.plannedSetsDetails.length > 0) {
+                stareSerie = ex.plannedSetsDetails.map((s, idx) => ({
+                  setNumber: s.setNumber || idx + 1,
+                  reps: s.reps ?? (parseInt(String(ex.targetRepsRange || '8').split('-')[0]) || 8),
+                  weightKg: typeof s.weightKg === 'number' ? s.weightKg : (typeof s.weight === 'number' ? s.weight : (Number(ex.defaultWeightKg) || 0)),
+                  weight: typeof s.weight === 'number' ? s.weight : (typeof s.weightKg === 'number' ? s.weightKg : (Number(ex.defaultWeightKg) || 0)),
+                  rir: typeof s.rir === 'number' ? s.rir : (!isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2)),
+                  rpe: typeof s.rpe === 'number' ? s.rpe : (!isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0)),
+                  distance: s.distance ?? ex.targetDistance,
+                  distanceUnit: s.distanceUnit || ex.distanceUnit,
+                  pace: s.pace || ex.targetPace,
+                  targetHr: s.targetHr || s.targetHR || ex.targetHR,
+                  targetHR: s.targetHR || s.targetHr || ex.targetHR,
+                }));
+              } else {
+                const count = Math.max(Number(ex.plannedSets) || 3, 1);
+                const defaultReps = parseInt(String(ex.targetRepsRange || '8').split('-')[0]) || 8;
+                const baseW = Number(ex.defaultWeightKg) || 0;
+                stareSerie = Array.from({ length: count }, (_, i) => ({
+                  setNumber: i + 1,
+                  reps: defaultReps,
+                  weightKg: baseW,
+                  weight: baseW,
+                  rir: !isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2),
+                  rpe: !isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0),
+                  distance: ex.targetDistance,
+                  distanceUnit: ex.distanceUnit,
+                  pace: ex.targetPace,
+                  targetHr: ex.targetHR,
+                  targetHR: ex.targetHR,
+                }));
+              }
+
+              // 2. Mnożnik objętości (Sety):
+              // Dla każdego ćwiczenia pomnóż dotychczasową ilość zaplanowanych serii przez mnożnik i zaokrąglij do liczby całkowitej
+              const targetSetsCount = Math.max(1, Math.round(stareSerie.length * multiplier));
+              let nowaListaSerii: ExercisePlannedSet[] = [...stareSerie];
+
+              if (targetSetsCount > stareSerie.length) {
+                // Jeśli nowa liczba serii jest większa, dodaj do tablicy odpowiednią ilość nowych serii (kopiując parametry z ostatniej istniejącej serii)
+                const lastExistingSet = stareSerie[stareSerie.length - 1];
+                const setsToAdd = targetSetsCount - stareSerie.length;
+                for (let i = 0; i < setsToAdd; i++) {
+                  nowaListaSerii.push({
+                    ...lastExistingSet,
+                    setNumber: nowaListaSerii.length + 1,
+                  });
+                }
+              } else if (targetSetsCount < stareSerie.length) {
+                // Jeśli nowa liczba jest mniejsza, przytnij tablicę serii (.slice)
+                nowaListaSerii = nowaListaSerii.slice(0, targetSetsCount);
+              }
+
+              // 3. Progresja ciężaru (+ kg):
+              // Jeśli użytkownik wpisał wartość w pole progresji (np. 2.5), przeiteruj przez wszystkie serie każdego ćwiczenia.
+              // Jeśli ćwiczenie nie jest biegiem (category !== 'cardio'), dodaj wpisaną wartość do atrybutu weight każdej serii.
+              const shouldApplyProgression = deltaWeight !== 0 && !isCardio;
+              nowaListaSerii = nowaListaSerii.map((s, idx) => {
+                const currentW = typeof s.weight === 'number' ? s.weight : (typeof s.weightKg === 'number' ? s.weightKg : (Number(ex.defaultWeightKg) || 0));
+                const finalWeight = shouldApplyProgression
+                  ? Number((currentW + deltaWeight).toFixed(2))
+                  : currentW;
+                return {
+                  ...s,
+                  setNumber: idx + 1,
+                  weight: finalWeight,
+                  weightKg: finalWeight,
+                };
+              });
+
+              const updatedDefaultWeightKg = shouldApplyProgression
+                ? Number(((Number(ex.defaultWeightKg) || 0) + deltaWeight).toFixed(2))
+                : (Number(ex.defaultWeightKg) || 0);
+
+              return {
+                ...ex,
+                id: `ex-w${weekNumber}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
+                name: ex.name || 'Ćwiczenie',
+                muscleGroup: normalizeMuscleGroup(ex.muscleGroup),
+                plannedSets: nowaListaSerii.length,
+                plannedSetsDetails: nowaListaSerii,
+                targetRepsRange: ex.targetRepsRange || '8-10',
+                defaultWeightKg: updatedDefaultWeightKg,
+                targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
+                targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
+                restSeconds: Number(ex.restSeconds) || 90,
+                hyroxRelevance: ex.hyroxRelevance || '',
+                techniqueNotes: ex.techniqueNotes || '',
+              };
+            })
           : [],
         runningSession: d.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
       }));
@@ -274,6 +363,9 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   />
                   <span className="text-neutral-400 font-bold">x</span>
                 </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Skaluje ilość serii roboczych. Np. 1.25 zwiększy objętość o 25%, dodając dodatkowe serie do ćwiczeń.
+                </p>
                 {!isMultiplierValid && (
                   <p className="text-[11px] text-red-400 font-semibold mt-1">
                     Mnożnik musi mieścić się w zakresie 1.0 - 1.5

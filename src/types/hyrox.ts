@@ -56,6 +56,7 @@ export type RunningType = (typeof RUNNING_TYPES)[number];
 export interface ExerciseSet {
   setNumber: number;
   weightKg: number;
+  weight?: number;
   reps: number;
   completed: boolean;
   tonnage: number; // weightKg * reps
@@ -81,6 +82,7 @@ export interface ExercisePlannedSet {
   setNumber: number;
   reps?: number | string;
   weightKg?: number;
+  weight?: number;
   rir?: number;
   rpe?: number;
   distance?: number;
