@@ -628,7 +628,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                     detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
                       setNumber: s.setNumber || idx + 1,
                       reps: s.reps ?? 8,
-                      weightKg: s.weightKg ?? 0,
+                      weightKg: parseFloat(String(s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0)) || 0,
                       rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
                       rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
                       distance: s.distance ?? exercise.targetDistance ?? 800,

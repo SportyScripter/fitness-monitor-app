@@ -167,9 +167,28 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
             targetHR: ex.targetHR,
           });
         }
+      } else if (Array.isArray(ex.plannedSetsDetails) && ex.plannedSetsDetails.length > 0) {
+        // 2. Explicitly planned sets from plan / copied week with volume multiplier & progression
+        const defaultReps = parseInt(String(ex.targetRepsRange || '8').split('-')[0]) || 8;
+        sets = ex.plannedSetsDetails.map((s, idx) => {
+          const w = parseFloat(String(s.weightKg ?? s.weight ?? baseWeight).replace(',', '.')) || 0;
+          const r = typeof s.reps === 'number' ? s.reps : (parseInt(String(s.reps), 10) || defaultReps);
+          return {
+            setNumber: s.setNumber || idx + 1,
+            weightKg: w,
+            weight: w,
+            reps: r,
+            completed: false,
+            tonnage: Math.round(w * r),
+            unit: exUnit,
+            targetDistance: s.distance ?? ex.targetDistance,
+            distanceUnit: s.distanceUnit || ex.distanceUnit || 'm',
+            targetPace: s.pace || ex.targetPace,
+            targetHR: s.targetHr || s.targetHR || ex.targetHR,
+          };
+        });
       } else {
-        // 2. Fresh workout session (e.g. starting a new week or starting today's session for the first time):
-        // Query the most recent completed performance for this exercise from previous workouts/weeks
+        // 3. Fallback: Query the most recent completed performance for this exercise from previous workouts/weeks
         const pastLogsForEx = (workoutLogs || [])
           .filter(
             (l) =>
