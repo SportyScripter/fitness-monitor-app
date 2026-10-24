@@ -14,7 +14,8 @@ import {
   Sparkles,
   Zap,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Check
 } from 'lucide-react';
 import {
   WorkoutDay,
@@ -91,13 +92,44 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     isDeload: false,
   };
 
-  // Helper to check if day has logged workouts
-  const isDayCompleted = (day: WorkoutDay) => {
-    if (!day) return false;
-    return workoutLogs.some(
-      (l) => l.dayId === day.id || (l.dayTitle === day.title && l.dayId?.startsWith(`w${currentWeek}-`))
+  // Helper to check day status: 'completed' | 'in_progress' | 'not_started'
+  const getDayStatus = (day: WorkoutDay): 'completed' | 'in_progress' | 'not_started' => {
+    if (!day || day.type === 'REST_RECOVERY') return 'not_started';
+    const exercises = day.exercises || [];
+    if (exercises.length === 0) return 'not_started';
+
+    const dayLogs = workoutLogs.filter(
+      (l) => l.dayId === day.id || (l.dayTitle === day.title && (l.dayId?.startsWith(`w${currentWeek}-`) || !l.dayId))
     );
+
+    if (dayLogs.length === 0) return 'not_started';
+
+    // 1. Twarda flaga ukończenia całej sesji treningowej (np. z głównego timera "Zakończ i Zapisz")
+    const hasCompletedSessionFlag = dayLogs.some((l) => l.completed === true && (l.totalWorkoutDurationSec || 0) > 0);
+
+    // 2. Weryfikacja, czy KAŻDE zaplanowane ćwiczenie ma w 100% zrealizowane wszystkie zaplanowane serie
+    const areAllExercisesFullyCompleted = exercises.every((ex) => {
+      const exLogs = dayLogs.filter(
+        (l) =>
+          (l.exerciseId && l.exerciseId === ex.id) ||
+          (l.exerciseName && l.exerciseName.trim().toLowerCase() === ex.name.trim().toLowerCase())
+      );
+      const plannedSetsCount = Math.max(
+        ex.plannedSets || 0,
+        ex.plannedSetsDetails?.length || 0,
+        1
+      );
+      return exLogs.length >= plannedSetsCount;
+    });
+
+    if (hasCompletedSessionFlag || areAllExercisesFullyCompleted) {
+      return 'completed';
+    }
+
+    return 'in_progress';
   };
+
+  const isDayCompleted = (day: WorkoutDay) => getDayStatus(day) === 'completed';
 
   // Previous logs for selected day
   const previousWorkoutLogs = selectedDay
@@ -282,7 +314,9 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
           {currentWeekDays.map((day) => {
             const isSelected = selectedDay && selectedDay.id === day.id;
-            const completed = isDayCompleted(day);
+            const status = getDayStatus(day);
+            const isCompleted = status === 'completed';
+            const isInProgress = status === 'in_progress';
 
             return (
               <button
@@ -290,31 +324,54 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 onClick={() => onSelectDayId(day.id)}
                 className={`flex-1 min-w-[70px] p-2 rounded-2xl border text-center transition-all cursor-pointer touch-manipulation min-h-[58px] flex flex-col items-center justify-center relative ${
                   isSelected
-                    ? 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
-                    : completed
-                    ? 'bg-neutral-900/90 text-emerald-400 border-emerald-500/30'
+                    ? isCompleted
+                      ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
+                      : 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
+                    : isCompleted
+                    ? 'bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-100 border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600/70 dark:ring-emerald-500/50 shadow-sm shadow-emerald-900/10 hover:bg-emerald-100 dark:hover:bg-emerald-950/50'
+                    : isInProgress
+                    ? 'bg-amber-500/10 dark:bg-amber-950/20 text-neutral-800 dark:text-neutral-200 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/40 hover:bg-amber-500/15'
                     : 'bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                 }`}
                 title={day.title}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isSelected ? 'text-black' : 'text-neutral-400'
+                      isSelected
+                        ? 'text-black'
+                        : isCompleted
+                        ? 'text-emerald-800 dark:text-emerald-300 font-extrabold'
+                        : isInProgress
+                        ? 'text-amber-600 dark:text-amber-400 font-bold'
+                        : 'text-neutral-400'
                     }`}
                   >
                     D{day.dayNumber}
                   </span>
-                  {completed && (
-                    <CheckCircle2
-                      className={`w-3 h-3 ${isSelected ? 'text-black' : 'text-emerald-400'}`}
+                  {isCompleted && (
+                    <span
+                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
+                        isSelected
+                          ? 'bg-black text-emerald-400 ring-1 ring-black'
+                          : 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950'
+                      }`}
+                      title="Trening w 100% zrealizowany"
+                    >
+                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    </span>
+                  )}
+                  {isInProgress && !isCompleted && (
+                    <span
+                      className="w-2 h-2 rounded-full bg-amber-500 shrink-0 shadow-sm"
+                      title="Trening w trakcie realizacji"
                     />
                   )}
                 </div>
 
                 <span
                   className={`text-[11px] font-extrabold truncate max-w-[65px] ${
-                    isSelected ? 'text-black font-black' : 'text-white'
+                    isSelected ? 'text-black font-black' : isCompleted ? 'text-emerald-950 dark:text-white font-extrabold' : 'text-white'
                   }`}
                 >
                   {day.dayNamePolish?.slice(0, 3) || `D${day.dayNumber}`}
@@ -322,7 +379,13 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
                 <span
                   className={`text-[8px] uppercase font-bold tracking-tight mt-0.5 ${
-                    isSelected ? 'text-neutral-900' : 'text-neutral-500'
+                    isSelected
+                      ? 'text-neutral-900 font-extrabold'
+                      : isCompleted
+                      ? 'text-emerald-700 dark:text-emerald-400 font-bold'
+                      : isInProgress
+                      ? 'text-amber-600 dark:text-amber-400 font-semibold'
+                      : 'text-neutral-500'
                   }`}
                 >
                   {day.type === 'RUNNING_HIIT' ? 'Bieg' : day.type === 'WEEKEND_HYROX' ? 'Hyrox' : day.type === 'REST_RECOVERY' ? 'Rest' : 'Siła'}
@@ -633,10 +696,19 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       )
                     : [];
 
+                  // Warunek sprawdzający, czy wszystkie serie tego ćwiczenia zostały oznaczone jako wykonane
+                  const isExerciseCompleted =
+                    (detailedSets.length > 0 && detailedSets.every((s) => s.completed)) ||
+                    (currentSessionLogs.length > 0 && currentSessionLogs.length >= (exercise.plannedSets || 1));
+
                   return (
                     <div
                       key={exercise.id}
-                      className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-3xl p-4 shadow-md space-y-3 transition-all"
+                      className={`rounded-3xl p-4 shadow-md space-y-3 transition-all ${
+                        isExerciseCompleted
+                          ? 'border-2 border-emerald-600 dark:border-emerald-500 bg-neutral-900/90 opacity-80 shadow-emerald-950/20'
+                          : 'bg-neutral-900 border border-neutral-800 hover:border-neutral-700'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -647,6 +719,12 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
                               {isCardio ? (exercise.distanceUnit || 'm') : (exercise.unit || 'kg')}
                             </span>
+                            {isExerciseCompleted && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/30 dark:border-emerald-800 inline-flex items-center gap-1 shadow-sm">
+                                <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                <span>Wykonane</span>
+                              </span>
+                            )}
                           </div>
                           <h3 className="text-base font-bold text-white font-heading">
                             {exercise.name}
@@ -841,13 +919,24 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       )}
 
                       {/* Check off button */}
-                      <button
-                        onClick={() => setActiveDetailExercise(exercise)}
-                        className="w-full py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 hover:text-amber-200 border border-neutral-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[44px]"
-                      >
-                        <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Szczegóły & Odhacz Serie</span>
-                      </button>
+                      {isExerciseCompleted ? (
+                        <button
+                          onClick={() => setActiveDetailExercise(exercise)}
+                          className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[44px] shadow-md shadow-emerald-950/30 border border-emerald-600 dark:border-emerald-500"
+                          title="Wszystkie serie ukończone! Kliknij, aby przejrzeć lub edytować"
+                        >
+                          <Check className="w-4 h-4 stroke-[3]" />
+                          <span>Ukończone</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setActiveDetailExercise(exercise)}
+                          className="w-full py-2.5 px-4 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 hover:text-amber-200 border border-neutral-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[44px]"
+                        >
+                          <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Szczegóły & Odhacz Serie</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })}

@@ -751,6 +751,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
             totalWorkoutDurationSec: sessionSeconds,
             totalWorkDurationSec,
             totalRestDurationSec,
+            completed: true,
           });
         }
       });
