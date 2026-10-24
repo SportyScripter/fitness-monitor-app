@@ -528,15 +528,14 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
                   <div className="w-full overflow-x-auto">
                     {isCardio ? (
-                      /* CARDIO / BIEG: Dystans, Tempo, HR, RPE, Status, Delete */
-                      <table className="w-full text-left text-xs min-w-[500px]">
+                      /* CARDIO / BIEG: Dystans, Tempo, HR, Status, Delete (bez RPE) */
+                      <table className="w-full text-left text-xs">
                         <thead>
                           <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
                             <th className="w-10 pb-1.5">Seria</th>
                             <th className="pb-1.5 px-1">Dystans</th>
                             <th className="pb-1.5 px-1">Tempo docelowe</th>
                             <th className="w-24 pb-1.5 px-1 text-center">HR (bpm)</th>
-                            <th className="w-16 pb-1.5 px-1 text-center">RPE</th>
                             <th className="w-12 pb-1.5 text-center">Status</th>
                             <th className="w-8 pb-1.5"></th>
                           </tr>
@@ -589,20 +588,6 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                                   max="220"
                                   value={set.targetHr ?? 165}
                                   onChange={(e) => updateSetField(idx, 'targetHr', parseInt(e.target.value, 10) || 165)}
-                                  className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
-                                />
-                              </td>
-
-                              {/* RPE */}
-                              <td className="py-2 px-1 text-center">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="0.5"
-                                  min="1"
-                                  max="10"
-                                  value={set.rpe !== undefined ? set.rpe : 8}
-                                  onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>

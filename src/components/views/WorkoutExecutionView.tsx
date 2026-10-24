@@ -779,11 +779,6 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                                       <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20 font-bold">
                                         {sHr} bpm
                                       </span>
-                                      {set.rpe !== undefined && (
-                                        <span className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-medium">
-                                          RPE {set.rpe}
-                                        </span>
-                                      )}
                                     </div>
                                   </div>
                                 );

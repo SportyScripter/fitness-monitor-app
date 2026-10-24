@@ -15,10 +15,30 @@ import {
   Sparkles,
   Trophy,
   Activity,
-  Dumbbell
+  Dumbbell,
+  Clock,
+  Filter
 } from 'lucide-react';
 import { RPE_RIR_SCALE_REFERENCE, MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
 import { WorkoutLogEntry, MesocyclePhase, WorkoutDay, MuscleGroup } from '../../types/hyrox';
+import { ExerciseProgressionModal } from '../modals/ExerciseProgressionModal';
+
+export type TimeRangeFilter =
+  | 'last_vs_prev'
+  | '2_weeks'
+  | '1_month'
+  | '2_months'
+  | 'current_cycle'
+  | '1_year';
+
+export const TIME_RANGE_OPTIONS: { id: TimeRangeFilter; label: string }[] = [
+  { id: 'last_vs_prev', label: 'Ostatni trening vs poprzedni' },
+  { id: '2_weeks', label: 'Ostatnie 2 tygodnie' },
+  { id: '1_month', label: 'Ostatni miesiąc' },
+  { id: '2_months', label: 'Ostatnie 2 miesiące' },
+  { id: 'current_cycle', label: 'Obecny cykl' },
+  { id: '1_year', label: 'Ostatni rok' },
+];
 
 interface Progression1RMViewProps {
   currentWeek: number;
@@ -40,7 +60,27 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
   const [liftWeight, setLiftWeight] = useState<number>(100);
   const [liftReps, setLiftReps] = useState<number>(5);
 
-  // Exercise Progression calculation based on distinct sessions
+  // Filters state for Progression Table
+  const [timeRange, setTimeRange] = useState<TimeRangeFilter>('last_vs_prev');
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>('ALL');
+
+  // Modal state
+  const [selectedExerciseForModal, setSelectedExerciseForModal] = useState<string | null>(null);
+  const [isProgressionModalOpen, setIsProgressionModalOpen] = useState<boolean>(false);
+
+  // Unique muscle groups extracted from logged exercises
+  const uniqueMuscleGroups = useMemo(() => {
+    const groups = new Set<string>();
+    workoutLogs.forEach((l) => {
+      if (l.muscleGroup) {
+        const clean = l.muscleGroup.split('(')[0].trim();
+        if (clean) groups.add(clean);
+      }
+    });
+    return Array.from(groups).sort();
+  }, [workoutLogs]);
+
+  // Exercise Progression calculation based on distinct sessions and selected timeRange
   const exerciseProgressionList = useMemo(() => {
     const exMap: Record<string, WorkoutLogEntry[]> = {};
     workoutLogs.forEach((l) => {
@@ -50,9 +90,29 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
       exMap[key].push(l);
     });
 
+    const now = Date.now();
+    const getCutoff = (range: TimeRangeFilter): number | null => {
+      switch (range) {
+        case '2_weeks':
+          return now - 14 * 24 * 60 * 60 * 1000;
+        case '1_month':
+          return now - 30 * 24 * 60 * 60 * 1000;
+        case '2_months':
+          return now - 60 * 24 * 60 * 60 * 1000;
+        case '1_year':
+          return now - 365 * 24 * 60 * 60 * 1000;
+        case 'current_cycle':
+          return now - totalWeeksCount * 7 * 24 * 60 * 60 * 1000;
+        default:
+          return null;
+      }
+    };
+
+    const cutoff = getCutoff(timeRange);
+
     return Object.entries(exMap)
       .map(([name, logs]) => {
-        // Group by distinct calendar date to properly compare with previous workout day
+        // Group by distinct calendar date
         const sessionMap: Record<string, WorkoutLogEntry[]> = {};
         logs.forEach((l) => {
           const sKey = l.dateStr || (l.timestamp ? l.timestamp.split('T')[0] : 'session');
@@ -60,10 +120,9 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
           sessionMap[sKey].push(l);
         });
 
-        // Sort sessions by date descending
+        // Sort sessions by date descending (newest first)
         const sortedSessions = Object.values(sessionMap)
           .map((sessionLogs) => {
-            // Deduplicate sets within session by setNumber (keeping latest)
             const mapBySet = new Map<number, WorkoutLogEntry>();
             sessionLogs
               .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
@@ -76,12 +135,38 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
             return tB.localeCompare(tA);
           });
 
-        const latestSession = sortedSessions[0] || [];
-        const previousSession = sortedSessions[1] || [];
+        if (sortedSessions.length === 0) return null;
+
+        // Apply time range filtering
+        let activeSessions = sortedSessions;
+        if (timeRange !== 'last_vs_prev' && cutoff !== null) {
+          const filtered = sortedSessions.filter((s) => {
+            const rawDate = s[0]?.dateStr || s[0]?.timestamp;
+            if (!rawDate) return true;
+            const parsed = new Date(rawDate).getTime();
+            return isNaN(parsed) || parsed >= cutoff;
+          });
+          // If logs have matching dates within cutoff, use them
+          if (filtered.length > 0) {
+            activeSessions = filtered;
+          }
+        }
+
+        const latestSession = activeSessions[0] || [];
+        // When last_vs_prev, baseline is the immediate previous session
+        // When range like '1_month', baseline is the earliest session in that range to measure progression over the whole period
+        const previousSession =
+          timeRange === 'last_vs_prev'
+            ? activeSessions[1] || null
+            : activeSessions.length > 1
+            ? activeSessions[activeSessions.length - 1]
+            : null;
 
         const latestTopWeight = Math.max(...latestSession.map((s) => s.weightKg || 0), 0);
         const previousTopWeight =
-          previousSession.length > 0 ? Math.max(...previousSession.map((s) => s.weightKg || 0), 0) : null;
+          previousSession && previousSession.length > 0
+            ? Math.max(...previousSession.map((s) => s.weightKg || 0), 0)
+            : null;
 
         const latestBestSet = latestSession.reduce(
           (best, cur) =>
@@ -96,18 +181,19 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
         const deltaPct =
           previousTopWeight && previousTopWeight > 0 ? Math.round((deltaKg / previousTopWeight) * 100) : 0;
 
-        // Total unique completed sets across all sessions
-        const totalSets = sortedSessions.reduce((sum, s) => sum + s.length, 0);
-        const totalTonnage = sortedSessions.reduce(
+        const totalSets = activeSessions.reduce((sum, s) => sum + s.length, 0);
+        const totalTonnage = activeSessions.reduce(
           (sum, s) => sum + s.reduce((sSum, l) => sSum + (l.tonnageKg || (l.weightKg || 0) * (l.reps || 0)), 0),
           0
         );
         const unit = logs[0]?.unit || 'kg';
         const muscleGroup = logs[0]?.muscleGroup;
+        const muscleGroupClean = muscleGroup ? muscleGroup.split('(')[0].trim() : 'Inne';
 
         return {
           name,
           muscleGroup,
+          muscleGroupClean,
           unit,
           totalSets,
           totalTonnage,
@@ -115,14 +201,23 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
           latestTopWeight,
           latestReps: latestBestSet.reps,
           previousTopWeight,
-          previousDate: previousSession[0]?.dateStr || previousSession[0]?.timestamp?.split('T')[0],
+          previousDate: previousSession ? (previousSession[0]?.dateStr || previousSession[0]?.timestamp?.split('T')[0]) : null,
           deltaKg,
           deltaPct,
           estimated1RM,
         };
       })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => b.totalTonnage - a.totalTonnage);
-  }, [workoutLogs]);
+  }, [workoutLogs, timeRange, totalWeeksCount]);
+
+  // Filter by selected muscle group
+  const filteredExerciseList = useMemo(() => {
+    if (selectedMuscleGroup === 'ALL') return exerciseProgressionList;
+    return exerciseProgressionList.filter(
+      (item) => item.muscleGroupClean === selectedMuscleGroup
+    );
+  }, [exerciseProgressionList, selectedMuscleGroup]);
 
   // 1RM Formulas
   const epley1RM = Math.round(liftWeight * (1 + liftReps / 30));
@@ -421,15 +516,15 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
       {/* Exercise by Exercise Progression Table */}
       {exerciseProgressionList.length > 0 && (
         <div className="p-6 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-xl space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-amber-400" />
               <div>
                 <h3 className="text-base font-black text-white font-heading">
-                  Rzeczywista Progresja w Ćwiczeniach ({exerciseProgressionList.length} ćwiczeń)
+                  Rzeczywista Progresja w Ćwiczeniach ({filteredExerciseList.length} z {exerciseProgressionList.length})
                 </h3>
                 <p className="text-xs text-neutral-400">
-                  Porównanie ostatniego treningu z poprzednim — rzeczywiste obciążenia, serie i estymowane 1RM
+                  Rzeczywiste obciążenia, serie, estymowane 1RM oraz zmiana formy w wybranym przedziale czasowym
                 </p>
               </div>
             </div>
@@ -439,170 +534,263 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
             </span>
           </div>
 
-          {/* Mobile Cards (Visible below md) */}
-          <div className="space-y-3 md:hidden">
-            {exerciseProgressionList.map((item) => {
-              const hasProgression = item.deltaKg > 0;
-              const isDecline = item.deltaKg < 0;
-              const isFirst = item.previousTopWeight === null;
+          {/* 1. Filtry zakresu czasu i partii mięśniowych */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-neutral-950/70 border border-neutral-800">
+            {/* Wybór zakresu czasu */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Zakres czasu:</span>
+              </label>
+              <select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as TimeRangeFilter)}
+                className="w-full bg-neutral-900 border border-neutral-700 hover:border-amber-400/60 text-white rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
+              >
+                {TIME_RANGE_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id} className="bg-neutral-900 text-white">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              return (
-                <div
-                  key={item.name}
-                  className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2 text-xs"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="text-[10px] text-neutral-400 font-sans block">
-                        {item.muscleGroup?.split('(')[0]?.trim()}
-                      </span>
-                      <h4 className="font-bold text-white text-sm font-sans">
-                        {item.name}
-                      </h4>
-                    </div>
-
-                    <div className="shrink-0 text-right">
-                      {isFirst ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-400 font-sans">
-                          Baza
-                        </span>
-                      ) : hasProgression ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-sans">
-                          <TrendingUp className="w-3 h-3" />
-                          <span>+{item.deltaKg} {item.unit}</span>
-                        </span>
-                      ) : isDecline ? (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 font-sans">
-                          {item.deltaKg} {item.unit}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 font-sans">
-                          Utrzymanie
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-neutral-900/70 border border-neutral-800/80 text-center font-mono-numbers">
-                    <div>
-                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Ostatni</span>
-                      <span className="font-bold text-white text-xs">
-                        {item.latestTopWeight}{item.unit}
-                        {item.latestReps > 0 && <span className="text-neutral-400 font-normal"> ×{item.latestReps}</span>}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Szac. 1RM</span>
-                      <span className="font-black text-amber-400 text-xs">
-                        {item.estimated1RM > 0 ? `${item.estimated1RM} ${item.unit}` : '-'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Tonaż</span>
-                      <span className="font-bold text-neutral-200 text-xs">
-                        {item.totalTonnage.toLocaleString()}{item.unit}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {/* Wybór partii mięśniowej */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-amber-400" />
+                <span>Partia mięśniowa:</span>
+              </label>
+              <select
+                value={selectedMuscleGroup}
+                onChange={(e) => setSelectedMuscleGroup(e.target.value)}
+                className="w-full bg-neutral-900 border border-neutral-700 hover:border-amber-400/60 text-white rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer transition-colors"
+              >
+                <option value="ALL" className="bg-neutral-900 text-white">
+                  Wszystkie partie ({exerciseProgressionList.length})
+                </option>
+                {uniqueMuscleGroups.map((group) => (
+                  <option key={group} value={group} className="bg-neutral-900 text-white">
+                    {group}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Desktop Table (Hidden below md) */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs min-w-[650px]">
-              <thead>
-                <tr className="border-b border-neutral-800 text-neutral-400 font-semibold text-[11px] pb-2">
-                  <th className="pb-2.5">Ćwiczenie / Partia</th>
-                  <th className="pb-2.5">Ostatni Ciężar & Powt.</th>
-                  <th className="pb-2.5">Poprzedni Ciężar</th>
-                  <th className="pb-2.5 text-center">Progresja</th>
-                  <th className="pb-2.5 text-center">Szac. 1RM</th>
-                  <th className="pb-2.5 text-right">Serie & Tonaż</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/60 font-mono-numbers">
-                {exerciseProgressionList.map((item) => {
+          {filteredExerciseList.length === 0 ? (
+            <div className="p-8 text-center rounded-2xl bg-neutral-950/40 border border-neutral-800/80">
+              <p className="text-neutral-400 text-xs font-semibold">
+                Brak ćwiczeń spełniających wybrane kryteria filtrów. Zmień partię mięśniową lub rozszerz zakres czasu.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Cards (Visible below md) */}
+              <div className="space-y-3 md:hidden">
+                {filteredExerciseList.map((item) => {
                   const hasProgression = item.deltaKg > 0;
                   const isDecline = item.deltaKg < 0;
                   const isFirst = item.previousTopWeight === null;
 
                   return (
-                    <tr key={item.name} className="hover:bg-neutral-950/40 transition-colors">
-                      <td className="py-3">
-                        <span className="font-bold text-white block text-sm font-sans">{item.name}</span>
-                        {item.muscleGroup && (
+                    <div
+                      key={item.name}
+                      className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-2.5 text-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
                           <span className="text-[10px] text-neutral-400 font-sans block">
-                            {item.muscleGroup.split('(')[0].trim()}
+                            {item.muscleGroup?.split('(')[0]?.trim()}
                           </span>
-                        )}
-                      </td>
-
-                      <td className="py-3">
-                        <div className="font-bold text-white text-sm">
-                          {item.latestTopWeight} {item.unit}
-                          {item.latestReps > 0 && <span className="text-neutral-400 text-xs font-normal"> × {item.latestReps}</span>}
+                          <h4 className="font-bold text-white text-sm font-sans">
+                            {item.name}
+                          </h4>
                         </div>
-                        {item.latestDate && (
-                          <span className="text-[10px] text-neutral-500 font-sans block">
-                            {item.latestDate}
-                          </span>
-                        )}
-                      </td>
 
-                      <td className="py-3">
-                        {item.previousTopWeight !== null ? (
-                          <div>
-                            <span className="text-neutral-300 font-semibold">
-                              {item.previousTopWeight} {item.unit}
+                        <div className="shrink-0 text-right">
+                          {isFirst ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-400 font-sans">
+                              Baza
                             </span>
-                            {item.previousDate && (
-                              <span className="text-[10px] text-neutral-500 font-sans block">
-                                {item.previousDate}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-neutral-500 italic text-[11px] font-sans">Pierwszy zapis</span>
-                        )}
-                      </td>
+                          ) : hasProgression ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-sans">
+                              <TrendingUp className="w-3 h-3" />
+                              <span>+{item.deltaKg} {item.unit}</span>
+                            </span>
+                          ) : isDecline ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 font-sans">
+                              {item.deltaKg} {item.unit}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 font-sans">
+                              Utrzymanie
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                      <td className="py-3 text-center">
-                        {isFirst ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-400 font-sans">
-                            Baza odniesienia
+                      <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-neutral-900/70 border border-neutral-800/80 text-center font-mono-numbers">
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Ostatni</span>
+                          <span className="font-bold text-white text-xs">
+                            {item.latestTopWeight}{item.unit}
+                            {item.latestReps > 0 && <span className="text-neutral-400 font-normal"> ×{item.latestReps}</span>}
                           </span>
-                        ) : hasProgression ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-sans">
-                            <TrendingUp className="w-3 h-3" />
-                            <span>+{item.deltaKg} {item.unit} (+{item.deltaPct}%)</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Szac. 1RM</span>
+                          <span className="font-black text-amber-400 text-xs">
+                            {item.estimated1RM > 0 ? `${item.estimated1RM} ${item.unit}` : '-'}
                           </span>
-                        ) : isDecline ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 font-sans">
-                            {item.deltaKg} {item.unit}
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-500 block font-sans">Tonaż</span>
+                          <span className="font-bold text-neutral-200 text-xs">
+                            {item.totalTonnage.toLocaleString()}{item.unit}
                           </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 font-sans">
-                            Utrzymanie
-                          </span>
-                        )}
-                      </td>
+                        </div>
+                      </div>
 
-                      <td className="py-3 text-center font-bold text-amber-400">
-                        {item.estimated1RM > 0 ? `${item.estimated1RM} ${item.unit}` : '-'}
-                      </td>
-
-                      <td className="py-3 text-right">
-                        <span className="text-white font-bold block">{item.totalTonnage.toLocaleString()} {item.unit}</span>
-                        <span className="text-[10px] text-neutral-500 font-sans block">{item.totalSets} serii</span>
-                      </td>
-                    </tr>
+                      {/* Button Szczegóły dla urządzeń mobilnych */}
+                      <button
+                        onClick={() => {
+                          setSelectedExerciseForModal(item.name);
+                          setIsProgressionModalOpen(true);
+                        }}
+                        className="w-full mt-1 py-2 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 active:bg-neutral-700 text-amber-400 hover:text-amber-300 border border-neutral-800 hover:border-amber-400/40 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        <span>Szczegóły i Wykres Progresji</span>
+                      </button>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+
+              {/* Desktop Table (Hidden below md) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[720px]">
+                  <thead>
+                    <tr className="border-b border-neutral-800 text-neutral-400 font-semibold text-[11px] pb-2">
+                      <th className="pb-2.5">Ćwiczenie / Partia</th>
+                      <th className="pb-2.5">Ostatni Ciężar & Powt.</th>
+                      <th className="pb-2.5">
+                        {timeRange === 'last_vs_prev' ? 'Poprzedni Ciężar' : 'Ciężar Bazowy'}
+                      </th>
+                      <th className="pb-2.5 text-center">Progresja</th>
+                      <th className="pb-2.5 text-center">Szac. 1RM</th>
+                      <th className="pb-2.5 text-right">Serie & Tonaż</th>
+                      <th className="pb-2.5 text-center">Szczegóły</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60 font-mono-numbers">
+                    {filteredExerciseList.map((item) => {
+                      const hasProgression = item.deltaKg > 0;
+                      const isDecline = item.deltaKg < 0;
+                      const isFirst = item.previousTopWeight === null;
+
+                      return (
+                        <tr
+                          key={item.name}
+                          className="hover:bg-neutral-950/60 transition-colors group cursor-pointer"
+                          onClick={() => {
+                            setSelectedExerciseForModal(item.name);
+                            setIsProgressionModalOpen(true);
+                          }}
+                        >
+                          <td className="py-3">
+                            <span className="font-bold text-white block text-sm font-sans group-hover:text-amber-400 transition-colors">
+                              {item.name}
+                            </span>
+                            {item.muscleGroup && (
+                              <span className="text-[10px] text-neutral-400 font-sans block">
+                                {item.muscleGroup.split('(')[0].trim()}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3">
+                            <div className="font-bold text-white text-sm">
+                              {item.latestTopWeight} {item.unit}
+                              {item.latestReps > 0 && <span className="text-neutral-400 text-xs font-normal"> × {item.latestReps}</span>}
+                            </div>
+                            {item.latestDate && (
+                              <span className="text-[10px] text-neutral-500 font-sans block">
+                                {item.latestDate}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3">
+                            {item.previousTopWeight !== null ? (
+                              <div>
+                                <span className="text-neutral-300 font-semibold">
+                                  {item.previousTopWeight} {item.unit}
+                                </span>
+                                {item.previousDate && (
+                                  <span className="text-[10px] text-neutral-500 font-sans block">
+                                    {item.previousDate}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-neutral-500 italic text-[11px] font-sans">Pierwszy zapis</span>
+                            )}
+                          </td>
+
+                          <td className="py-3 text-center">
+                            {isFirst ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-400 font-sans">
+                                Baza odniesienia
+                              </span>
+                            ) : hasProgression ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 font-sans">
+                                <TrendingUp className="w-3 h-3" />
+                                <span>+{item.deltaKg} {item.unit} (+{item.deltaPct}%)</span>
+                              </span>
+                            ) : isDecline ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 font-sans">
+                                {item.deltaKg} {item.unit}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20 font-sans">
+                                Utrzymanie
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 text-center font-bold text-amber-400">
+                            {item.estimated1RM > 0 ? `${item.estimated1RM} ${item.unit}` : '-'}
+                          </td>
+
+                          <td className="py-3 text-right">
+                            <span className="text-white font-bold block">{item.totalTonnage.toLocaleString()} {item.unit}</span>
+                            <span className="text-[10px] text-neutral-500 font-sans block">{item.totalSets} serii</span>
+                          </td>
+
+                          {/* 2. Przycisk Szczegółów */}
+                          <td className="py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                setSelectedExerciseForModal(item.name);
+                                setIsProgressionModalOpen(true);
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-amber-400 hover:text-black text-neutral-300 border border-neutral-800 hover:border-amber-400 font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-sm group-hover:border-neutral-700"
+                              title="Zobacz wykres i historię serii"
+                            >
+                              <BarChart3 className="w-3.5 h-3.5 text-amber-400 group-hover:text-black transition-colors" />
+                              <span>Szczegóły</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -710,6 +898,19 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 3 & 4. Modal Szczegółów Progresji (Wykres & Historia Serii) */}
+      {isProgressionModalOpen && selectedExerciseForModal && (
+        <ExerciseProgressionModal
+          exerciseName={selectedExerciseForModal}
+          workoutLogs={workoutLogs}
+          isOpen={isProgressionModalOpen}
+          onClose={() => {
+            setIsProgressionModalOpen(false);
+            setSelectedExerciseForModal(null);
+          }}
+        />
+      )}
     </div>
   );
 };
