@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Dumbbell, ShieldCheck, Flame, Cloud, Sparkles } from 'lucide-react';
 
-export const LoginView: React.FC = () => {
+interface LoginViewProps {
+  onSkip?: () => void;
+}
+
+export const LoginView: React.FC<LoginViewProps> = ({ onSkip }) => {
   const { signIn, error } = useAuth();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -85,7 +89,7 @@ export const LoginView: React.FC = () => {
             )}
 
             {/* Google Sign In Button */}
-            <div className="pt-3">
+            <div className="pt-3 space-y-2.5">
               <button
                 type="button"
                 onClick={handleSignIn}
@@ -116,6 +120,18 @@ export const LoginView: React.FC = () => {
                 )}
                 <span>{isLoggingIn ? 'Logowanie...' : 'Zaloguj się przez Google'}</span>
               </button>
+
+              {/* Skip and continue locally as guest */}
+              {onSkip && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  disabled={isLoggingIn}
+                  className="w-full py-3 rounded-2xl bg-neutral-950/80 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white font-semibold text-xs transition-colors cursor-pointer text-center"
+                >
+                  Pomiń i kontynuuj lokalnie (Tryb gościa)
+                </button>
+              )}
             </div>
           </div>
         </div>

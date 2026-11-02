@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Header } from './components/layout/Header';
 import { BottomNavBar, MainNavTab } from './components/layout/BottomNavBar';
@@ -22,9 +22,12 @@ import { TrainingCatalogSidebar } from './components/layout/TrainingCatalogSideb
 import { AddWeekModal } from './components/modals/AddWeekModal';
 import { SummaryCalendarView } from './components/views/SummaryCalendarView';
 import { LoginView } from './components/auth/LoginView';
+import { SyncConflictModal } from './components/modals/SyncConflictModal';
 import { useAuth } from './context/AuthContext';
 import {
-  initializeUserData,
+  checkCloudSyncStatus,
+  uploadLocalDataToCloud,
+  applyCloudDataToLocalStorage,
   subscribeToCycles,
   subscribeToWorkoutLogs,
   subscribeToRecovery,
@@ -34,7 +37,8 @@ import {
   saveWorkoutLogsBatch,
   deleteWorkoutLogEntry,
   deleteWorkoutSessionLogs,
-  saveRecoveryEntry
+  saveRecoveryEntry,
+  CloudSyncStatus
 } from './services/firestoreService';
 import { appendHyroxTrialToSheet } from './services/sheets';
 import { Dumbbell } from 'lucide-react';
@@ -172,11 +176,50 @@ export default function App() {
     }
   }, [theme]);
 
-  // Training Cycles List (Cloud First)
-  const [cyclesList, setCyclesList] = useState<TrainingCycleCatalog[]>(DEFAULT_TRAINING_CYCLES);
+  // Training Cycles List - initialized from localStorage for offline/guest support
+  const [cyclesList, setCyclesList] = useState<TrainingCycleCatalog[]>(() => {
+    try {
+      const saved = localStorage.getItem('hyrox_training_cycles_list');
+      if (saved) {
+        const parsed: TrainingCycleCatalog[] = JSON.parse(saved);
+        return parsed.map((cycle) => {
+          const defaultPreset = DEFAULT_TRAINING_CYCLES.find((d) => d.id === cycle.id);
+          const rawMap = defaultPreset && defaultPreset.weeksPlansMap
+            ? { ...defaultPreset.weeksPlansMap, ...(cycle.weeksPlansMap || {}) }
+            : (cycle.weeksPlansMap || {});
+
+          const healedMap: Record<number, WorkoutDay[]> = {};
+          Object.entries(rawMap).forEach(([wStr, days]) => {
+            const wNum = parseInt(wStr, 10);
+            if (Array.isArray(days)) {
+              healedMap[wNum] = days.map((d, idx) => ({
+                ...d,
+                id: d.id && d.id.startsWith(`w${wNum}-`) ? d.id : `w${wNum}-${d.dayNumber || idx + 1}-${d.id || 'day'}`,
+              }));
+            }
+          });
+
+          return {
+            ...cycle,
+            weeksPlansMap: healedMap,
+          };
+        });
+      }
+      return DEFAULT_TRAINING_CYCLES;
+    } catch {
+      return DEFAULT_TRAINING_CYCLES;
+    }
+  });
 
   // Active Selected Cycle ID
-  const [activeCycleId, setActiveCycleId] = useState<string>(DEFAULT_TRAINING_CYCLES[0].id);
+  const [activeCycleId, setActiveCycleId] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('hyrox_active_cycle_id');
+      return saved || DEFAULT_TRAINING_CYCLES[0].id;
+    } catch {
+      return DEFAULT_TRAINING_CYCLES[0].id;
+    }
+  });
 
   const activeCycle = cyclesList.find((c) => c.id === activeCycleId) || cyclesList[0] || DEFAULT_TRAINING_CYCLES[0];
   const currentWeek = activeCycle.currentWeek || 1;
@@ -196,41 +239,116 @@ export default function App() {
     }
   });
 
-  // Workout logs from Cloud Firestore
-  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>([]);
+  // Workout logs initialized from local storage
+  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('hyrox_workout_logs');
+      if (!saved) return [];
+      const parsed: WorkoutLogEntry[] = JSON.parse(saved);
+      return sanitizeAndDeduplicateLogs(parsed);
+    } catch {
+      return [];
+    }
+  });
 
-  // Recovery logs from Cloud Firestore
-  const [recoveryHistory, setRecoveryHistory] = useState<DailyRecoveryData[]>([]);
+  // Recovery logs initialized from local storage
+  const [recoveryHistory, setRecoveryHistory] = useState<DailyRecoveryData[]>(() => {
+    try {
+      const saved = localStorage.getItem('hyrox_recovery_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  // Initial Data Fetch & Firestore Real-time Subscriptions (Cloud-First + Auto-Migration)
+  // Sync Conflict Modal State
+  const [conflictModal, setConflictModal] = useState<{
+    isOpen: boolean;
+    cloudStatus: CloudSyncStatus | null;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    cloudStatus: null,
+    isLoading: false,
+  });
+
+  const syncedUserRef = useRef<string | null>(null);
+
+  // Firestore On-Demand Sync & Realtime Subscriptions (No silent wiping!)
   useEffect(() => {
-    if (!user?.uid) return;
-    let isMounted = true;
-    setIsDataLoading(true);
+    if (!user?.uid) {
+      syncedUserRef.current = null;
+      return;
+    }
 
-    initializeUserData(user.uid)
-      .then((data) => {
-        if (!isMounted) return;
-        setCyclesList(data.cycles);
-        setActiveCycleId(data.activeCycleId);
-        setWorkoutLogs(data.workoutLogs);
-        setRecoveryHistory(data.recoveryHistory);
-        setIsDataLoading(false);
+    if (syncedUserRef.current === user.uid) return;
+
+    let isMounted = true;
+    checkCloudSyncStatus(user.uid)
+      .then((status) => {
+        if (!isMounted || !status) return;
+
+        // Condition 1: Both local and cloud have data -> Show Conflict Modal
+        if (status.hasLocalData && status.hasCloudData) {
+          setConflictModal({
+            isOpen: true,
+            cloudStatus: status,
+            isLoading: false,
+          });
+          return;
+        }
+
+        // Condition 2: Local has data, but cloud is empty -> upload local data to cloud
+        if (status.hasLocalData && !status.hasCloudData) {
+          uploadLocalDataToCloud(user.uid, {
+            cycles: cyclesList,
+            activeCycleId,
+            logs: workoutLogs,
+            recovery: recoveryHistory,
+          }).catch(console.warn);
+          syncedUserRef.current = user.uid;
+        }
+        // Condition 3: Local is empty, but cloud has data -> pull from cloud
+        else if (!status.hasLocalData && status.hasCloudData) {
+          setCyclesList(status.cloudCycles);
+          setActiveCycleId(status.cloudActiveCycleId);
+          setWorkoutLogs(status.cloudLogs);
+          setRecoveryHistory(status.cloudRecovery);
+          applyCloudDataToLocalStorage({
+            cycles: status.cloudCycles,
+            activeCycleId: status.cloudActiveCycleId,
+            logs: status.cloudLogs,
+            recovery: status.cloudRecovery,
+          });
+          syncedUserRef.current = user.uid;
+        } else {
+          syncedUserRef.current = user.uid;
+        }
       })
       .catch((err) => {
-        console.error('Błąd inicjalizacji danych użytkownika z Firestore:', err);
-        if (isMounted) setIsDataLoading(false);
+        console.warn('Błąd sprawdzania statusu chmury:', err);
       });
 
     // Realtime listeners
     const unsubCycles = subscribeToCycles(user.uid, (cycles) => {
-      if (cycles && cycles.length > 0) setCyclesList(cycles);
+      if (cycles && cycles.length > 0) {
+        setCyclesList(cycles);
+        try {
+          localStorage.setItem('hyrox_training_cycles_list', JSON.stringify(cycles));
+        } catch {}
+      }
     });
     const unsubLogs = subscribeToWorkoutLogs(user.uid, (logs) => {
       setWorkoutLogs(logs);
+      try {
+        localStorage.setItem('hyrox_workout_logs', JSON.stringify(logs));
+      } catch {}
     });
     const unsubRecovery = subscribeToRecovery(user.uid, (rec) => {
       setRecoveryHistory(rec);
+      try {
+        localStorage.setItem('hyrox_recovery_history', JSON.stringify(rec));
+      } catch {}
     });
 
     return () => {
@@ -241,6 +359,44 @@ export default function App() {
     };
   }, [user?.uid]);
 
+  // Modal Action 1: "Zachowaj i wyślij do chmury"
+  const handleKeepLocalAndUpload = async () => {
+    if (!user?.uid) return;
+    try {
+      setConflictModal((prev) => ({ ...prev, isLoading: true }));
+      await uploadLocalDataToCloud(user.uid, {
+        cycles: cyclesList,
+        activeCycleId,
+        logs: workoutLogs,
+        recovery: recoveryHistory,
+      });
+      syncedUserRef.current = user.uid;
+      setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
+    } catch (err) {
+      console.error('Błąd wysyłania danych do chmury:', err);
+      setConflictModal((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  // Modal Action 2: "Pobierz stan z chmury"
+  const handleDownloadCloudAndOverwrite = () => {
+    if (conflictModal.cloudStatus) {
+      const status = conflictModal.cloudStatus;
+      setCyclesList(status.cloudCycles);
+      setActiveCycleId(status.cloudActiveCycleId);
+      setWorkoutLogs(status.cloudLogs);
+      setRecoveryHistory(status.cloudRecovery);
+      applyCloudDataToLocalStorage({
+        cycles: status.cloudCycles,
+        activeCycleId: status.cloudActiveCycleId,
+        logs: status.cloudLogs,
+        recovery: status.cloudRecovery,
+      });
+    }
+    if (user?.uid) syncedUserRef.current = user.uid;
+    setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
+  };
+
   // Modals & Drawers
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDay | null>(null);
   const [isWorkoutMinimized, setIsWorkoutMinimized] = useState<boolean>(false);
@@ -250,9 +406,14 @@ export default function App() {
   const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false);
   const [isAddWeekModalOpen, setIsAddWeekModalOpen] = useState(false);
 
-  // Helper to persist updated cycles
+  // Helper to persist updated cycles (both localStorage and Firestore)
   const persistCycles = (updatedCycles: TrainingCycleCatalog[]) => {
     setCyclesList(updatedCycles);
+    try {
+      localStorage.setItem('hyrox_training_cycles_list', JSON.stringify(updatedCycles));
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       updatedCycles.forEach((c) => {
         saveCycleToFirestore(user.uid, c).catch((err) =>
@@ -265,6 +426,11 @@ export default function App() {
   // Select another cycle as active - immediately switches to "Trening" and finds next uncompleted day
   const handleSelectCycle = (cycleId: string) => {
     setActiveCycleId(cycleId);
+    try {
+      localStorage.setItem('hyrox_active_cycle_id', cycleId);
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       saveActiveCycleId(user.uid, cycleId).catch((err) =>
         console.warn('Błąd zapisu aktywnego cyklu do Firestore:', err)
@@ -895,12 +1061,17 @@ export default function App() {
     }
   };
 
-  // Save workout logs with deduplication and write to Firestore
+  // Save workout logs with deduplication and write to both localStorage and Firestore
   const handleSaveLogs = (newEntries: WorkoutLogEntry[]) => {
     if (!newEntries || newEntries.length === 0) return;
     const combined = [...workoutLogs, ...newEntries];
     const updated = deduplicateWorkoutLogs(combined);
     setWorkoutLogs(updated);
+    try {
+      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       saveWorkoutLogsBatch(user.uid, newEntries).catch(console.warn);
     }
@@ -910,6 +1081,11 @@ export default function App() {
   const handleDeleteWorkoutLogEntry = (logId: string) => {
     const updated = workoutLogs.filter((l) => l.id !== logId);
     setWorkoutLogs(updated);
+    try {
+      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       deleteWorkoutLogEntry(user.uid, logId).catch(console.warn);
     }
@@ -927,6 +1103,11 @@ export default function App() {
       return !matchSession && !matchFallback;
     });
     setWorkoutLogs(updated);
+    try {
+      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       deleteWorkoutSessionLogs(user.uid, sessionId, dateStr, currentSnapshot).catch(console.warn);
     }
@@ -949,44 +1130,19 @@ export default function App() {
     }
   };
 
-  // Save recovery data to Firestore
+  // Save recovery data to both localStorage and Firestore
   const handleSaveRecovery = (data: DailyRecoveryData) => {
     const updated = [data, ...recoveryHistory.filter((x) => x.date !== data.date)];
     setRecoveryHistory(updated);
+    try {
+      localStorage.setItem('hyrox_recovery_history', JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
     if (user?.uid) {
       saveRecoveryEntry(user.uid, data).catch(console.warn);
     }
   };
-
-  // --- Auth Wall: Block unauthenticated users completely ---
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen w-full bg-neutral-950 flex flex-col items-center justify-center p-6 text-white">
-        <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center text-neutral-950 shadow-lg shadow-amber-400/20 mb-4 animate-pulse">
-          <Dumbbell className="w-6 h-6 stroke-[2.4]" />
-        </div>
-        <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">
-          Inicjalizacja autoryzacji...
-        </p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <LoginView />;
-  }
-
-  if (isDataLoading) {
-    return (
-      <div className="min-h-screen w-full bg-neutral-950 flex flex-col items-center justify-center p-6 text-white text-center">
-        <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center text-neutral-950 shadow-lg shadow-amber-400/20 mb-4 animate-spin">
-          <Dumbbell className="w-6 h-6 stroke-[2.4]" />
-        </div>
-        <p className="text-base font-bold text-white mb-1">Synchronizacja z Cloud Firestore</p>
-        <p className="text-xs text-neutral-400">Pobieranie Twoich cykli i historii treningów z chmury...</p>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -1202,6 +1358,25 @@ export default function App() {
             isOpen={isTimerOpen}
             onClose={() => setIsTimerOpen(false)}
           />
+
+          {/* Cloud Sync Conflict Resolution Modal */}
+          {conflictModal.cloudStatus && (
+            <SyncConflictModal
+              isOpen={conflictModal.isOpen}
+              onClose={() => setConflictModal((prev) => ({ ...prev, isOpen: false }))}
+              localStats={{
+                cyclesCount: conflictModal.cloudStatus.localCyclesCount,
+                logsCount: conflictModal.cloudStatus.localLogsCount,
+              }}
+              cloudStats={{
+                cyclesCount: conflictModal.cloudStatus.cloudCyclesCount,
+                logsCount: conflictModal.cloudStatus.cloudLogsCount,
+              }}
+              onKeepLocalAndUpload={handleKeepLocalAndUpload}
+              onDownloadCloudAndOverwrite={handleDownloadCloudAndOverwrite}
+              isLoading={conflictModal.isLoading}
+            />
+          )}
         </div>
       </div>
     </div>

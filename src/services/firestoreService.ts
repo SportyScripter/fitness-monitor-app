@@ -7,8 +7,6 @@ import {
   deleteDoc,
   writeBatch,
   onSnapshot,
-  query,
-  orderBy,
   Unsubscribe
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -17,49 +15,39 @@ import {
   WorkoutLogEntry,
   DailyRecoveryData
 } from '../types/hyrox';
-import { DEFAULT_TRAINING_CYCLES } from '../data/defaultCycles';
 import { sanitizeAndDeduplicateLogs } from '../utils/dateUtils';
+import { DEFAULT_TRAINING_CYCLES } from '../data/defaultCycles';
 
-// LocalStorage Keys for Legacy Data
-const LOCAL_STORAGE_CYCLES_KEY = 'hyrox_training_cycles_list';
-const LOCAL_STORAGE_ACTIVE_CYCLE_KEY = 'hyrox_active_cycle_id';
-const LOCAL_STORAGE_LOGS_KEY = 'hyrox_workout_logs';
-const LOCAL_STORAGE_RECOVERY_KEY = 'hyrox_recovery_history';
-const getMigrationFlagKey = (userId: string) => `hyrox_is_migrated_${userId}`;
+// Local Storage Keys
+export const LOCAL_STORAGE_CYCLES_KEY = 'hyrox_training_cycles_list';
+export const LOCAL_STORAGE_ACTIVE_CYCLE_KEY = 'hyrox_active_cycle_id';
+export const LOCAL_STORAGE_LOGS_KEY = 'hyrox_workout_logs';
+export const LOCAL_STORAGE_RECOVERY_KEY = 'hyrox_recovery_history';
 
-export interface UserInitialData {
-  cycles: TrainingCycleCatalog[];
-  activeCycleId: string;
-  workoutLogs: WorkoutLogEntry[];
-  recoveryHistory: DailyRecoveryData[];
+export interface CloudSyncStatus {
+  hasCloudData: boolean;
+  cloudCyclesCount: number;
+  cloudLogsCount: number;
+  cloudCycles: TrainingCycleCatalog[];
+  cloudActiveCycleId: string;
+  cloudLogs: WorkoutLogEntry[];
+  cloudRecovery: DailyRecoveryData[];
+  hasLocalData: boolean;
+  localCyclesCount: number;
+  localLogsCount: number;
 }
 
 /**
- * Clean local storage legacy keys after migration or when cloud data exists
+ * Check whether cloud contains data and whether local storage has data,
+ * without silently modifying or deleting any local storage entries.
  */
-export const purgeLocalLegacyStorage = (userId: string) => {
-  try {
-    localStorage.removeItem(LOCAL_STORAGE_CYCLES_KEY);
-    localStorage.removeItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY);
-    localStorage.removeItem(LOCAL_STORAGE_LOGS_KEY);
-    localStorage.removeItem(LOCAL_STORAGE_RECOVERY_KEY);
-    localStorage.setItem(getMigrationFlagKey(userId), 'true');
-  } catch (err) {
-    console.warn('Nie udało się wyczyścić localStorage:', err);
-  }
-};
-
-/**
- * Initialize user data on login with Cloud-First strategy and automatic migration
- */
-export async function initializeUserData(userId: string): Promise<UserInitialData> {
+export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncStatus> {
   const cyclesColRef = collection(db, 'users', userId, 'cycles');
   const userDocRef = doc(db, 'users', userId);
   const logsColRef = collection(db, 'users', userId, 'workout_logs');
   const recoveryColRef = collection(db, 'users', userId, 'recovery');
 
   try {
-    // Step 1: Check existing data in Firestore
     const [cyclesSnap, userDocSnap, logsSnap, recoverySnap] = await Promise.all([
       getDocs(cyclesColRef),
       getDoc(userDocRef),
@@ -67,143 +55,137 @@ export async function initializeUserData(userId: string): Promise<UserInitialDat
       getDocs(recoveryColRef),
     ]);
 
-    // STRATEGY: CLOUD FIRST
-    // If cloud contains cycles or logs, cloud is the absolute single source of truth.
-    if (!cyclesSnap.empty) {
-      console.log('[Firestore] Znaleziono istniejące dane w chmurze (Cloud First).');
-      // Purge any unauthenticated clicks from localStorage
-      purgeLocalLegacyStorage(userId);
+    const cloudCycles: TrainingCycleCatalog[] = cyclesSnap.docs.map(
+      (d) => d.data() as TrainingCycleCatalog
+    );
+    const cloudLogs: WorkoutLogEntry[] = logsSnap.docs.map(
+      (d) => d.data() as WorkoutLogEntry
+    );
+    const cloudRecovery: DailyRecoveryData[] = recoverySnap.docs.map(
+      (d) => d.data() as DailyRecoveryData
+    );
 
-      const cloudCycles: TrainingCycleCatalog[] = cyclesSnap.docs.map(
-        (d) => d.data() as TrainingCycleCatalog
-      );
-      const cloudLogs: WorkoutLogEntry[] = logsSnap.docs.map(
-        (d) => d.data() as WorkoutLogEntry
-      );
-      const cloudRecovery: DailyRecoveryData[] = recoverySnap.docs.map(
-        (d) => d.data() as DailyRecoveryData
-      );
+    const hasCloudData = !cyclesSnap.empty || !logsSnap.empty;
+    const activeCycleId =
+      userDocSnap.exists() && userDocSnap.data()?.activeCycleId
+        ? userDocSnap.data().activeCycleId
+        : cloudCycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id;
 
-      const activeCycleId =
-        userDocSnap.exists() && userDocSnap.data()?.activeCycleId
-          ? userDocSnap.data().activeCycleId
-          : cloudCycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id;
-
-      return {
-        cycles: cloudCycles,
-        activeCycleId,
-        workoutLogs: sanitizeAndDeduplicateLogs(cloudLogs),
-        recoveryHistory: cloudRecovery,
-      };
-    }
-
-    // Step 2: Cloud is empty. Check if there are local legacy data to migrate.
-    const isAlreadyMigrated = localStorage.getItem(getMigrationFlagKey(userId)) === 'true';
-    let localCycles: TrainingCycleCatalog[] | null = null;
-    let localActiveCycleId: string | null = null;
-    let localLogs: WorkoutLogEntry[] | null = null;
-    let localRecovery: DailyRecoveryData[] | null = null;
-
+    // Check localStorage safely
+    let localCyclesCount = 0;
+    let localLogsCount = 0;
     try {
       const rawCycles = localStorage.getItem(LOCAL_STORAGE_CYCLES_KEY);
-      if (rawCycles) localCycles = JSON.parse(rawCycles);
-
-      localActiveCycleId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY);
-
+      if (rawCycles) {
+        const parsed = JSON.parse(rawCycles);
+        localCyclesCount = Array.isArray(parsed) ? parsed.length : 0;
+      }
       const rawLogs = localStorage.getItem(LOCAL_STORAGE_LOGS_KEY);
-      if (rawLogs) localLogs = JSON.parse(rawLogs);
-
-      const rawRec = localStorage.getItem(LOCAL_STORAGE_RECOVERY_KEY);
-      if (rawRec) localRecovery = JSON.parse(rawRec);
-    } catch (e) {
-      console.warn('Błąd odczytu localStorage podczas próby migracji:', e);
+      if (rawLogs) {
+        const parsed = JSON.parse(rawLogs);
+        localLogsCount = Array.isArray(parsed) ? parsed.length : 0;
+      }
+    } catch {
+      // ignore
     }
 
-    const hasLocalData =
-      (localCycles && localCycles.length > 0) ||
-      (localLogs && localLogs.length > 0);
-
-    if (hasLocalData && !isAlreadyMigrated) {
-      console.log('[Firestore] Migracja danych z localStorage do chmury użytkownika...');
-      const targetCycles = localCycles && localCycles.length > 0 ? localCycles : DEFAULT_TRAINING_CYCLES;
-      const targetActiveCycleId = localActiveCycleId || targetCycles[0].id;
-      const targetLogs = sanitizeAndDeduplicateLogs(localLogs || []);
-      const targetRecovery = localRecovery || [];
-
-      // Save user doc
-      await setDoc(userDocRef, {
-        userId,
-        activeCycleId: targetActiveCycleId,
-        isMigrated: true,
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Save cycles to Firestore
-      for (const cycle of targetCycles) {
-        await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cycle);
-      }
-
-      // Save logs in batch chunks (max 450 per batch)
-      if (targetLogs.length > 0) {
-        const chunkSize = 400;
-        for (let i = 0; i < targetLogs.length; i += chunkSize) {
-          const batch = writeBatch(db);
-          const chunk = targetLogs.slice(i, i + chunkSize);
-          chunk.forEach((log: WorkoutLogEntry) => {
-            const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
-            batch.set(logRef, log);
-          });
-          await batch.commit();
-        }
-      }
-
-      // Save recovery
-      if (targetRecovery.length > 0) {
-        const batch = writeBatch(db);
-        targetRecovery.forEach((rec: DailyRecoveryData) => {
-          const recRef = doc(db, 'users', userId, 'recovery', rec.date);
-          batch.set(recRef, rec);
-        });
-        await batch.commit();
-      }
-
-      // Purge and flag
-      purgeLocalLegacyStorage(userId);
-
-      return {
-        cycles: targetCycles,
-        activeCycleId: targetActiveCycleId,
-        workoutLogs: targetLogs,
-        recoveryHistory: targetRecovery,
-      };
-    }
-
-    // Step 3: Brand new user with no cloud data and no local data
-    console.log('[Firestore] Nowy użytkownik – inicjalizacja domyślnego szablonu cykli.');
-    const initialCycles = DEFAULT_TRAINING_CYCLES;
-    const initialActiveCycleId = initialCycles[0].id;
-
-    await setDoc(userDocRef, {
-      userId,
-      activeCycleId: initialActiveCycleId,
-      isMigrated: true,
-      updatedAt: new Date().toISOString(),
-    });
-
-    for (const cycle of initialCycles) {
-      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cycle);
-    }
-
-    purgeLocalLegacyStorage(userId);
+    const hasLocalData = localLogsCount > 0 || localCyclesCount > 0;
 
     return {
-      cycles: initialCycles,
-      activeCycleId: initialActiveCycleId,
-      workoutLogs: [],
-      recoveryHistory: [],
+      hasCloudData,
+      cloudCyclesCount: cloudCycles.length,
+      cloudLogsCount: cloudLogs.length,
+      cloudCycles,
+      cloudActiveCycleId: activeCycleId,
+      cloudLogs: sanitizeAndDeduplicateLogs(cloudLogs),
+      cloudRecovery,
+      hasLocalData,
+      localCyclesCount,
+      localLogsCount,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `users/${userId}`);
+  }
+}
+
+/**
+ * Upload local data to Cloud Firestore (Option 1: "Zachowaj i wyślij do chmury")
+ * Merges/overwrites Firestore with the current local state.
+ */
+export async function uploadLocalDataToCloud(
+  userId: string,
+  localData: {
+    cycles: TrainingCycleCatalog[];
+    activeCycleId: string;
+    logs: WorkoutLogEntry[];
+    recovery: DailyRecoveryData[];
+  }
+): Promise<void> {
+  const userDocRef = doc(db, 'users', userId);
+  try {
+    // 1. Update user document
+    await setDoc(
+      userDocRef,
+      {
+        userId,
+        activeCycleId: localData.activeCycleId,
+        isMigrated: true,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    // 2. Save cycles
+    for (const cycle of localData.cycles) {
+      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cycle, { merge: true });
+    }
+
+    // 3. Save logs in chunks
+    const deduplicated = sanitizeAndDeduplicateLogs(localData.logs);
+    const chunkSize = 400;
+    for (let i = 0; i < deduplicated.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      const chunk = deduplicated.slice(i, i + chunkSize);
+      chunk.forEach((log: WorkoutLogEntry) => {
+        const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
+        batch.set(logRef, log, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    // 4. Save recovery
+    if (localData.recovery.length > 0) {
+      const batch = writeBatch(db);
+      localData.recovery.forEach((rec: DailyRecoveryData) => {
+        const recRef = doc(db, 'users', userId, 'recovery', rec.date);
+        batch.set(recRef, rec, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    console.log('[Firestore] Dane lokalne pomyślnie wysłane do chmury.');
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
+  }
+}
+
+/**
+ * Overwrite local data with Cloud Firestore (Option 2: "Pobierz stan z chmury")
+ * Writes cloud data to localStorage so offline and local caches stay up to date.
+ */
+export function applyCloudDataToLocalStorage(data: {
+  cycles: TrainingCycleCatalog[];
+  activeCycleId: string;
+  logs: WorkoutLogEntry[];
+  recovery: DailyRecoveryData[];
+}): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(data.cycles));
+    localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, data.activeCycleId);
+    localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(data.logs));
+    localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(data.recovery));
+  } catch (err) {
+    console.warn('Błąd zapisu do localStorage podczas synchronizacji:', err);
   }
 }
 
@@ -232,7 +214,7 @@ export function subscribeToCycles(
 }
 
 /**
- * Save or update single cycle in Firestore
+ * Save single cycle in Firestore
  */
 export async function saveCycleToFirestore(
   userId: string,
@@ -370,7 +352,7 @@ export async function deleteWorkoutSessionLogs(
 }
 
 /**
- * Fetch all workout logs directly from Firestore (e.g. for Excel/CSV export)
+ * Fetch all workout logs directly from Firestore
  */
 export async function fetchAllWorkoutLogsForExport(
   userId: string
