@@ -46,7 +46,7 @@ interface MoreMenuViewProps {
   recoveryHistory: DailyRecoveryData[];
   onSaveRecovery: (data: DailyRecoveryData) => void;
   onSaveHyroxTrial: (trial: HyroxRaceTrial) => void;
-  activeCycle: TrainingCycleCatalog;
+  activeCycle: TrainingCycleCatalog | null;
   currentWeekDays: WorkoutDay[];
   weeksList: MesocyclePhase[];
   spreadsheetId: string | null;
@@ -185,7 +185,7 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
             workoutLogs={workoutLogs}
             weekPlan={currentWeekDays}
             weeksList={weeksList}
-            activeCycle={activeCycle}
+            activeCycle={activeCycle || undefined}
             onOpenSheetsModal={onOpenSheetsModal}
             onWeekChange={onWeekChange}
           />
@@ -210,7 +210,7 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
             workoutLogs={workoutLogs}
             totalWeeksCount={weeksList.length}
             weeksList={weeksList}
-            allWeeksPlans={activeCycle.weeksPlansMap || {}}
+            allWeeksPlans={activeCycle?.weeksPlansMap || {}}
           />
         );
         break;

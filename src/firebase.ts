@@ -54,6 +54,7 @@ try {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager(),
       }),
+      ignoreUndefinedProperties: true,
     },
     firebaseConfig.firestoreDatabaseId
   );

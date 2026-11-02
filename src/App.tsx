@@ -212,9 +212,9 @@ export default function App() {
           };
         });
       }
-      return DEFAULT_TRAINING_CYCLES;
+      return [];
     } catch {
-      return DEFAULT_TRAINING_CYCLES;
+      return [];
     }
   });
 
@@ -222,16 +222,27 @@ export default function App() {
   const [activeCycleId, setActiveCycleId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('hyrox_active_cycle_id');
-      return saved || DEFAULT_TRAINING_CYCLES[0].id;
+      if (saved) return saved;
+      const rawCycles = localStorage.getItem('hyrox_training_cycles_list');
+      if (rawCycles) {
+        const parsed = JSON.parse(rawCycles);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].id;
+      }
+      return '';
     } catch {
-      return DEFAULT_TRAINING_CYCLES[0].id;
+      return '';
     }
   });
 
-  const activeCycle = cyclesList.find((c) => c.id === activeCycleId) || cyclesList[0] || DEFAULT_TRAINING_CYCLES[0];
-  const currentWeek = activeCycle.currentWeek || 1;
-  const weeksList = activeCycle.weeksList !== undefined ? activeCycle.weeksList : (activeCycle.id.includes('hyrox') ? MESOCYCLE_WEEKS : []);
-  const currentWeekDays: WorkoutDay[] = getDaysForCycleWeek(activeCycle, currentWeek);
+  const activeCycle: TrainingCycleCatalog | null =
+    cyclesList.find((c) => c.id === activeCycleId) ||
+    cyclesList[0] ||
+    null;
+  const currentWeek = activeCycle?.currentWeek || 1;
+  const weeksList = activeCycle
+    ? (activeCycle.weeksList !== undefined ? activeCycle.weeksList : (activeCycle.id?.includes('hyrox') ? MESOCYCLE_WEEKS : []))
+    : [];
+  const currentWeekDays: WorkoutDay[] = activeCycle ? getDaysForCycleWeek(activeCycle, currentWeek) : [];
 
   // 4 Bottom Navigation tabs: 'edit' | 'workout' | 'calendar' | 'more'
   const [activeTab, setActiveTab] = useState<MainNavTab>('workout');
@@ -367,10 +378,11 @@ export default function App() {
           return;
         }
 
-        // Case 4: BOTH cloud AND localStorage are completely empty!
-        // TYLKO W TYM PRZYPADKU wczytujemy DEFAULT_TRAINING_CYCLES!
-        if (!hasCloudData && !hasLocalData) {
-          console.log('[Sync] Zarówno chmura jak i localStorage są puste. Wczytywanie domyślnego planu...');
+        // Case 4: BRAND NEW EMPTY ACCOUNT INITIALIZATION ONLY!
+        // Domyślny cykl ładuj TYLKO podczas pierwszej, jednorazowej inicjalizacji całkowicie nowego, pustego konta!
+        const isBrandNewAccount = !status.isCloudAccountInitialized && !deviceMigrated && !status.isCloudMigrated;
+        if (!hasCloudData && !hasLocalData && isBrandNewAccount) {
+          console.log('[Sync] Całkowicie nowe konto. Jednorazowa inicjalizacja domyślnym planem...');
           const defaultCycles = DEFAULT_TRAINING_CYCLES;
           const defaultActive = defaultCycles[0].id;
           setCyclesList(defaultCycles);
@@ -394,18 +406,23 @@ export default function App() {
           return;
         }
 
-        // Case 5: Already migrated on this device (deviceMigrated === true)
-        if (deviceMigrated) {
-          if (hasCloudData) {
-            setCyclesList(status.cloudCycles);
-            setActiveCycleId(status.cloudActiveCycleId);
-            setWorkoutLogs(status.cloudLogs);
-            setRecoveryHistory(status.cloudRecovery);
-          }
-          syncedUserRef.current = user.uid;
-          setIsSyncInitialized(true);
-          setIsDataLoading(false);
-        }
+        // Case 5: Existing account (or subcollection cycles in Firestore is empty)
+        // If cycles collection in Firestore is empty, leave empty list. NEVER inject default cycle!
+        console.log(`[Sync] Wczytano stan z chmury: ${status.cloudCycles.length} cykli, ${status.cloudLogs.length} logów.`);
+        setCyclesList(status.cloudCycles);
+        setActiveCycleId(status.cloudActiveCycleId);
+        setWorkoutLogs(status.cloudLogs);
+        setRecoveryHistory(status.cloudRecovery);
+        applyCloudDataToLocalStorage({
+          cycles: status.cloudCycles,
+          activeCycleId: status.cloudActiveCycleId,
+          logs: status.cloudLogs,
+          recovery: status.cloudRecovery,
+        });
+        markDeviceMigrated(user.uid);
+        syncedUserRef.current = user.uid;
+        setIsSyncInitialized(true);
+        setIsDataLoading(false);
       })
       .catch((err) => {
         console.warn('Błąd sprawdzania statusu chmury:', err);
@@ -425,12 +442,16 @@ export default function App() {
     }
 
     const unsubCycles = subscribeToCycles(user.uid, (cycles) => {
-      if (cycles && cycles.length > 0) {
-        setCyclesList(cycles);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(cycles));
-        } catch {}
-      }
+      console.log(`[Firestore onSnapshot] Odebrano cykle z chmury: ${cycles.length}`);
+      setCyclesList(cycles);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(cycles));
+      } catch {}
+      setActiveCycleId((prevActiveId) => {
+        if (cycles.length === 0) return '';
+        if (cycles.some((c) => c.id === prevActiveId)) return prevActiveId;
+        return cycles[0]?.id || '';
+      });
     });
 
     const unsubLogs = subscribeToWorkoutLogs(user.uid, (logs) => {
@@ -537,20 +558,27 @@ export default function App() {
   };
 
   // Select another cycle as active - immediately switches to "Trening" and finds next uncompleted day
-  const handleSelectCycle = (cycleId: string) => {
+  const handleSelectCycle = (cycleId: string, listOverride?: TrainingCycleCatalog[]) => {
     setActiveCycleId(cycleId);
     try {
-      localStorage.setItem('hyrox_active_cycle_id', cycleId);
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, cycleId);
     } catch (e) {
       console.warn(e);
     }
-    if (user?.uid) {
+    if (user?.uid && cycleId) {
       saveActiveCycleId(user.uid, cycleId).catch((err) =>
         console.warn('Błąd zapisu aktywnego cyklu do Firestore:', err)
       );
     }
 
-    const selectedCycle = cyclesList.find((c) => c.id === cycleId) || cyclesList[0];
+    const currentList = listOverride || cyclesList;
+    const selectedCycle = currentList.find((c) => c.id === cycleId) || currentList[0] || null;
+    if (!selectedCycle) {
+      setActiveTab('workout');
+      setMoreSubView(null);
+      return;
+    }
+
     const targetWeek = selectedCycle.currentWeek || 1;
     const days = getDaysForCycleWeek(selectedCycle, targetWeek);
 
@@ -593,36 +621,74 @@ export default function App() {
     }
   }, [currentWeek, activeCycleId, currentWeekDays, selectedDayId, workoutLogs]);
 
-  // Create new cycle
-  const handleCreateCycle = (newCycle: TrainingCycleCatalog) => {
-    const updated = [...cyclesList, newCycle];
+  // Create new cycle - saves to both localStorage and Firestore immediately
+  const handleCreateCycle = async (newCycle: TrainingCycleCatalog) => {
+    const updated = [...cyclesList.filter((c) => c.id !== newCycle.id), newCycle];
     setCyclesList(updated);
-    if (user?.uid) {
-      saveCycleToFirestore(user.uid, newCycle).catch(console.warn);
-      saveActiveCycleId(user.uid, newCycle.id).catch(console.warn);
+    setActiveCycleId(newCycle.id);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(updated));
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, newCycle.id);
+    } catch (e) {
+      console.warn('Błąd zapisu do localStorage:', e);
     }
-    handleSelectCycle(newCycle.id);
+
+    if (user?.uid) {
+      try {
+        await saveCycleToFirestore(user.uid, newCycle);
+        await saveActiveCycleId(user.uid, newCycle.id);
+        console.log(`[Firestore] Nowy cykl ${newCycle.id} ("${newCycle.name}") zapisany pomyślnie.`);
+      } catch (err) {
+        console.error('Błąd zapisu nowego cyklu do chmury:', err);
+      }
+    }
+
+    handleSelectCycle(newCycle.id, updated);
   };
 
-  // Update existing cycle
-  const handleUpdateCycle = (updatedCycle: TrainingCycleCatalog) => {
+  // Update existing cycle - saves to both localStorage and Firestore immediately
+  const handleUpdateCycle = async (updatedCycle: TrainingCycleCatalog) => {
     const updated = cyclesList.map((c) => (c.id === updatedCycle.id ? updatedCycle : c));
     setCyclesList(updated);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Błąd zapisu do localStorage:', e);
+    }
+
     if (user?.uid) {
-      saveCycleToFirestore(user.uid, updatedCycle).catch(console.warn);
+      try {
+        await saveCycleToFirestore(user.uid, updatedCycle);
+      } catch (err) {
+        console.error('Błąd aktualizacji cyklu w chmurze:', err);
+      }
     }
   };
 
-  // Delete cycle
-  const handleDeleteCycle = (cycleId: string) => {
-    if (cyclesList.length <= 1) return;
+  // Delete cycle - allows deleting all cycles without restriction
+  const handleDeleteCycle = async (cycleId: string) => {
     const updated = cyclesList.filter((c) => c.id !== cycleId);
     setCyclesList(updated);
-    if (user?.uid) {
-      deleteCycleFromFirestore(user.uid, cycleId).catch(console.warn);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Błąd zapisu do localStorage:', e);
     }
+
+    if (user?.uid) {
+      try {
+        await deleteCycleFromFirestore(user.uid, cycleId);
+      } catch (err) {
+        console.error('Błąd usuwania cyklu z chmury:', err);
+      }
+    }
+
     if (activeCycleId === cycleId) {
-      handleSelectCycle(updated[0].id);
+      const nextId = updated[0]?.id || '';
+      handleSelectCycle(nextId, updated);
     }
   };
 

@@ -137,6 +137,7 @@ export interface CloudSyncStatus {
   cloudLogs: WorkoutLogEntry[];
   cloudRecovery: DailyRecoveryData[];
   isCloudMigrated: boolean;
+  isCloudAccountInitialized: boolean;
   localData: LocalTrainingData;
   isDeviceMigrated: boolean;
 }
@@ -170,12 +171,17 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
     );
 
     const hasCloudData = cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0;
+    const isCloudAccountInitialized =
+      userDocSnap.exists() &&
+      (userDocSnap.data()?.isInitialized === true ||
+       userDocSnap.data()?.isMigrated === true);
     const isCloudMigrated = userDocSnap.exists() && userDocSnap.data()?.isMigrated === true;
 
+    // Use saved active cycle, or first cycle in list, or empty string. NEVER force default cycle!
     const activeCycleId =
       userDocSnap.exists() && userDocSnap.data()?.activeCycleId
         ? userDocSnap.data().activeCycleId
-        : cloudCycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id;
+        : cloudCycles[0]?.id || '';
 
     const localData = readLocalTrainingData();
     const migratedOnDevice = isDeviceMigrated(userId);
@@ -190,6 +196,7 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudLogs: sanitizeAndDeduplicateLogs(cloudLogs),
       cloudRecovery,
       isCloudMigrated,
+      isCloudAccountInitialized,
       localData,
       isDeviceMigrated: migratedOnDevice,
     };
@@ -207,6 +214,7 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudLogs: [],
       cloudRecovery: [],
       isCloudMigrated: false,
+      isCloudAccountInitialized: false,
       localData,
       isDeviceMigrated: isDeviceMigrated(userId),
     };
@@ -228,22 +236,23 @@ export async function uploadLocalDataToCloud(
 ): Promise<void> {
   const userDocRef = doc(db, 'users', userId);
   try {
-    // 1. Update user document with migration flag
+    // 1. Update user document with migration and initialized flag
     await setDoc(
       userDocRef,
       {
         userId,
-        activeCycleId: localData.activeCycleId || localData.cycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id,
+        activeCycleId: localData.activeCycleId || localData.cycles[0]?.id || '',
         isMigrated: true,
+        isInitialized: true,
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
     );
 
-    // 2. Save cycles
-    const cyclesToSave = localData.cycles.length > 0 ? localData.cycles : DEFAULT_TRAINING_CYCLES;
-    for (const cycle of cyclesToSave) {
-      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cycle, { merge: true });
+    // 2. Save cycles (only the actual cycles, no forced defaults)
+    for (const cycle of localData.cycles) {
+      const cleanCycle = JSON.parse(JSON.stringify(cycle));
+      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cleanCycle, { merge: true });
     }
 
     // 3. Save logs in chunks
@@ -254,7 +263,7 @@ export async function uploadLocalDataToCloud(
       const chunk = deduplicated.slice(i, i + chunkSize);
       chunk.forEach((log: WorkoutLogEntry) => {
         const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
-        batch.set(logRef, log, { merge: true });
+        batch.set(logRef, JSON.parse(JSON.stringify(log)), { merge: true });
       });
       await batch.commit();
     }
@@ -264,7 +273,7 @@ export async function uploadLocalDataToCloud(
       const batch = writeBatch(db);
       localData.recovery.forEach((rec: DailyRecoveryData) => {
         const recRef = doc(db, 'users', userId, 'recovery', rec.date);
-        batch.set(recRef, rec, { merge: true });
+        batch.set(recRef, JSON.parse(JSON.stringify(rec)), { merge: true });
       });
       await batch.commit();
     }
@@ -299,7 +308,8 @@ export function applyCloudDataToLocalStorage(data: {
 }
 
 /**
- * Subscribe to Training Cycles in realtime
+ * Subscribe to Training Cycles in realtime (onSnapshot)
+ * Reflects actual Firestore state, including empty list if user deleted/has 0 cycles.
  */
 export function subscribeToCycles(
   userId: string,
@@ -312,9 +322,8 @@ export function subscribeToCycles(
       const cycles: TrainingCycleCatalog[] = snapshot.docs.map(
         (d) => d.data() as TrainingCycleCatalog
       );
-      if (cycles.length > 0) {
-        onUpdate(cycles);
-      }
+      // Immediately reflect actual state from cloud (even when empty!)
+      onUpdate(cycles);
     },
     (error) => {
       handleFirestoreError(error, OperationType.LIST, `users/${userId}/cycles`);
@@ -329,11 +338,19 @@ export async function saveCycleToFirestore(
   userId: string,
   cycle: TrainingCycleCatalog
 ): Promise<void> {
+  if (!userId || !cycle || !cycle.id) {
+    console.error('[Firestore] Brak userId lub cycle.id!');
+    return;
+  }
   const cycleRef = doc(db, 'users', userId, 'cycles', cycle.id);
   try {
-    await setDoc(cycleRef, cycle, { merge: true });
+    const cleanCycle = JSON.parse(JSON.stringify(cycle));
+    await setDoc(cycleRef, cleanCycle, { merge: true });
+    console.log(`[Firestore] Cykl ${cycle.id} ("${cycle.name}") zapisany w chmurze.`);
   } catch (error) {
+    console.error(`[Firestore] Błąd zapisu cyklu ${cycle.id}:`, error);
     handleFirestoreError(error, OperationType.WRITE, `users/${userId}/cycles/${cycle.id}`);
+    throw error;
   }
 }
 
@@ -344,11 +361,14 @@ export async function deleteCycleFromFirestore(
   userId: string,
   cycleId: string
 ): Promise<void> {
+  if (!userId || !cycleId) return;
   const cycleRef = doc(db, 'users', userId, 'cycles', cycleId);
   try {
     await deleteDoc(cycleRef);
+    console.log(`[Firestore] Cykl ${cycleId} usunięty z chmury.`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `users/${userId}/cycles/${cycleId}`);
+    throw error;
   }
 }
 

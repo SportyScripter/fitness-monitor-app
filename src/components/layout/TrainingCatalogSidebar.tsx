@@ -301,18 +301,16 @@ export const TrainingCatalogSidebar: React.FC<TrainingCatalogSidebarProps> = ({
                         </button>
                       ) : null}
 
-                      {cyclesList.length > 1 && (
-                        <button
-                          onClick={() => {
-                            const conf = window.confirm(`Czy na pewno chcesz usunąć cykl "${cycle.name}"?`);
-                            if (conf) onDeleteCycle(cycle.id);
-                          }}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 transition-colors"
-                          title="Usuń cykl"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => {
+                          const conf = window.confirm(`Czy na pewno chcesz usunąć cykl "${cycle.name}"?`);
+                          if (conf) onDeleteCycle(cycle.id);
+                        }}
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 transition-colors"
+                        title="Usuń cykl"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
 

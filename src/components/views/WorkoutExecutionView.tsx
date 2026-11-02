@@ -31,7 +31,7 @@ import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
 import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
 
 interface WorkoutExecutionViewProps {
-  activeCycle: TrainingCycleCatalog;
+  activeCycle: TrainingCycleCatalog | null;
   currentWeek: number;
   weeksList: MesocyclePhase[];
   currentWeekDays: WorkoutDay[];
@@ -71,6 +71,20 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   const [isPreviousWorkoutModalOpen, setIsPreviousWorkoutModalOpen] = useState(false);
   const [activeDetailExercise, setActiveDetailExercise] = useState<Exercise | null>(null);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Record<string, boolean>>({});
+
+  if (!activeCycle) {
+    return (
+      <div className="w-full max-w-xl mx-auto py-12 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-400/10 border border-amber-400/30 text-amber-400 flex items-center justify-center mx-auto">
+          <Dumbbell className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-black text-white">Brak aktywnego cyklu treningowego</h2>
+        <p className="text-xs sm:text-sm text-neutral-400 max-w-sm mx-auto">
+          Twój katalog cykli jest pusty. Otwórz przycisk „Zarządzaj cyklami” u góry, aby utworzyć swój pierwszy cykl od zera.
+        </p>
+      </div>
+    );
+  }
 
   const toggleExerciseExpand = (exerciseId: string) => {
     setExpandedExerciseIds((prev) => ({

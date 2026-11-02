@@ -12,7 +12,7 @@ import { MesocyclePhase, TrainingCycleCatalog } from '../../types/hyrox';
 import { useScrollDirection } from '../../hooks/useScrollDirection';
 
 interface HeaderProps {
-  activeCycle: TrainingCycleCatalog;
+  activeCycle: TrainingCycleCatalog | null;
   cyclesList: TrainingCycleCatalog[];
   onSelectCycle: (cycleId: string) => void;
   currentWeek: number;
@@ -131,17 +131,23 @@ export const Header: React.FC<HeaderProps> = ({
         }`}>
           <div className="flex items-center justify-between pointer-events-none">
             <div className="flex items-center gap-2 truncate pr-6">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+              <span className={`w-2 h-2 rounded-full shrink-0 ${activeCycle ? 'bg-amber-400 animate-pulse' : 'bg-neutral-600'}`} />
               <div className="truncate">
                 <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider leading-none">
                   Aktywny cykl:
                 </span>
-                <span className="text-xs font-black text-amber-400 font-heading uppercase tracking-wide truncate block mt-0.5">
-                  {activeCycle.name}
-                  <span className="text-neutral-400 text-[10px] font-normal lowercase pl-1.5 hidden sm:inline">
-                    ({activeCycle.goal})
+                {activeCycle ? (
+                  <span className="text-xs font-black text-amber-400 font-heading uppercase tracking-wide truncate block mt-0.5">
+                    {activeCycle.name}
+                    <span className="text-neutral-400 text-[10px] font-normal lowercase pl-1.5 hidden sm:inline">
+                      ({activeCycle.goal})
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span className="text-xs font-bold text-neutral-400 font-heading uppercase tracking-wide truncate block mt-0.5">
+                    Brak aktywnego cyklu (Katalog pusty)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -150,16 +156,20 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Native Select Overlay with Large Touch Area */}
           <select
-            value={activeCycle.id}
+            value={activeCycle?.id || ''}
             onChange={(e) => onSelectCycle(e.target.value)}
             className="absolute inset-0 opacity-0 w-full h-full cursor-pointer touch-manipulation"
             aria-label="Wybierz aktywny cykl treningowy z katalogu"
           >
-            {cyclesList.map((c) => (
-              <option key={c.id} value={c.id} className="bg-neutral-900 text-white font-bold">
-                {c.name} ({c.goal})
-              </option>
-            ))}
+            {cyclesList.length === 0 ? (
+              <option value="">Brak utworzonych cykli — utwórz cykl w katalogu</option>
+            ) : (
+              cyclesList.map((c) => (
+                <option key={c.id} value={c.id} className="bg-neutral-900 text-white font-bold">
+                  {c.name} ({c.goal})
+                </option>
+              ))
+            )}
           </select>
         </div>
       </div>
