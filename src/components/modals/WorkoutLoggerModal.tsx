@@ -1351,6 +1351,8 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           workoutLogs={workoutLogs}
           isOpen={!!selectedChartExerciseName}
           onClose={() => setSelectedChartExerciseName(null)}
+          category={day?.exercises?.find((e) => e.name.trim().toLowerCase() === selectedChartExerciseName.trim().toLowerCase())?.category}
+          exercise={day?.exercises?.find((e) => e.name.trim().toLowerCase() === selectedChartExerciseName.trim().toLowerCase())}
         />
       )}
 

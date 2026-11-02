@@ -484,17 +484,45 @@ export default function App() {
 
       // Determine highest working weight performed in that previous session, or fallback to defaultWeightKg
       const maxLoggedWeight = lastSets.length > 0 ? Math.max(...lastSets.map((s) => s.weightKg || 0)) : 0;
-      const baseW = maxLoggedWeight > 0 ? maxLoggedWeight : (ex.defaultWeightKg || 0);
+      const baseW = maxLoggedWeight > 0 ? maxLoggedWeight : (parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? 0)) || 0);
 
-      const progressedWeight =
-        progressionDeltaKg > 0 && baseW > 0
-          ? Number((baseW + progressionDeltaKg).toFixed(1))
-          : (ex.defaultWeightKg || baseW);
+      const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
+      const hasDelta = progressionDeltaKg > 0 && !isCardio && baseW > 0;
+      const progressedWeight = hasDelta
+        ? Number((baseW + progressionDeltaKg).toFixed(1))
+        : (parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? baseW)) || baseW);
+
+      const updatedSetsDetails = Array.isArray(ex.plannedSetsDetails)
+        ? ex.plannedSetsDetails.map((s, sIdx) => {
+            const setW = parseFloat(String(s.weightKg ?? s.weight ?? baseW)) || 0;
+            const finalW = hasDelta ? Number((setW + progressionDeltaKg).toFixed(1)) : setW;
+            return {
+              ...s,
+              setNumber: s.setNumber || sIdx + 1,
+              weightKg: finalW,
+              weight: finalW,
+              completed: false,
+              isCompleted: false,
+            };
+          })
+        : undefined;
+
+      const primaryW = updatedSetsDetails && updatedSetsDetails.length > 0
+        ? (updatedSetsDetails[0].weightKg ?? updatedSetsDetails[0].weight ?? progressedWeight)
+        : progressedWeight;
 
       return {
         ...ex,
         id: `ex-w${targetWeek}-${(ex.name || 'ex').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
-        defaultWeightKg: progressedWeight,
+        defaultWeightKg: primaryW,
+        weight: primaryW,
+        weightKg: primaryW,
+        targetWeight: primaryW,
+        isCompleted: false,
+        completed: false,
+        loggedSets: [],
+        completedSets: [],
+        plannedSetsDetails: updatedSetsDetails,
       };
     });
 
@@ -504,6 +532,10 @@ export default function App() {
       dayNumber: targetDayNumber,
       dayNamePolish: targetDayName,
       title: sourceDay.title,
+      isCompleted: false,
+      completed: false,
+      loggedSets: [],
+      completedSets: [],
       exercises: copiedExercises,
       runningSession: sourceDay.runningSession ? JSON.parse(JSON.stringify(sourceDay.runningSession)) : undefined,
     };
@@ -556,32 +588,53 @@ export default function App() {
     const clonedDays: WorkoutDay[] = sourceDays.map((d, dIdx) => ({
       ...d,
       id: `w${targetWeek}-day-${d.dayNumber || dIdx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      isCompleted: false,
+      completed: false,
+      loggedSets: [],
+      completedSets: [],
       exercises: (d.exercises || []).map((ex) => {
         const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
         const hasDelta = progressionDeltaKg > 0 && !isCardio;
+        const currentW = parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? 0).replace(',', '.')) || 0;
         const newWeight = hasDelta
-          ? Number(((ex.defaultWeightKg || 0) + progressionDeltaKg).toFixed(2))
-          : ex.defaultWeightKg;
+          ? Number((currentW + progressionDeltaKg).toFixed(2))
+          : currentW;
         const updatedDetails = Array.isArray(ex.plannedSetsDetails)
-          ? ex.plannedSetsDetails.map((s, sIdx) => ({
-              ...s,
-              setNumber: s.setNumber || sIdx + 1,
-              weightKg: hasDelta
-                ? Number(((s.weightKg ?? s.weight ?? ex.defaultWeightKg ?? 0) + progressionDeltaKg).toFixed(2))
-                : s.weightKg,
-              weight: hasDelta
-                ? Number(((s.weight ?? s.weightKg ?? ex.defaultWeightKg ?? 0) + progressionDeltaKg).toFixed(2))
-                : s.weight,
-            }))
+          ? ex.plannedSetsDetails.map((s, sIdx) => {
+              const setW = parseFloat(String(s.weightKg ?? s.weight ?? currentW).replace(',', '.')) || 0;
+              const finalSetW = hasDelta
+                ? Number((setW + progressionDeltaKg).toFixed(2))
+                : setW;
+              return {
+                ...s,
+                setNumber: s.setNumber || sIdx + 1,
+                weightKg: finalSetW,
+                weight: finalSetW,
+                completed: false,
+                isCompleted: false,
+              };
+            })
           : undefined;
+
+        const primaryW = updatedDetails && updatedDetails.length > 0 && (updatedDetails[0].weightKg !== undefined || updatedDetails[0].weight !== undefined)
+          ? (updatedDetails[0].weightKg ?? updatedDetails[0].weight ?? newWeight)
+          : newWeight;
 
         return {
           ...ex,
           id: `ex-w${targetWeek}-${(ex.name || 'ex').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
-          defaultWeightKg: newWeight,
+          defaultWeightKg: primaryW,
+          weight: primaryW,
+          weightKg: primaryW,
+          targetWeight: primaryW,
+          isCompleted: false,
+          completed: false,
+          loggedSets: [],
+          completedSets: [],
           plannedSetsDetails: updatedDetails,
         };
       }),
+      runningSession: d.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
     }));
 
     const updatedCycle: TrainingCycleCatalog = {
@@ -675,26 +728,49 @@ export default function App() {
           summary: d?.summary || '',
           targetRpeRange: d?.targetRpeRange || `${newPhase.targetRPE || 8.0}`,
           targetRirRange: d?.targetRirRange || `${newPhase.targetRIR ?? 2}`,
+          isCompleted: false,
+          completed: false,
+          loggedSets: [],
+          completedSets: [],
           exercises: Array.isArray(d?.exercises)
-            ? d.exercises.map((ex, exIdx) => ({
-                ...ex,
-                id: ex?.id || `ex-w${newPhase.week}-${exIdx + 1}-${Date.now()}`,
-                name: ex?.name || `Ćwiczenie ${exIdx + 1}`,
-                muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
-                plannedSets: ex?.plannedSets ?? 3,
-                targetRepsRange: ex?.targetRepsRange || '8-10',
-                defaultWeightKg: (ex?.defaultWeightKg !== undefined) ? ex.defaultWeightKg : 20,
-                targetRIR: ex?.targetRIR ?? (newPhase.targetRIR ?? 2),
-                targetRPE: ex?.targetRPE ?? (newPhase.targetRPE ?? 8),
-                restSeconds: ex?.restSeconds ?? 90,
-                hyroxRelevance: ex?.hyroxRelevance || '',
-                techniqueNotes: ex?.techniqueNotes || '',
-                plannedSetsDetails: Array.isArray(ex?.plannedSetsDetails)
-                  ? ex.plannedSetsDetails.map((s) => ({ ...s }))
-                  : undefined,
-              }))
+            ? d.exercises.map((ex, exIdx) => {
+                const sets = Array.isArray(ex?.plannedSetsDetails)
+                  ? ex.plannedSetsDetails.map((s, sIdx) => ({
+                      ...s,
+                      setNumber: s.setNumber || sIdx + 1,
+                      completed: false,
+                      isCompleted: false,
+                    }))
+                  : undefined;
+                const primaryW = (sets && sets.length > 0 && (sets[0].weightKg !== undefined || sets[0].weight !== undefined))
+                  ? (sets[0].weightKg ?? sets[0].weight ?? ex?.defaultWeightKg ?? 20)
+                  : ((ex?.defaultWeightKg !== undefined) ? ex.defaultWeightKg : (ex?.weight ?? 20));
+
+                return {
+                  ...ex,
+                  id: ex?.id || `ex-w${newPhase.week}-${exIdx + 1}-${Date.now()}`,
+                  name: ex?.name || `Ćwiczenie ${exIdx + 1}`,
+                  muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
+                  plannedSets: sets ? sets.length : (ex?.plannedSets ?? 3),
+                  targetRepsRange: ex?.targetRepsRange || '8-10',
+                  defaultWeightKg: primaryW,
+                  weight: primaryW,
+                  weightKg: primaryW,
+                  targetWeight: primaryW,
+                  isCompleted: false,
+                  completed: false,
+                  loggedSets: [],
+                  completedSets: [],
+                  targetRIR: ex?.targetRIR ?? (newPhase.targetRIR ?? 2),
+                  targetRPE: ex?.targetRPE ?? (newPhase.targetRPE ?? 8),
+                  restSeconds: ex?.restSeconds ?? 90,
+                  hyroxRelevance: ex?.hyroxRelevance || '',
+                  techniqueNotes: ex?.techniqueNotes || '',
+                  plannedSetsDetails: sets,
+                };
+              })
             : [],
-          runningSession: d?.runningSession,
+          runningSession: d?.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
           recoveryProtocols: Array.isArray(d?.recoveryProtocols) ? d.recoveryProtocols : [],
           sessionNotes: d?.sessionNotes || '',
         }))

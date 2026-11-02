@@ -85,6 +85,8 @@ export interface ExercisePlannedSet {
   weight?: number;
   rir?: number;
   rpe?: number;
+  completed?: boolean;
+  isCompleted?: boolean;
   distance?: number;
   distanceUnit?: 'km' | 'm';
   pace?: string;
@@ -101,6 +103,9 @@ export interface Exercise {
   plannedSets: number;
   targetRepsRange: string; // e.g. "6-8" or "10-12" or "20-25"
   defaultWeightKg: number;
+  weight?: number;
+  targetWeight?: number;
+  weightKg?: number;
   targetRIR: number; // e.g. 2
   targetRPE: number; // e.g. 8
   restSeconds: number;
@@ -117,6 +122,10 @@ export interface Exercise {
   targetHR?: number;
   targetDurationSec?: number;
   plannedSetsDetails?: ExercisePlannedSet[];
+  isCompleted?: boolean;
+  completed?: boolean;
+  loggedSets?: any[];
+  completedSets?: any[];
 }
 
 export interface RunningInterval {
@@ -175,6 +184,10 @@ export interface WorkoutDay {
   runningSession?: RunningSession;
   recoveryProtocols?: string[];
   sessionNotes?: string;
+  isCompleted?: boolean;
+  completed?: boolean;
+  loggedSets?: any[];
+  completedSets?: any[];
 }
 
 export interface TemplateWorkout {

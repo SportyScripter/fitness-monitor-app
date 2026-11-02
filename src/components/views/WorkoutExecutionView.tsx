@@ -99,7 +99,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     if (exercises.length === 0) return 'not_started';
 
     const dayLogs = workoutLogs.filter(
-      (l) => l.dayId === day.id || (l.dayTitle === day.title && (l.dayId?.startsWith(`w${currentWeek}-`) || !l.dayId))
+      (l) => l.dayId === day.id || (l.dayId && l.dayId.startsWith(`w${currentWeek}-`) && l.dayTitle === day.title)
     );
 
     if (dayLogs.length === 0) return 'not_started';
@@ -538,14 +538,13 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 {selectedDay.exercises.map((exercise, index) => {
                   const isExpanded = !!expandedExerciseIds[exercise.id];
 
-                  // Active sets for this exercise (including newly added during workout / logged today)
-                  const todayStr = new Date().toISOString().split('T')[0];
+                  // Active sets for this exercise (strictly scoped to this selected day)
                   const currentSessionLogs = (workoutLogs || [])
                     .filter(
                       (l) =>
                         l.exerciseName &&
                         l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase() &&
-                        (l.dayId === selectedDay.id || l.dateStr === todayStr || (l.timestamp && l.timestamp.startsWith(todayStr)))
+                        (l.dayId ? l.dayId === selectedDay.id : (l.dayTitle === selectedDay.title && l.dayId?.startsWith(`w${currentWeek}-`)))
                     )
                     .sort((a, b) => a.setNumber - b.setNumber);
 

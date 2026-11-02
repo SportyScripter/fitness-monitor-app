@@ -130,92 +130,90 @@ const SortableExerciseCard: React.FC<SortableExerciseCardProps> = ({
           : 'border-neutral-800 hover:border-neutral-700'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        {/* Dedicated Touch Drag Handle + Exercise Details */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {/* GripVertical Handle with Touch/Mouse Listeners */}
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            className="p-2 -ml-1 text-neutral-400 hover:text-amber-400 active:text-amber-300 touch-none cursor-grab active:cursor-grabbing rounded-lg hover:bg-neutral-900 transition-colors shrink-0"
-            title="Przeciągnij, aby zmienić kolejność ćwiczenia"
-            aria-label="Uchwyt zmiany kolejności ćwiczenia"
-          >
-            <GripVertical className="w-5 h-5 stroke-[2.2]" />
-          </button>
+      {/* Wiersz 1 (Tytułowy): Uchwyt + Odznaki i Nazwa ćwiczenia na pełną szerokość */}
+      <div className="flex items-start gap-3 w-full">
+        {/* Dedicated Touch Drag Handle */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="p-2 -ml-1 text-neutral-400 hover:text-amber-400 active:text-amber-300 touch-none cursor-grab active:cursor-grabbing rounded-lg hover:bg-neutral-900 transition-colors shrink-0 mt-1"
+          title="Przeciągnij, aby zmienić kolejność ćwiczenia"
+          aria-label="Uchwyt zmiany kolejności ćwiczenia"
+        >
+          <GripVertical className="w-5 h-5 stroke-[2.2]" />
+        </button>
 
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim()}
-              </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-900 text-neutral-400">
-                {exercise.unit || 'kg'}
-              </span>
-            </div>
-            <h3 className="text-sm font-bold text-white truncate">
-              {exercise.name}
-            </h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
+              #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim()}
+            </span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-900 text-neutral-400">
+              {exercise.unit || 'kg'}
+            </span>
           </div>
+          <h3 className="text-sm sm:text-base font-bold text-white break-words whitespace-normal leading-snug">
+            {exercise.name}
+          </h3>
         </div>
+      </div>
 
-        {/* Card action buttons with fallback Up/Down chevron buttons */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Fallback Move Up Button */}
-          <button
-            type="button"
-            onClick={onMoveUp}
-            disabled={index === 0}
-            className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 text-xs cursor-pointer touch-manipulation disabled:opacity-25 disabled:cursor-not-allowed"
-            title="Przesuń ćwiczenie w górę"
-            aria-label="Przesuń w górę"
-          >
-            <ChevronUp className="w-3.5 h-3.5" />
-          </button>
+      {/* Wiersz 2 (Przyciski akcji): Przeniesione pod spód */}
+      <div className="flex justify-end flex-wrap gap-2 w-full mt-3">
+        {/* Fallback Move Up Button */}
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={index === 0}
+          className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 text-xs cursor-pointer touch-manipulation disabled:opacity-25 disabled:cursor-not-allowed"
+          title="Przesuń ćwiczenie w górę"
+          aria-label="Przesuń w górę"
+        >
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Fallback Move Down Button */}
-          <button
-            type="button"
-            onClick={onMoveDown}
-            disabled={index === totalCount - 1}
-            className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 text-xs cursor-pointer touch-manipulation disabled:opacity-25 disabled:cursor-not-allowed"
-            title="Przesuń ćwiczenie w dół"
-            aria-label="Przesuń w dół"
-          >
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
+        {/* Fallback Move Down Button */}
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={index === totalCount - 1}
+          className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 text-xs cursor-pointer touch-manipulation disabled:opacity-25 disabled:cursor-not-allowed"
+          title="Przesuń ćwiczenie w dół"
+          aria-label="Przesuń w dół"
+        >
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Edit Exercise Modal Trigger */}
-          <button
-            type="button"
-            onClick={onEdit}
-            className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
-            title="Edytuj ćwiczenie i serie"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
+        {/* Edit Exercise Modal Trigger */}
+        <button
+          type="button"
+          onClick={onEdit}
+          className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
+          title="Edytuj ćwiczenie i serie"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Progress Chart Modal Trigger */}
-          <button
-            type="button"
-            onClick={onChart}
-            className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
-            title="Wykres progresu"
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-          </button>
+        {/* Progress Chart Modal Trigger */}
+        <button
+          type="button"
+          onClick={onChart}
+          className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
+          title="Wykres progresu"
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Delete Exercise Button */}
-          <button
-            type="button"
-            onClick={onDelete}
-            className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-500 hover:text-red-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
-            title="Usuń ćwiczenie"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        {/* Delete Exercise Button */}
+        <button
+          type="button"
+          onClick={onDelete}
+          className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-500 hover:text-red-400 border border-neutral-800 text-xs cursor-pointer touch-manipulation"
+          title="Usuń ćwiczenie"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* Numeric parameters grid */}

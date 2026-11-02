@@ -716,10 +716,16 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                     <div className="col-span-3">
                       <input
                         type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="8"
                         value={set.reps}
                         onChange={(e) => handleUpdateSet(idx, 'reps', e.target.value)}
+                        onBlur={() => {
+                          if (set.reps.trim() === '') {
+                            handleUpdateSet(idx, 'reps', '8');
+                          }
+                        }}
                         className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                       />
                     </div>
@@ -729,9 +735,15 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       <input
                         type="text"
                         inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
+                        pattern="[0-9.,]*"
+                        placeholder="0"
                         value={set.weightKg}
                         onChange={(e) => handleUpdateSet(idx, 'weightKg', e.target.value)}
+                        onBlur={() => {
+                          if (set.weightKg.trim() === '') {
+                            handleUpdateSet(idx, 'weightKg', '0');
+                          }
+                        }}
                         className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                       />
                     </div>
@@ -740,10 +752,16 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                     <div className="col-span-2">
                       <input
                         type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="2"
                         value={set.rir}
                         onChange={(e) => handleUpdateSet(idx, 'rir', e.target.value)}
+                        onBlur={() => {
+                          if (set.rir.trim() === '') {
+                            handleUpdateSet(idx, 'rir', '2');
+                          }
+                        }}
                         className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                       />
                     </div>
@@ -753,9 +771,15 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
                       <input
                         type="text"
                         inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
+                        pattern="[0-9.,]*"
+                        placeholder="8"
                         value={set.rpe}
                         onChange={(e) => handleUpdateSet(idx, 'rpe', e.target.value)}
+                        onBlur={() => {
+                          if (set.rpe.trim() === '') {
+                            handleUpdateSet(idx, 'rpe', '8');
+                          }
+                        }}
                         className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                       />
                     </div>

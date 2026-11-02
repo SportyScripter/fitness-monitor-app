@@ -17,6 +17,7 @@ import {
   Navigation
 } from 'lucide-react';
 import { WorkoutLogEntry, Exercise, RUNNING_TYPES, RunningType } from '../../types/hyrox';
+import { EXERCISE_CATALOG } from '../../data/exerciseCatalog';
 
 interface ExerciseChartModalProps {
   exerciseName: string;
@@ -96,20 +97,18 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
     (l) => l.exerciseName && l.exerciseName.trim().toLowerCase() === exerciseName.trim().toLowerCase()
   );
 
-  // Determine if this is a cardio exercise
-  const isCardio =
-    category === 'cardio' ||
-    exercise?.category === 'cardio' ||
-    exercise?.exerciseType === 'RUNNING' ||
-    RUNNING_TYPES.includes(exerciseName as RunningType) ||
-    exerciseLogs.some(
-      (l) =>
-        l.activityType === 'RUNNING' ||
-        (l.targetDistance !== undefined && l.targetDistance > 0) ||
-        !!l.distanceUnit ||
-        !!l.targetPace ||
-        !!l.actualPace
-    );
+  // Zabezpieczenie typu ćwiczenia:
+  // Domyślnie zawsze siła (fallback dla wartości pustych/undefined/null lub 'strength').
+  // Widok Cardio jest renderowany TYLKO i wyłącznie wtedy, gdy kategoria jest jawnie równa 'cardio'.
+  const catalogMatch =
+    !category && !exercise?.category
+      ? EXERCISE_CATALOG.find(
+          (c) => c.name.trim().toLowerCase() === exerciseName.trim().toLowerCase()
+        )
+      : undefined;
+
+  const resolvedCategory = exercise?.category || category || catalogMatch?.category;
+  const isCardio = resolvedCategory === 'cardio';
 
   // Group logs by date / session
   interface SessionSummary {

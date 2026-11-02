@@ -32,23 +32,11 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
 }) => {
   const safeWeeks = Array.isArray(existingWeeks) ? existingWeeks.filter(Boolean) : [];
   const nextWeekNumber = safeWeeks.length > 0 ? Math.max(...safeWeeks.map((w) => w?.week || 0)) + 1 : 1;
-  const lastPhase = safeWeeks.length > 0 ? safeWeeks[safeWeeks.length - 1] : null;
-
-  const lastVolMult = typeof lastPhase?.volumeMultiplier === 'number' && !isNaN(lastPhase.volumeMultiplier) ? lastPhase.volumeMultiplier : 1.0;
-  const lastTargetRPE = typeof lastPhase?.targetRPE === 'number' && !isNaN(lastPhase.targetRPE) ? lastPhase.targetRPE : 8.0;
-  const lastTargetRIR = typeof lastPhase?.targetRIR === 'number' && !isNaN(lastPhase.targetRIR) ? lastPhase.targetRIR : 2;
-
   const [weekNumber, setWeekNumber] = useState(nextWeekNumber);
   const [weekName, setWeekName] = useState(`Tydzień ${nextWeekNumber}: Faza Indywidualna`);
-  const [volumeMultiplier, setVolumeMultiplier] = useState<string>(
-    lastPhase ? String(Math.min(1.3, Number((lastVolMult + 0.05).toFixed(2)))) : '1.05'
-  );
-  const [targetRPE, setTargetRPE] = useState<string>(
-    lastPhase ? String(Math.min(9.5, Number((lastTargetRPE + 0.2).toFixed(1)))) : '8.0'
-  );
-  const [targetRIR, setTargetRIR] = useState<string>(
-    lastPhase ? String(Math.max(1, lastTargetRIR)) : '2'
-  );
+  const [volumeMultiplier, setVolumeMultiplier] = useState<string>('1.0');
+  const [targetRPE, setTargetRPE] = useState<string>('8.0');
+  const [targetRIR, setTargetRIR] = useState<string>('2');
   const [isDeload, setIsDeload] = useState(false);
   const [focusNote, setFocusNote] = useState('');
 
@@ -117,6 +105,10 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
         summary: d.summary || '',
         targetRpeRange: d.targetRpeRange || `${targetRPE}`,
         targetRirRange: d.targetRirRange || `${targetRIR}`,
+        isCompleted: false,
+        completed: false,
+        loggedSets: [],
+        completedSets: [],
         exercises: Array.isArray(d.exercises)
           ? d.exercises.filter(Boolean).map((ex) => {
               const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
@@ -131,7 +123,7 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   ? (ex as any).sets
                   : [];
 
-              const baseExerciseWeight = parseFloat(String(ex.defaultWeightKg ?? 0).replace(',', '.')) || 0;
+              const baseExerciseWeight = parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? 0).replace(',', '.')) || 0;
               const defaultReps = parseInt(String(ex.targetRepsRange || '8').split('-')[0], 10) || 8;
 
               // Przygotowanie tablicy istniejących serii (oldSets)
@@ -150,6 +142,8 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                     weight: parsedW,
                     rir: typeof s.rir === 'number' ? s.rir : (!isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2)),
                     rpe: typeof s.rpe === 'number' ? s.rpe : (!isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0)),
+                    completed: false,
+                    isCompleted: false,
                     distance: s.distance ?? ex.targetDistance,
                     distanceUnit: s.distanceUnit || ex.distanceUnit,
                     pace: s.pace || ex.targetPace,
@@ -166,6 +160,8 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   weight: baseExerciseWeight,
                   rir: !isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2),
                   rpe: !isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0),
+                  completed: false,
+                  isCompleted: false,
                   distance: ex.targetDistance,
                   distanceUnit: ex.distanceUnit,
                   pace: ex.targetPace,
@@ -191,6 +187,8 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   setNumber: idx + 1,
                   weightKg: newW,
                   weight: newW,
+                  completed: false,
+                  isCompleted: false,
                 };
               });
 
@@ -212,22 +210,31 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   finalSets.push({
                     ...lastSetWithProgression,
                     setNumber: finalSets.length + 1,
+                    completed: false,
+                    isCompleted: false,
                   });
                 }
               } else if (targetSetsCount < updatedSetsWithProgression.length) {
                 finalSets = finalSets.slice(0, targetSetsCount);
               }
 
-              // Ujednolicenie numerów serii 1..N
+              // Ujednolicenie numerów serii 1..N oraz reset statusu ukończenia serii
               finalSets = finalSets.map((s, idx) => ({
                 ...s,
                 setNumber: idx + 1,
+                completed: false,
+                isCompleted: false,
               }));
 
-              // Aktualizacja bazowego ciężaru ćwiczenia
+              // Obliczenie zaktualizowanego ciężaru
               const newDefaultWeight = shouldApplyProgression
                 ? Number((baseExerciseWeight + deltaWeight).toFixed(2))
                 : baseExerciseWeight;
+
+              // Ujednolicenie nadrzędnego ciężaru na poziomie obiektu ćwiczenia
+              const primarySetWeight = finalSets.length > 0 && (finalSets[0].weightKg !== undefined || finalSets[0].weight !== undefined)
+                ? (finalSets[0].weightKg ?? finalSets[0].weight ?? newDefaultWeight)
+                : newDefaultWeight;
 
               return {
                 ...ex,
@@ -237,7 +244,14 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                 plannedSets: finalSets.length,
                 plannedSetsDetails: finalSets,
                 targetRepsRange: ex.targetRepsRange || '8-10',
-                defaultWeightKg: newDefaultWeight,
+                defaultWeightKg: primarySetWeight,
+                weight: primarySetWeight,
+                weightKg: primarySetWeight,
+                targetWeight: primarySetWeight,
+                isCompleted: false,
+                completed: false,
+                loggedSets: [],
+                completedSets: [],
                 targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
                 targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
                 restSeconds: Number(ex.restSeconds) || 90,
@@ -386,7 +400,7 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                         setVolumeMultiplier(val);
                       }
                     }}
-                    placeholder="np. 1.05"
+                    placeholder="np. 1.0"
                     className={`w-full bg-neutral-900 border rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none font-mono-numbers ${
                       !isMultiplierValid
                         ? 'border-red-500 text-red-300 focus:border-red-500'

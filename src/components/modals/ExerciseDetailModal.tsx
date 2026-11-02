@@ -56,17 +56,17 @@ interface ExerciseDetailModalProps {
 
 export interface ExerciseDetailSetItem {
   setNumber: number;
-  weightKg: number;
-  reps: number;
-  rir: number;
-  rpe: number;
+  weightKg: number | string;
+  reps: number | string;
+  rir: number | string;
+  rpe: number | string;
   completed: boolean;
   unit: ExerciseUnit;
   notes?: string;
-  distance?: number;
+  distance?: number | string;
   distanceUnit?: 'm' | 'km';
   pace?: string;
-  targetHr?: number;
+  targetHr?: number | string;
 }
 
 export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
@@ -324,7 +324,38 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   const handleSavePerformance = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveExercisePerformance(setsToLog, exerciseNotes, selectedLogDate, exerciseRpe, exerciseRir);
+    const sanitizedSets = setsToLog.map((s) => {
+      const parsedWeight = typeof s.weightKg === 'string'
+        ? parseFloat(s.weightKg.replace(',', '.'))
+        : Number(s.weightKg);
+      const parsedReps = typeof s.reps === 'string'
+        ? parseInt(s.reps, 10)
+        : Number(s.reps);
+      const parsedRir = typeof s.rir === 'string'
+        ? parseInt(s.rir, 10)
+        : Number(s.rir);
+      const parsedRpe = typeof s.rpe === 'string'
+        ? parseFloat(s.rpe.replace(',', '.'))
+        : Number(s.rpe);
+      const parsedDist = typeof s.distance === 'string'
+        ? parseFloat(s.distance.replace(',', '.'))
+        : Number(s.distance);
+      const parsedHr = typeof s.targetHr === 'string'
+        ? parseInt(s.targetHr, 10)
+        : Number(s.targetHr);
+
+      return {
+        ...s,
+        weightKg: isNaN(parsedWeight) ? 0 : parsedWeight,
+        reps: isNaN(parsedReps) || parsedReps < 1 ? 1 : parsedReps,
+        rir: isNaN(parsedRir) ? 2 : parsedRir,
+        rpe: isNaN(parsedRpe) ? 8 : parsedRpe,
+        distance: isNaN(parsedDist) ? undefined : parsedDist,
+        targetHr: isNaN(parsedHr) ? undefined : parsedHr,
+      };
+    });
+
+    onSaveExercisePerformance(sanitizedSets, exerciseNotes, selectedLogDate, exerciseRpe, exerciseRir);
     setSaveSuccessMsg(`Zapisano wykonanie serii dla daty ${selectedLogDate}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
@@ -351,7 +382,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const latestTonnage = latestSets.reduce((sum, s) => sum + (s.tonnageKg || s.weightKg * s.reps), 0);
   const totalCompletedDistMeters = setsToLog.reduce((sum, s) => {
     if (!s.completed) return sum;
-    const d = s.distance || 0;
+    const rawD = typeof s.distance === 'string' ? parseFloat(s.distance.replace(',', '.')) : Number(s.distance);
+    const d = isNaN(rawD) ? 0 : rawD;
     return sum + (s.distanceUnit === 'km' ? d * 1000 : d);
   }, 0);
 
@@ -549,12 +581,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               <td className="py-2 px-1">
                                 <div className="flex items-center gap-1">
                                   <input
-                                    type="number"
+                                    type="text"
                                     inputMode="decimal"
-                                    step="any"
-                                    min="0"
-                                    value={set.distance ?? 800}
-                                    onChange={(e) => updateSetField(idx, 'distance', parseFloat(e.target.value) || 0)}
+                                    pattern="[0-9.,]*"
+                                    placeholder="800"
+                                    value={set.distance !== undefined && set.distance !== null ? String(set.distance) : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === '' || /^[0-9]*[.,]?[0-9]*$/.test(val)) {
+                                        updateSetField(idx, 'distance', val);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      if (set.distance === '' || set.distance === undefined || set.distance === null) {
+                                        updateSetField(idx, 'distance', 800);
+                                      } else {
+                                        const num = parseFloat(String(set.distance).replace(',', '.'));
+                                        updateSetField(idx, 'distance', isNaN(num) ? 800 : num);
+                                      }
+                                    }}
                                     className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                   />
                                   <select
@@ -582,12 +627,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               {/* HR */}
                               <td className="py-2 px-1 text-center">
                                 <input
-                                  type="number"
+                                  type="text"
                                   inputMode="numeric"
-                                  min="50"
-                                  max="220"
-                                  value={set.targetHr ?? 165}
-                                  onChange={(e) => updateSetField(idx, 'targetHr', parseInt(e.target.value, 10) || 165)}
+                                  pattern="[0-9]*"
+                                  placeholder="165"
+                                  value={set.targetHr !== undefined && set.targetHr !== null ? String(set.targetHr) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^[0-9]*$/.test(val)) {
+                                      updateSetField(idx, 'targetHr', val);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (set.targetHr === '' || set.targetHr === undefined || set.targetHr === null) {
+                                      updateSetField(idx, 'targetHr', 165);
+                                    } else {
+                                      const num = parseInt(String(set.targetHr), 10);
+                                      updateSetField(idx, 'targetHr', isNaN(num) ? 165 : num);
+                                    }
+                                  }}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>
@@ -645,13 +703,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               {/* Weight */}
                               <td className="py-2 px-1">
                                 <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  pattern="[0-9]*"
-                                  step="any"
-                                  min="0"
-                                  value={set.weightKg}
-                                  onChange={(e) => updateSetField(idx, 'weightKg', parseFloat(e.target.value) || 0)}
+                                  type="text"
+                                  inputMode="decimal"
+                                  pattern="[0-9.,]*"
+                                  placeholder="0"
+                                  value={set.weightKg !== undefined && set.weightKg !== null ? String(set.weightKg) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^[0-9]*[.,]?[0-9]*$/.test(val)) {
+                                      updateSetField(idx, 'weightKg', val);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (set.weightKg === '' || set.weightKg === undefined || set.weightKg === null) {
+                                      updateSetField(idx, 'weightKg', 0);
+                                    } else {
+                                      const num = parseFloat(String(set.weightKg).replace(',', '.'));
+                                      updateSetField(idx, 'weightKg', isNaN(num) ? 0 : num);
+                                    }
+                                  }}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>
@@ -659,12 +729,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               {/* Reps */}
                               <td className="py-2 px-1">
                                 <input
-                                  type="number"
+                                  type="text"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
-                                  min="1"
-                                  value={set.reps}
-                                  onChange={(e) => updateSetField(idx, 'reps', parseInt(e.target.value, 10) || 1)}
+                                  placeholder="1"
+                                  value={set.reps !== undefined && set.reps !== null ? String(set.reps) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^[0-9]*$/.test(val)) {
+                                      updateSetField(idx, 'reps', val);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (set.reps === '' || set.reps === undefined || set.reps === null) {
+                                      updateSetField(idx, 'reps', 1);
+                                    } else {
+                                      const num = parseInt(String(set.reps), 10);
+                                      updateSetField(idx, 'reps', isNaN(num) || num < 1 ? 1 : num);
+                                    }
+                                  }}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>
@@ -672,13 +755,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               {/* Editable RIR */}
                               <td className="py-2 px-1 text-center">
                                 <input
-                                  type="number"
+                                  type="text"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
-                                  min="0"
-                                  max="10"
-                                  value={set.rir !== undefined ? set.rir : 2}
-                                  onChange={(e) => updateSetField(idx, 'rir', parseInt(e.target.value, 10) || 0)}
+                                  placeholder="2"
+                                  value={set.rir !== undefined && set.rir !== null ? String(set.rir) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^[0-9]*$/.test(val)) {
+                                      updateSetField(idx, 'rir', val);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (set.rir === '' || set.rir === undefined || set.rir === null) {
+                                      updateSetField(idx, 'rir', 2);
+                                    } else {
+                                      const num = parseInt(String(set.rir), 10);
+                                      updateSetField(idx, 'rir', isNaN(num) ? 2 : num);
+                                    }
+                                  }}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>
@@ -686,13 +781,25 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               {/* Editable RPE */}
                               <td className="py-2 px-1 text-center">
                                 <input
-                                  type="number"
+                                  type="text"
                                   inputMode="decimal"
-                                  step="0.5"
-                                  min="1"
-                                  max="10"
-                                  value={set.rpe !== undefined ? set.rpe : 8}
-                                  onChange={(e) => updateSetField(idx, 'rpe', parseFloat(e.target.value) || 8)}
+                                  pattern="[0-9.,]*"
+                                  placeholder="8"
+                                  value={set.rpe !== undefined && set.rpe !== null ? String(set.rpe) : ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '' || /^[0-9]*[.,]?[0-9]*$/.test(val)) {
+                                      updateSetField(idx, 'rpe', val);
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (set.rpe === '' || set.rpe === undefined || set.rpe === null) {
+                                      updateSetField(idx, 'rpe', 8);
+                                    } else {
+                                      const num = parseFloat(String(set.rpe).replace(',', '.'));
+                                      updateSetField(idx, 'rpe', isNaN(num) ? 8 : num);
+                                    }
+                                  }}
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                                 />
                               </td>
@@ -772,7 +879,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                         Łączny tonaż serii:{' '}
                         <strong className="text-amber-400 font-mono-numbers">
                           {setsToLog
-                            .reduce((sum, s) => sum + (s.completed ? s.weightKg * s.reps : 0), 0)
+                            .reduce((sum, s) => {
+                              if (!s.completed) return sum;
+                              const w = typeof s.weightKg === 'string' ? parseFloat(s.weightKg.replace(',', '.')) || 0 : s.weightKg || 0;
+                              const r = typeof s.reps === 'string' ? parseInt(s.reps, 10) || 0 : s.reps || 0;
+                              return sum + w * r;
+                            }, 0)
                             .toLocaleString()}{' '}
                           {exUnit}
                         </strong>

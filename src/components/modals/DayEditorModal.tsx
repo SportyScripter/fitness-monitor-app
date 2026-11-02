@@ -1110,11 +1110,21 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                             <div>
                               <label className="text-[10px] text-neutral-400 block mb-0.5">Serie / Rundy:</label>
                               <input
-                                type="number"
-                                value={ex.plannedSets}
-                                onChange={(e) =>
-                                  handleUpdateExerciseField(ex.id, 'plannedSets', parseInt(e.target.value) || 1)
-                                }
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="1"
+                                value={ex.plannedSets !== undefined && ex.plannedSets !== null ? String(ex.plannedSets) : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^[0-9]*$/.test(val)) {
+                                    handleUpdateExerciseField(ex.id, 'plannedSets', val as any);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  const num = parseInt(String(ex.plannedSets || ''), 10);
+                                  handleUpdateExerciseField(ex.id, 'plannedSets', isNaN(num) || num < 1 ? 1 : num);
+                                }}
                                 className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>
@@ -1123,7 +1133,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                               <label className="text-[10px] text-neutral-400 block mb-0.5">Powt / Dystans:</label>
                               <input
                                 type="text"
-                                value={ex.targetRepsRange}
+                                value={ex.targetRepsRange || ''}
                                 onChange={(e) =>
                                   handleUpdateExerciseField(ex.id, 'targetRepsRange', e.target.value)
                                 }
@@ -1134,12 +1144,22 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                             <div>
                               <label className="text-[10px] text-neutral-400 block mb-0.5">Ciężar ({exUnit}):</label>
                               <input
-                                type="number"
-                                step="1"
-                                value={ex.defaultWeightKg}
-                                onChange={(e) =>
-                                  handleUpdateExerciseField(ex.id, 'defaultWeightKg', parseFloat(e.target.value) || 0)
-                                }
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9.,]*"
+                                placeholder="0"
+                                value={ex.defaultWeightKg !== undefined && ex.defaultWeightKg !== null ? String(ex.defaultWeightKg) : ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^[0-9]*[.,]?[0-9]*$/.test(val)) {
+                                    handleUpdateExerciseField(ex.id, 'defaultWeightKg', val as any);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  const val = String(ex.defaultWeightKg || '').replace(',', '.');
+                                  const num = parseFloat(val);
+                                  handleUpdateExerciseField(ex.id, 'defaultWeightKg', isNaN(num) ? 0 : num);
+                                }}
                                 className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded px-2 py-1 font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
                               />
                             </div>

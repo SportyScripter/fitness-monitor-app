@@ -786,8 +786,8 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
                         title="Kliknij, aby otworzyć szczegóły, edytować serie lub sprawdzić historię tego ćwiczenia"
                       >
                         <div>
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div>
+                          <div className="flex flex-row w-full items-start justify-between gap-2.5 mb-2">
+                            <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">
                                 <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
                                   #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim() || (exercise.category === 'cardio' ? 'Cardio / Bieg' : 'Ogólne')}
@@ -801,12 +801,12 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
                                   {exercise.unit || 'kg'}
                                 </span>
                               </div>
-                              <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
+                              <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors whitespace-normal break-words leading-snug">
                                 {exercise.name}
                               </h3>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => setActiveDetailExercise(exercise)}
                                 className="px-2.5 py-1 rounded-lg bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
