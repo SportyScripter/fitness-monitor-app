@@ -23,23 +23,127 @@ export const LOCAL_STORAGE_CYCLES_KEY = 'hyrox_training_cycles_list';
 export const LOCAL_STORAGE_ACTIVE_CYCLE_KEY = 'hyrox_active_cycle_id';
 export const LOCAL_STORAGE_LOGS_KEY = 'hyrox_workout_logs';
 export const LOCAL_STORAGE_RECOVERY_KEY = 'hyrox_recovery_history';
+const LOCAL_STORAGE_MIGRATED_PREFIX = 'hyrox_device_migrated_';
+
+export interface LocalTrainingData {
+  cycles: TrainingCycleCatalog[];
+  activeCycleId: string;
+  logs: WorkoutLogEntry[];
+  recovery: DailyRecoveryData[];
+  hasAnyData: boolean;
+  hasLogs: boolean;
+  hasCycles: boolean;
+}
+
+/**
+ * Safely inspects current localStorage contents without adding defaults or mutating storage.
+ */
+export function readLocalTrainingData(): LocalTrainingData {
+  let cycles: TrainingCycleCatalog[] = [];
+  let logs: WorkoutLogEntry[] = [];
+  let recovery: DailyRecoveryData[] = [];
+  let activeCycleId = '';
+
+  try {
+    const rawCycles = localStorage.getItem(LOCAL_STORAGE_CYCLES_KEY);
+    if (rawCycles) {
+      const parsed = JSON.parse(rawCycles);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        cycles = parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Błąd odczytu cykli z localStorage:', err);
+  }
+
+  try {
+    const rawActive = localStorage.getItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY);
+    if (rawActive && typeof rawActive === 'string') {
+      activeCycleId = rawActive;
+    }
+  } catch (err) {}
+
+  try {
+    const rawLogs = localStorage.getItem(LOCAL_STORAGE_LOGS_KEY);
+    if (rawLogs) {
+      const parsed = JSON.parse(rawLogs);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        logs = sanitizeAndDeduplicateLogs(parsed);
+      }
+    }
+  } catch (err) {
+    console.warn('Błąd odczytu logów z localStorage:', err);
+  }
+
+  try {
+    const rawRecovery = localStorage.getItem(LOCAL_STORAGE_RECOVERY_KEY);
+    if (rawRecovery) {
+      const parsed = JSON.parse(rawRecovery);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        recovery = parsed;
+      }
+    }
+  } catch (err) {}
+
+  if (!activeCycleId && cycles.length > 0) {
+    activeCycleId = cycles[0].id;
+  }
+
+  const hasLogs = logs.length > 0;
+  const hasCycles = cycles.length > 0;
+  const hasRecovery = recovery.length > 0;
+  const hasAnyData = hasLogs || hasCycles || hasRecovery;
+
+  return {
+    cycles,
+    activeCycleId,
+    logs,
+    recovery,
+    hasAnyData,
+    hasLogs,
+    hasCycles,
+  };
+}
+
+/**
+ * Check if this specific device has already been migrated / synced for this user
+ */
+export function isDeviceMigrated(userId: string): boolean {
+  try {
+    return localStorage.getItem(`${LOCAL_STORAGE_MIGRATED_PREFIX}${userId}`) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mark this specific device as migrated / synced for this user
+ */
+export function markDeviceMigrated(userId: string): void {
+  try {
+    localStorage.setItem(`${LOCAL_STORAGE_MIGRATED_PREFIX}${userId}`, 'true');
+  } catch (err) {
+    console.warn('Błąd zapisu flagi migracji na urządzeniu:', err);
+  }
+}
 
 export interface CloudSyncStatus {
   hasCloudData: boolean;
   cloudCyclesCount: number;
   cloudLogsCount: number;
+  cloudRecoveryCount: number;
   cloudCycles: TrainingCycleCatalog[];
   cloudActiveCycleId: string;
   cloudLogs: WorkoutLogEntry[];
   cloudRecovery: DailyRecoveryData[];
-  hasLocalData: boolean;
-  localCyclesCount: number;
-  localLogsCount: number;
+  isCloudMigrated: boolean;
+  localData: LocalTrainingData;
+  isDeviceMigrated: boolean;
 }
 
 /**
- * Check whether cloud contains data and whether local storage has data,
- * without silently modifying or deleting any local storage entries.
+ * Check whether cloud contains data and inspect local data snapshot.
+ * Safe and read-only: does not modify or delete any local storage or cloud entries.
  */
 export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncStatus> {
   const cyclesColRef = collection(db, 'users', userId, 'cycles');
@@ -65,52 +169,53 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       (d) => d.data() as DailyRecoveryData
     );
 
-    const hasCloudData = !cyclesSnap.empty || !logsSnap.empty;
+    const hasCloudData = cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0;
+    const isCloudMigrated = userDocSnap.exists() && userDocSnap.data()?.isMigrated === true;
+
     const activeCycleId =
       userDocSnap.exists() && userDocSnap.data()?.activeCycleId
         ? userDocSnap.data().activeCycleId
         : cloudCycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id;
 
-    // Check localStorage safely
-    let localCyclesCount = 0;
-    let localLogsCount = 0;
-    try {
-      const rawCycles = localStorage.getItem(LOCAL_STORAGE_CYCLES_KEY);
-      if (rawCycles) {
-        const parsed = JSON.parse(rawCycles);
-        localCyclesCount = Array.isArray(parsed) ? parsed.length : 0;
-      }
-      const rawLogs = localStorage.getItem(LOCAL_STORAGE_LOGS_KEY);
-      if (rawLogs) {
-        const parsed = JSON.parse(rawLogs);
-        localLogsCount = Array.isArray(parsed) ? parsed.length : 0;
-      }
-    } catch {
-      // ignore
-    }
-
-    const hasLocalData = localLogsCount > 0 || localCyclesCount > 0;
+    const localData = readLocalTrainingData();
+    const migratedOnDevice = isDeviceMigrated(userId);
 
     return {
       hasCloudData,
       cloudCyclesCount: cloudCycles.length,
       cloudLogsCount: cloudLogs.length,
+      cloudRecoveryCount: cloudRecovery.length,
       cloudCycles,
       cloudActiveCycleId: activeCycleId,
       cloudLogs: sanitizeAndDeduplicateLogs(cloudLogs),
       cloudRecovery,
-      hasLocalData,
-      localCyclesCount,
-      localLogsCount,
+      isCloudMigrated,
+      localData,
+      isDeviceMigrated: migratedOnDevice,
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `users/${userId}`);
+    // Fallback if network issue
+    const localData = readLocalTrainingData();
+    return {
+      hasCloudData: false,
+      cloudCyclesCount: 0,
+      cloudLogsCount: 0,
+      cloudRecoveryCount: 0,
+      cloudCycles: [],
+      cloudActiveCycleId: '',
+      cloudLogs: [],
+      cloudRecovery: [],
+      isCloudMigrated: false,
+      localData,
+      isDeviceMigrated: isDeviceMigrated(userId),
+    };
   }
 }
 
 /**
- * Upload local data to Cloud Firestore (Option 1: "Zachowaj i wyślij do chmury")
- * Merges/overwrites Firestore with the current local state.
+ * Upload local data to Cloud Firestore (Option 1: "Wyślij dane z telefonu do chmury")
+ * Strictly preserves local data and uploads it to Firestore.
  */
 export async function uploadLocalDataToCloud(
   userId: string,
@@ -123,12 +228,12 @@ export async function uploadLocalDataToCloud(
 ): Promise<void> {
   const userDocRef = doc(db, 'users', userId);
   try {
-    // 1. Update user document
+    // 1. Update user document with migration flag
     await setDoc(
       userDocRef,
       {
         userId,
-        activeCycleId: localData.activeCycleId,
+        activeCycleId: localData.activeCycleId || localData.cycles[0]?.id || DEFAULT_TRAINING_CYCLES[0].id,
         isMigrated: true,
         updatedAt: new Date().toISOString(),
       },
@@ -136,7 +241,8 @@ export async function uploadLocalDataToCloud(
     );
 
     // 2. Save cycles
-    for (const cycle of localData.cycles) {
+    const cyclesToSave = localData.cycles.length > 0 ? localData.cycles : DEFAULT_TRAINING_CYCLES;
+    for (const cycle of cyclesToSave) {
       await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cycle, { merge: true });
     }
 
@@ -154,7 +260,7 @@ export async function uploadLocalDataToCloud(
     }
 
     // 4. Save recovery
-    if (localData.recovery.length > 0) {
+    if (localData.recovery && localData.recovery.length > 0) {
       const batch = writeBatch(db);
       localData.recovery.forEach((rec: DailyRecoveryData) => {
         const recRef = doc(db, 'users', userId, 'recovery', rec.date);
@@ -163,9 +269,12 @@ export async function uploadLocalDataToCloud(
       await batch.commit();
     }
 
-    console.log('[Firestore] Dane lokalne pomyślnie wysłane do chmury.');
+    // 5. Mark migrated on device
+    markDeviceMigrated(userId);
+    console.log('[Firestore] Dane lokalne pomyślnie zmigrowane do chmury.');
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
+    throw error;
   }
 }
 
@@ -364,6 +473,7 @@ export async function fetchAllWorkoutLogsForExport(
     return sanitizeAndDeduplicateLogs(logs);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `users/${userId}/workout_logs`);
+    return [];
   }
 }
 

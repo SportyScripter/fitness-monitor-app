@@ -38,6 +38,13 @@ import {
   deleteWorkoutLogEntry,
   deleteWorkoutSessionLogs,
   saveRecoveryEntry,
+  markDeviceMigrated,
+  isDeviceMigrated,
+  readLocalTrainingData,
+  LOCAL_STORAGE_CYCLES_KEY,
+  LOCAL_STORAGE_ACTIVE_CYCLE_KEY,
+  LOCAL_STORAGE_LOGS_KEY,
+  LOCAL_STORAGE_RECOVERY_KEY,
   CloudSyncStatus
 } from './services/firestoreService';
 import { appendHyroxTrialToSheet } from './services/sheets';
@@ -261,7 +268,9 @@ export default function App() {
     }
   });
 
-  // Sync Conflict Modal State
+  // Sync Conflict & Initialization State
+  const [hasDataConflict, setHasDataConflict] = useState<boolean>(false);
+  const [isSyncInitialized, setIsSyncInitialized] = useState<boolean>(false);
   const [conflictModal, setConflictModal] = useState<{
     isOpen: boolean;
     cloudStatus: CloudSyncStatus | null;
@@ -274,42 +283,73 @@ export default function App() {
 
   const syncedUserRef = useRef<string | null>(null);
 
-  // Firestore On-Demand Sync & Realtime Subscriptions (No silent wiping!)
+  // Initial Sync & Migration Orchestration
+  // Enforces Rule 1 (local data priority when cloud is empty) and Rule 2 (hard stop on conflict)
   useEffect(() => {
     if (!user?.uid) {
       syncedUserRef.current = null;
+      setIsSyncInitialized(false);
+      setHasDataConflict(false);
+      setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
       return;
     }
 
     if (syncedUserRef.current === user.uid) return;
 
     let isMounted = true;
+    setIsDataLoading(true);
+
     checkCloudSyncStatus(user.uid)
-      .then((status) => {
+      .then(async (status) => {
         if (!isMounted || !status) return;
 
-        // Condition 1: Both local and cloud have data -> Show Conflict Modal
-        if (status.hasLocalData && status.hasCloudData) {
+        const { hasCloudData, isDeviceMigrated: deviceMigrated, localData } = status;
+        const hasLocalData = localData.hasAnyData;
+
+        // RULE 2: Wymuszenie Modala przy konflikcie (Twardy Stop):
+        // Jeśli chmura MA dane ORAZ localStorage MA dane (i brak flagi migracji na tym urządzeniu),
+        // funkcja musi natychmiast przerwać inicjalizację i ustawić stan hasDataConflict: true.
+        // Modal z wyborem MUSI fizycznie blokować interfejs. Aplikacja nie ma prawa dotknąć localStorage ani Firestore!
+        if (hasCloudData && hasLocalData && !deviceMigrated) {
+          console.warn('[Sync] Wykryto konflikt: dane na telefonie i w chmurze. Blokada interfejsu (Twardy Stop).');
+          setHasDataConflict(true);
           setConflictModal({
             isOpen: true,
             cloudStatus: status,
             isLoading: false,
           });
+          setIsDataLoading(false);
+          return; // STOP! Do not touch storage, do not attach listeners.
+        }
+
+        // RULE 1: Zakaz nadpisywania lokalnych danych przy pierwszym logowaniu:
+        // Jeśli Firestore jest pusty, a w localStorage znajdują się JAKIEKOLWIEK dane (cykle/logi),
+        // funkcja inicjalizująca musi BEZWZGLĘDNIE zapisać je do chmury.
+        // Wczytanie domyślnego planu (DEFAULT_TRAINING_CYCLES) może nastąpić TYLKO wtedy, gdy ZARÓWNO chmura, jak i localStorage są całkowicie puste.
+        if (!hasCloudData && hasLocalData) {
+          console.log('[Sync] Firestore pusty, wykryto dane lokalne. Zapisywanie danych z telefonu do chmury...');
+          const cyclesToUpload = localData.cycles.length > 0 ? localData.cycles : (cyclesList.length > 0 ? cyclesList : DEFAULT_TRAINING_CYCLES);
+          const activeIdToUpload = localData.activeCycleId || activeCycleId || cyclesToUpload[0].id;
+          const logsToUpload = localData.logs.length > 0 ? localData.logs : workoutLogs;
+          const recoveryToUpload = localData.recovery.length > 0 ? localData.recovery : recoveryHistory;
+
+          await uploadLocalDataToCloud(user.uid, {
+            cycles: cyclesToUpload,
+            activeCycleId: activeIdToUpload,
+            logs: logsToUpload,
+            recovery: recoveryToUpload,
+          });
+
+          markDeviceMigrated(user.uid);
+          syncedUserRef.current = user.uid;
+          setIsSyncInitialized(true);
+          setIsDataLoading(false);
           return;
         }
 
-        // Condition 2: Local has data, but cloud is empty -> upload local data to cloud
-        if (status.hasLocalData && !status.hasCloudData) {
-          uploadLocalDataToCloud(user.uid, {
-            cycles: cyclesList,
-            activeCycleId,
-            logs: workoutLogs,
-            recovery: recoveryHistory,
-          }).catch(console.warn);
-          syncedUserRef.current = user.uid;
-        }
-        // Condition 3: Local is empty, but cloud has data -> pull from cloud
-        else if (!status.hasLocalData && status.hasCloudData) {
+        // Case 3: Cloud has data, Local is empty (e.g. fresh phone/clean browser of existing user)
+        if (hasCloudData && !hasLocalData) {
+          console.log('[Sync] Pobieranie danych z konta chmurowego...');
           setCyclesList(status.cloudCycles);
           setActiveCycleId(status.cloudActiveCycleId);
           setWorkoutLogs(status.cloudLogs);
@@ -320,58 +360,123 @@ export default function App() {
             logs: status.cloudLogs,
             recovery: status.cloudRecovery,
           });
+          markDeviceMigrated(user.uid);
           syncedUserRef.current = user.uid;
-        } else {
+          setIsSyncInitialized(true);
+          setIsDataLoading(false);
+          return;
+        }
+
+        // Case 4: BOTH cloud AND localStorage are completely empty!
+        // TYLKO W TYM PRZYPADKU wczytujemy DEFAULT_TRAINING_CYCLES!
+        if (!hasCloudData && !hasLocalData) {
+          console.log('[Sync] Zarówno chmura jak i localStorage są puste. Wczytywanie domyślnego planu...');
+          const defaultCycles = DEFAULT_TRAINING_CYCLES;
+          const defaultActive = defaultCycles[0].id;
+          setCyclesList(defaultCycles);
+          setActiveCycleId(defaultActive);
+          applyCloudDataToLocalStorage({
+            cycles: defaultCycles,
+            activeCycleId: defaultActive,
+            logs: [],
+            recovery: [],
+          });
+          await uploadLocalDataToCloud(user.uid, {
+            cycles: defaultCycles,
+            activeCycleId: defaultActive,
+            logs: [],
+            recovery: [],
+          });
+          markDeviceMigrated(user.uid);
           syncedUserRef.current = user.uid;
+          setIsSyncInitialized(true);
+          setIsDataLoading(false);
+          return;
+        }
+
+        // Case 5: Already migrated on this device (deviceMigrated === true)
+        if (deviceMigrated) {
+          if (hasCloudData) {
+            setCyclesList(status.cloudCycles);
+            setActiveCycleId(status.cloudActiveCycleId);
+            setWorkoutLogs(status.cloudLogs);
+            setRecoveryHistory(status.cloudRecovery);
+          }
+          syncedUserRef.current = user.uid;
+          setIsSyncInitialized(true);
+          setIsDataLoading(false);
         }
       })
       .catch((err) => {
         console.warn('Błąd sprawdzania statusu chmury:', err);
+        setIsDataLoading(false);
       });
 
-    // Realtime listeners
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid]);
+
+  // Firestore Realtime Subscriptions
+  // Runs ONLY after initial sync / migration has completed and there is NO active conflict!
+  useEffect(() => {
+    if (!user?.uid || !isSyncInitialized || hasDataConflict) {
+      return;
+    }
+
     const unsubCycles = subscribeToCycles(user.uid, (cycles) => {
       if (cycles && cycles.length > 0) {
         setCyclesList(cycles);
         try {
-          localStorage.setItem('hyrox_training_cycles_list', JSON.stringify(cycles));
+          localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(cycles));
         } catch {}
       }
     });
+
     const unsubLogs = subscribeToWorkoutLogs(user.uid, (logs) => {
       setWorkoutLogs(logs);
       try {
-        localStorage.setItem('hyrox_workout_logs', JSON.stringify(logs));
+        localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(logs));
       } catch {}
     });
+
     const unsubRecovery = subscribeToRecovery(user.uid, (rec) => {
       setRecoveryHistory(rec);
       try {
-        localStorage.setItem('hyrox_recovery_history', JSON.stringify(rec));
+        localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(rec));
       } catch {}
     });
 
     return () => {
-      isMounted = false;
       unsubCycles();
       unsubLogs();
       unsubRecovery();
     };
-  }, [user?.uid]);
+  }, [user?.uid, isSyncInitialized, hasDataConflict]);
 
-  // Modal Action 1: "Zachowaj i wyślij do chmury"
+  // Modal Action 1: "Wyślij dane z telefonu do chmury"
   const handleKeepLocalAndUpload = async () => {
-    if (!user?.uid) return;
+    if (!user?.uid || !conflictModal.cloudStatus) return;
     try {
       setConflictModal((prev) => ({ ...prev, isLoading: true }));
+      const localData = conflictModal.cloudStatus.localData;
+      const cyclesToUpload = localData.cycles.length > 0 ? localData.cycles : cyclesList;
+      const activeIdToUpload = localData.activeCycleId || activeCycleId || cyclesToUpload[0]?.id;
+      const logsToUpload = localData.logs.length > 0 ? localData.logs : workoutLogs;
+      const recoveryToUpload = localData.recovery.length > 0 ? localData.recovery : recoveryHistory;
+
       await uploadLocalDataToCloud(user.uid, {
-        cycles: cyclesList,
-        activeCycleId,
-        logs: workoutLogs,
-        recovery: recoveryHistory,
+        cycles: cyclesToUpload,
+        activeCycleId: activeIdToUpload,
+        logs: logsToUpload,
+        recovery: recoveryToUpload,
       });
+
+      markDeviceMigrated(user.uid);
       syncedUserRef.current = user.uid;
+      setHasDataConflict(false);
       setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
+      setIsSyncInitialized(true);
     } catch (err) {
       console.error('Błąd wysyłania danych do chmury:', err);
       setConflictModal((prev) => ({ ...prev, isLoading: false }));
@@ -379,8 +484,10 @@ export default function App() {
   };
 
   // Modal Action 2: "Pobierz stan z chmury"
-  const handleDownloadCloudAndOverwrite = () => {
-    if (conflictModal.cloudStatus) {
+  const handleDownloadCloudAndOverwrite = async () => {
+    if (!user?.uid || !conflictModal.cloudStatus) return;
+    try {
+      setConflictModal((prev) => ({ ...prev, isLoading: true }));
       const status = conflictModal.cloudStatus;
       setCyclesList(status.cloudCycles);
       setActiveCycleId(status.cloudActiveCycleId);
@@ -392,9 +499,15 @@ export default function App() {
         logs: status.cloudLogs,
         recovery: status.cloudRecovery,
       });
+      markDeviceMigrated(user.uid);
+      syncedUserRef.current = user.uid;
+      setHasDataConflict(false);
+      setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
+      setIsSyncInitialized(true);
+    } catch (err) {
+      console.error('Błąd pobierania danych z chmury:', err);
+      setConflictModal((prev) => ({ ...prev, isLoading: false }));
     }
-    if (user?.uid) syncedUserRef.current = user.uid;
-    setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
   };
 
   // Modals & Drawers
@@ -1359,14 +1472,13 @@ export default function App() {
             onClose={() => setIsTimerOpen(false)}
           />
 
-          {/* Cloud Sync Conflict Resolution Modal */}
-          {conflictModal.cloudStatus && (
+          {/* Cloud Sync Conflict Resolution Modal - Physical UI Blocking */}
+          {hasDataConflict && conflictModal.cloudStatus && (
             <SyncConflictModal
-              isOpen={conflictModal.isOpen}
-              onClose={() => setConflictModal((prev) => ({ ...prev, isOpen: false }))}
+              isOpen={hasDataConflict}
               localStats={{
-                cyclesCount: conflictModal.cloudStatus.localCyclesCount,
-                logsCount: conflictModal.cloudStatus.localLogsCount,
+                cyclesCount: conflictModal.cloudStatus.localData.cycles.length,
+                logsCount: conflictModal.cloudStatus.localData.logs.length,
               }}
               cloudStats={{
                 cyclesCount: conflictModal.cloudStatus.cloudCyclesCount,
