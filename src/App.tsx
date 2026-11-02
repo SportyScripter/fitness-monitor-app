@@ -21,8 +21,23 @@ import { RestTimer } from './components/features/RestTimer';
 import { TrainingCatalogSidebar } from './components/layout/TrainingCatalogSidebar';
 import { AddWeekModal } from './components/modals/AddWeekModal';
 import { SummaryCalendarView } from './components/views/SummaryCalendarView';
-import { initAuth, googleSignIn, logout } from './services/auth';
+import { LoginView } from './components/auth/LoginView';
+import { useAuth } from './context/AuthContext';
+import {
+  initializeUserData,
+  subscribeToCycles,
+  subscribeToWorkoutLogs,
+  subscribeToRecovery,
+  saveCycleToFirestore,
+  deleteCycleFromFirestore,
+  saveActiveCycleId,
+  saveWorkoutLogsBatch,
+  deleteWorkoutLogEntry,
+  deleteWorkoutSessionLogs,
+  saveRecoveryEntry
+} from './services/firestoreService';
 import { appendHyroxTrialToSheet } from './services/sheets';
+import { Dumbbell } from 'lucide-react';
 import {
   WorkoutDay,
   WorkoutLogEntry,
@@ -142,6 +157,8 @@ export const sanitizeAndDeduplicateLogs = (logs: WorkoutLogEntry[]): WorkoutLogE
 export const deduplicateWorkoutLogs = sanitizeAndDeduplicateLogs;
 
 export default function App() {
+  const { user, loading: isAuthLoading, signIn: handleGoogleSignIn, signOut: handleGoogleSignOut } = useAuth();
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
 
   useEffect(() => {
@@ -155,51 +172,11 @@ export default function App() {
     }
   }, [theme]);
 
-  // Training Cycles List (Masa 2026, Przygotowania pod HYROX, Redukcja, etc.)
-  const [cyclesList, setCyclesList] = useState<TrainingCycleCatalog[]>(() => {
-    try {
-      const saved = localStorage.getItem('hyrox_training_cycles_list');
-      if (saved) {
-        const parsed: TrainingCycleCatalog[] = JSON.parse(saved);
-        // Heal preset cycles with missing weeks in weeksPlansMap, and heal day IDs per week
-        return parsed.map((cycle) => {
-          const defaultPreset = DEFAULT_TRAINING_CYCLES.find((d) => d.id === cycle.id);
-          const rawMap = defaultPreset && defaultPreset.weeksPlansMap
-            ? { ...defaultPreset.weeksPlansMap, ...(cycle.weeksPlansMap || {}) }
-            : (cycle.weeksPlansMap || {});
-
-          const healedMap: Record<number, WorkoutDay[]> = {};
-          Object.entries(rawMap).forEach(([wStr, days]) => {
-            const wNum = parseInt(wStr, 10);
-            if (Array.isArray(days)) {
-              healedMap[wNum] = days.map((d, idx) => ({
-                ...d,
-                id: d.id && d.id.startsWith(`w${wNum}-`) ? d.id : `w${wNum}-${d.dayNumber || idx + 1}-${d.id || 'day'}`,
-              }));
-            }
-          });
-
-          return {
-            ...cycle,
-            weeksPlansMap: healedMap,
-          };
-        });
-      }
-      return DEFAULT_TRAINING_CYCLES;
-    } catch {
-      return DEFAULT_TRAINING_CYCLES;
-    }
-  });
+  // Training Cycles List (Cloud First)
+  const [cyclesList, setCyclesList] = useState<TrainingCycleCatalog[]>(DEFAULT_TRAINING_CYCLES);
 
   // Active Selected Cycle ID
-  const [activeCycleId, setActiveCycleId] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('hyrox_active_cycle_id');
-      return saved || DEFAULT_TRAINING_CYCLES[0].id;
-    } catch {
-      return DEFAULT_TRAINING_CYCLES[0].id;
-    }
-  });
+  const [activeCycleId, setActiveCycleId] = useState<string>(DEFAULT_TRAINING_CYCLES[0].id);
 
   const activeCycle = cyclesList.find((c) => c.id === activeCycleId) || cyclesList[0] || DEFAULT_TRAINING_CYCLES[0];
   const currentWeek = activeCycle.currentWeek || 1;
@@ -210,8 +187,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<MainNavTab>('workout');
   const [moreSubView, setMoreSubView] = useState<MoreSubView>(null);
   const [selectedDayId, setSelectedDayId] = useState<string>('');
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(() => {
     try {
@@ -221,31 +196,50 @@ export default function App() {
     }
   });
 
-  // Local workout logs with automatic healing of duplicates
-  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>(() => {
-    try {
-      const saved = localStorage.getItem('hyrox_workout_logs');
-      if (!saved) return [];
-      const parsed: WorkoutLogEntry[] = JSON.parse(saved);
-      const deduplicated = sanitizeAndDeduplicateLogs(parsed);
-      if (deduplicated.length !== parsed.length) {
-        localStorage.setItem('hyrox_workout_logs', JSON.stringify(deduplicated));
-      }
-      return deduplicated;
-    } catch {
-      return [];
-    }
-  });
+  // Workout logs from Cloud Firestore
+  const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>([]);
 
-  // Recovery logs
-  const [recoveryHistory, setRecoveryHistory] = useState<DailyRecoveryData[]>(() => {
-    try {
-      const saved = localStorage.getItem('hyrox_recovery_history');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Recovery logs from Cloud Firestore
+  const [recoveryHistory, setRecoveryHistory] = useState<DailyRecoveryData[]>([]);
+
+  // Initial Data Fetch & Firestore Real-time Subscriptions (Cloud-First + Auto-Migration)
+  useEffect(() => {
+    if (!user?.uid) return;
+    let isMounted = true;
+    setIsDataLoading(true);
+
+    initializeUserData(user.uid)
+      .then((data) => {
+        if (!isMounted) return;
+        setCyclesList(data.cycles);
+        setActiveCycleId(data.activeCycleId);
+        setWorkoutLogs(data.workoutLogs);
+        setRecoveryHistory(data.recoveryHistory);
+        setIsDataLoading(false);
+      })
+      .catch((err) => {
+        console.error('Błąd inicjalizacji danych użytkownika z Firestore:', err);
+        if (isMounted) setIsDataLoading(false);
+      });
+
+    // Realtime listeners
+    const unsubCycles = subscribeToCycles(user.uid, (cycles) => {
+      if (cycles && cycles.length > 0) setCyclesList(cycles);
+    });
+    const unsubLogs = subscribeToWorkoutLogs(user.uid, (logs) => {
+      setWorkoutLogs(logs);
+    });
+    const unsubRecovery = subscribeToRecovery(user.uid, (rec) => {
+      setRecoveryHistory(rec);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubCycles();
+      unsubLogs();
+      unsubRecovery();
+    };
+  }, [user?.uid]);
 
   // Modals & Drawers
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDay | null>(null);
@@ -259,20 +253,22 @@ export default function App() {
   // Helper to persist updated cycles
   const persistCycles = (updatedCycles: TrainingCycleCatalog[]) => {
     setCyclesList(updatedCycles);
-    try {
-      localStorage.setItem('hyrox_training_cycles_list', JSON.stringify(updatedCycles));
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      updatedCycles.forEach((c) => {
+        saveCycleToFirestore(user.uid, c).catch((err) =>
+          console.warn('Błąd zapisu cyklu do Firestore:', err)
+        );
+      });
     }
   };
 
   // Select another cycle as active - immediately switches to "Trening" and finds next uncompleted day
   const handleSelectCycle = (cycleId: string) => {
     setActiveCycleId(cycleId);
-    try {
-      localStorage.setItem('hyrox_active_cycle_id', cycleId);
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      saveActiveCycleId(user.uid, cycleId).catch((err) =>
+        console.warn('Błąd zapisu aktywnego cyklu do Firestore:', err)
+      );
     }
 
     const selectedCycle = cyclesList.find((c) => c.id === cycleId) || cyclesList[0];
@@ -321,21 +317,31 @@ export default function App() {
   // Create new cycle
   const handleCreateCycle = (newCycle: TrainingCycleCatalog) => {
     const updated = [...cyclesList, newCycle];
-    persistCycles(updated);
+    setCyclesList(updated);
+    if (user?.uid) {
+      saveCycleToFirestore(user.uid, newCycle).catch(console.warn);
+      saveActiveCycleId(user.uid, newCycle.id).catch(console.warn);
+    }
     handleSelectCycle(newCycle.id);
   };
 
   // Update existing cycle
   const handleUpdateCycle = (updatedCycle: TrainingCycleCatalog) => {
     const updated = cyclesList.map((c) => (c.id === updatedCycle.id ? updatedCycle : c));
-    persistCycles(updated);
+    setCyclesList(updated);
+    if (user?.uid) {
+      saveCycleToFirestore(user.uid, updatedCycle).catch(console.warn);
+    }
   };
 
   // Delete cycle
   const handleDeleteCycle = (cycleId: string) => {
     if (cyclesList.length <= 1) return;
     const updated = cyclesList.filter((c) => c.id !== cycleId);
-    persistCycles(updated);
+    setCyclesList(updated);
+    if (user?.uid) {
+      deleteCycleFromFirestore(user.uid, cycleId).catch(console.warn);
+    }
     if (activeCycleId === cycleId) {
       handleSelectCycle(updated[0].id);
     }
@@ -879,47 +885,6 @@ export default function App() {
     handleUpdateCycle(updatedCycle);
   };
 
-  // Auth initialization
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (authenticatedUser) => {
-        setUser(authenticatedUser);
-        setIsAuthLoading(false);
-      },
-      () => {
-        setUser(null);
-        setIsAuthLoading(false);
-      }
-    );
-
-    return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
-  }, []);
-
-  // Google sign in / sign out
-  const handleGoogleSignIn = async () => {
-    try {
-      const res = await googleSignIn();
-      if (res) {
-        setUser(res.user);
-      }
-    } catch (err: any) {
-      console.error('Błąd logowania Google:', err);
-    }
-  };
-
-  const handleGoogleSignOut = async () => {
-    try {
-      await logout();
-      setUser(null);
-    } catch (err: any) {
-      console.error('Błąd wylogowania:', err);
-    }
-  };
-
   // Link spreadsheet
   const handleSpreadsheetLinked = (id: string) => {
     setSpreadsheetId(id);
@@ -930,16 +895,14 @@ export default function App() {
     }
   };
 
-  // Save workout logs with deduplication to prevent set explosion on re-runs
+  // Save workout logs with deduplication and write to Firestore
   const handleSaveLogs = (newEntries: WorkoutLogEntry[]) => {
     if (!newEntries || newEntries.length === 0) return;
     const combined = [...workoutLogs, ...newEntries];
     const updated = deduplicateWorkoutLogs(combined);
     setWorkoutLogs(updated);
-    try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      saveWorkoutLogsBatch(user.uid, newEntries).catch(console.warn);
     }
   };
 
@@ -947,15 +910,14 @@ export default function App() {
   const handleDeleteWorkoutLogEntry = (logId: string) => {
     const updated = workoutLogs.filter((l) => l.id !== logId);
     setWorkoutLogs(updated);
-    try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      deleteWorkoutLogEntry(user.uid, logId).catch(console.warn);
     }
   };
 
   // Delete entire workout session
   const handleDeleteWorkoutSession = (sessionId: string, dateStr: string) => {
+    const currentSnapshot = [...workoutLogs];
     const updated = workoutLogs.filter((l) => {
       const matchSession = l.sessionId === sessionId;
       const matchFallback =
@@ -965,10 +927,8 @@ export default function App() {
       return !matchSession && !matchFallback;
     });
     setWorkoutLogs(updated);
-    try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      deleteWorkoutSessionLogs(user.uid, sessionId, dateStr, currentSnapshot).catch(console.warn);
     }
   };
 
@@ -989,16 +949,44 @@ export default function App() {
     }
   };
 
-  // Save recovery data
+  // Save recovery data to Firestore
   const handleSaveRecovery = (data: DailyRecoveryData) => {
     const updated = [data, ...recoveryHistory.filter((x) => x.date !== data.date)];
     setRecoveryHistory(updated);
-    try {
-      localStorage.setItem('hyrox_recovery_history', JSON.stringify(updated));
-    } catch (e) {
-      console.warn(e);
+    if (user?.uid) {
+      saveRecoveryEntry(user.uid, data).catch(console.warn);
     }
   };
+
+  // --- Auth Wall: Block unauthenticated users completely ---
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen w-full bg-neutral-950 flex flex-col items-center justify-center p-6 text-white">
+        <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center text-neutral-950 shadow-lg shadow-amber-400/20 mb-4 animate-pulse">
+          <Dumbbell className="w-6 h-6 stroke-[2.4]" />
+        </div>
+        <p className="text-xs uppercase font-bold text-neutral-400 tracking-wider">
+          Inicjalizacja autoryzacji...
+        </p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView />;
+  }
+
+  if (isDataLoading) {
+    return (
+      <div className="min-h-screen w-full bg-neutral-950 flex flex-col items-center justify-center p-6 text-white text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center text-neutral-950 shadow-lg shadow-amber-400/20 mb-4 animate-spin">
+          <Dumbbell className="w-6 h-6 stroke-[2.4]" />
+        </div>
+        <p className="text-base font-bold text-white mb-1">Synchronizacja z Cloud Firestore</p>
+        <p className="text-xs text-neutral-400">Pobieranie Twoich cykli i historii treningów z chmury...</p>
+      </div>
+    );
+  }
 
   return (
     <div

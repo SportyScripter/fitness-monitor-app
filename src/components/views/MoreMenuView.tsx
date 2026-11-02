@@ -15,9 +15,12 @@ import {
   Calendar,
   LogOut,
   Dumbbell,
-  Scale
+  Scale,
+  Download,
+  Check
 } from 'lucide-react';
 import { User } from 'firebase/auth';
+import { downloadWorkoutDataCSV } from '../../utils/exportUtils';
 import {
   WorkoutLogEntry,
   DailyRecoveryData,
@@ -82,6 +85,23 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
   subView,
   onSubViewChange,
 }) => {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  const handleExportData = () => {
+    try {
+      setIsExporting(true);
+      downloadWorkoutDataCSV(workoutLogs);
+      setExportNotice('✓ Pomyślnie wygenerowano plik CSV!');
+      setTimeout(() => setExportNotice(null), 4000);
+    } catch (err) {
+      console.error('Błąd eksportu danych:', err);
+      setExportNotice('Nie udało się wyeksportować danych.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // Navigation menu items
   const menuItems = [
     {
@@ -366,6 +386,41 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
             <p className="text-[10px] text-neutral-400 mt-0.5">
               {isTimerOpen ? 'Aktywny na ekranie' : 'Otwórz timer'}
             </p>
+          </button>
+        </div>
+
+        {/* Excel / CSV Export Button */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={handleExportData}
+            disabled={isExporting}
+            className="w-full p-4 rounded-3xl bg-neutral-900 border border-neutral-800 hover:border-amber-400/50 hover:bg-neutral-900/90 transition-all text-left flex items-center justify-between gap-3 cursor-pointer group shadow-sm touch-manipulation active:scale-[0.99] disabled:opacity-50"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-2xl border transition-transform group-hover:scale-105 shrink-0 bg-amber-400/10 text-amber-400 border-amber-400/20">
+                <Download className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
+                    Pobierz moje dane (Excel)
+                  </h4>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-neutral-950 text-neutral-400 font-bold border border-neutral-800">
+                    CSV / Excel
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  {exportNotice
+                    ? exportNotice
+                    : `Eksportuj pełną historię ${workoutLogs.length} serii i ćwiczeń do arkusza`}
+                </p>
+              </div>
+            </div>
+
+            <div className="px-3 py-1.5 rounded-xl bg-neutral-800 group-hover:bg-amber-400 group-hover:text-black text-neutral-300 text-xs font-bold transition-all shrink-0">
+              Pobierz .csv
+            </div>
           </button>
         </div>
       </div>

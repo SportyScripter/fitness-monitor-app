@@ -1,5 +1,5 @@
 /**
- * Utilities for local date string formatting and comparison
+ * Utilities for local date string formatting, comparison, and deduplication
  * Prevents UTC off-by-one errors (e.g. 10-17 instead of 10-18 in European timezones)
  */
 
@@ -50,3 +50,28 @@ export const compareLogsDescending = (
 
   return (a.setNumber || 1) - (b.setNumber || 1);
 };
+
+export function sanitizeAndDeduplicateLogs<T extends { timestamp?: string; dateStr?: string; exerciseName?: string; setNumber?: number }>(
+  logs: T[]
+): T[] {
+  if (!Array.isArray(logs) || logs.length === 0) return [];
+
+  const sorted = [...logs].sort((a, b) => {
+    const tA = a.timestamp || a.dateStr || '';
+    const tB = b.timestamp || b.dateStr || '';
+    return tA.localeCompare(tB);
+  });
+
+  const map = new Map<string, T>();
+
+  sorted.forEach((log) => {
+    const date = extractLogDate(log);
+    const exNorm = (log.exerciseName || '').trim().toLowerCase();
+    const setNum = log.setNumber || 1;
+
+    const key = `${date}___${exNorm}___set${setNum}`;
+    map.set(key, { ...log, dateStr: date });
+  });
+
+  return Array.from(map.values());
+}

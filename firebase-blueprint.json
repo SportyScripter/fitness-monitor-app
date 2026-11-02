@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile settings, active cycle ID and migration metadata",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "activeCycleId": { "type": "string", "maxLength": 128 },
+        "theme": { "type": "string", "enum": ["dark", "light"] },
+        "isMigrated": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["userId"]
+    },
+    "TrainingCycle": {
+      "title": "TrainingCycle",
+      "description": "A mesocycle plan including weeks and workout days",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "goal": { "type": "string", "maxLength": 64 },
+        "currentWeek": { "type": "number" },
+        "totalWeeks": { "type": "number" },
+        "weeksList": { "type": "array" },
+        "weeksPlansMap": { "type": "object" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "WorkoutLog": {
+      "title": "WorkoutLog",
+      "description": "Logged workout set entry with weight, reps, RIR/RPE and cardio telemetry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "dayId": { "type": "string", "maxLength": 128 },
+        "dayTitle": { "type": "string", "maxLength": 128 },
+        "exerciseName": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "muscleGroup": { "type": "string", "maxLength": 64 },
+        "setNumber": { "type": "number" },
+        "weightKg": { "type": "number" },
+        "reps": { "type": "number" },
+        "rir": { "type": "number" },
+        "rpe": { "type": "number" },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "dateStr": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "userId", "exerciseName", "setNumber"]
+    },
+    "DailyRecovery": {
+      "title": "DailyRecovery",
+      "description": "Daily wellness and readiness metrics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 64 },
+        "sleepHours": { "type": "number" },
+        "soreness": { "type": "number" },
+        "stress": { "type": "number" },
+        "energy": { "type": "number" }
+      },
+      "required": ["id", "userId", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document storing active preferences"
+    },
+    "/users/{userId}/cycles/{cycleId}": {
+      "schema": "TrainingCycle",
+      "description": "User mesocycles and week plans"
+    },
+    "/users/{userId}/workout_logs/{logId}": {
+      "schema": "WorkoutLog",
+      "description": "Logged workout sets and history"
+    },
+    "/users/{userId}/recovery/{recoveryId}": {
+      "schema": "DailyRecovery",
+      "description": "Daily recovery score and subjective metrics"
+    }
+  }
+}
