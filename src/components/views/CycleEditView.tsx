@@ -25,7 +25,9 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  DragStartEvent,
+  DragEndEvent,
+  DragOverlay
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -77,61 +79,57 @@ interface CycleEditViewProps {
   workoutLogs?: WorkoutLogEntry[];
 }
 
-interface SortableDayTileProps {
+interface DayTileCardProps {
   day: WorkoutDay;
   index: number;
-  isSelected: boolean;
-  onSelect: () => void;
+  isSelected?: boolean;
+  isDragging?: boolean;
+  isOverlay?: boolean;
+  onClick?: () => void;
 }
 
-const SortableDayTile: React.FC<SortableDayTileProps> = ({
+export const DayTileCard: React.FC<DayTileCardProps> = ({
   day,
   index,
-  isSelected,
-  onSelect,
+  isSelected = false,
+  isDragging = false,
+  isOverlay = false,
+  onClick,
 }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: day.id });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 50 : undefined,
-    opacity: isDragging ? 0.75 : 1,
-  };
-
   const dynamicDayNumber = index + 1;
+
+  // Placeholder rendered in the list in place of the dragged element
+  if (isDragging && !isOverlay) {
+    return (
+      <div
+        className="w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-amber-400/60 bg-neutral-900/40 opacity-30 min-h-[74px] transition-all select-none touch-none"
+        aria-hidden="true"
+        style={{ touchAction: 'none' }}
+      />
+    );
+  }
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      onClick={onSelect}
-      className={`p-2.5 rounded-2xl text-left border transition-all cursor-grab active:cursor-grabbing whitespace-nowrap shrink-0 touch-manipulation min-w-[125px] select-none ${
-        isDragging
-          ? 'shadow-2xl ring-2 ring-amber-400 scale-105 bg-neutral-900 border-amber-400'
+      onClick={onClick}
+      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none touch-none ${
+        isOverlay
+          ? 'bg-neutral-900 dark:bg-neutral-900 border-2 border-amber-400 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/50 scale-105 z-50 cursor-grabbing opacity-100 pointer-events-none'
           : isSelected
-          ? 'bg-neutral-900 border-amber-400 shadow-md ring-1 ring-amber-400'
-          : 'bg-neutral-950/80 border-neutral-800 hover:border-neutral-700'
+          ? 'bg-neutral-900 border-amber-400 shadow-md ring-1 ring-amber-400 cursor-grab active:cursor-grabbing'
+          : 'bg-neutral-950/90 border border-neutral-800 hover:border-neutral-700 cursor-grab active:cursor-grabbing'
       }`}
+      style={{ touchAction: 'none' }}
     >
       <div className="flex items-center justify-between gap-1 mb-1">
         <div className="flex items-center gap-1">
-          <GripVertical className="w-3 h-3 text-neutral-500 opacity-60 shrink-0" />
+          <GripVertical className="w-3.5 h-3.5 text-neutral-400 opacity-70 shrink-0" />
           <span className="text-[10px] uppercase font-bold text-neutral-400">
             Dzień {dynamicDayNumber}
           </span>
         </div>
         <span
-          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold ${
+          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold shrink-0 ${
             day.type === 'FBW'
               ? 'bg-amber-400 text-black'
               : day.type === 'RUNNING_HIIT'
@@ -160,6 +158,53 @@ const SortableDayTile: React.FC<SortableDayTileProps> = ({
       <div className="text-[10px] text-neutral-400 truncate max-w-[110px]">
         {day.exercises?.length || 0} ćwiczeń
       </div>
+    </div>
+  );
+};
+
+interface SortableDayTileProps {
+  day: WorkoutDay;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+const SortableDayTile: React.FC<SortableDayTileProps> = ({
+  day,
+  index,
+  isSelected,
+  onSelect,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: day.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    touchAction: 'none',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="shrink-0 flex-shrink-0 touch-none"
+    >
+      <DayTileCard
+        day={day}
+        index={index}
+        isSelected={isSelected}
+        isDragging={isDragging}
+        onClick={onSelect}
+      />
     </div>
   );
 };
@@ -462,7 +507,21 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
     }
   };
 
+  const [activeDayId, setActiveDayId] = useState<string | null>(null);
+
+  const activeDay = activeDayId
+    ? currentWeekDays.find((d) => d && d.id === activeDayId) || null
+    : null;
+  const activeDayIndex = activeDay
+    ? currentWeekDays.findIndex((d) => d && d.id === activeDay.id)
+    : -1;
+
+  const handleDayDragStart = (event: DragStartEvent) => {
+    setActiveDayId(String(event.active.id));
+  };
+
   const handleDayDragEnd = (event: DragEndEvent) => {
+    setActiveDayId(null);
     const { active, over } = event;
     if (!over || active.id === over.id || !currentWeekDays) return;
 
@@ -473,6 +532,10 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
       const reordered = arrayMove(currentWeekDays, oldIndex, newIndex);
       onReorderDays?.(reordered);
     }
+  };
+
+  const handleDayDragCancel = () => {
+    setActiveDayId(null);
   };
 
   const handleMoveExercise = (fromIndex: number, direction: 'up' | 'down') => {
@@ -811,17 +874,28 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
           </button>
         </div>
 
-        {/* Horizontal Day Chips with touch-friendly size and drag-and-drop reordering */}
+        {/* Horizontal Day Chips with touch-friendly size, DragOverlay and edge-only auto-scroll */}
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDayDragStart}
           onDragEnd={handleDayDragEnd}
+          onDragCancel={handleDayDragCancel}
+          autoScroll={{
+            threshold: {
+              x: 0.18, // Auto-scroll activates only when within 18% of the left or right edges
+              y: 0.2,
+            },
+            acceleration: 4,
+            interval: 10,
+            layoutShiftCompensation: false,
+          }}
         >
           <SortableContext
             items={currentWeekDays.map((d) => d.id)}
             strategy={horizontalListSortingStrategy}
           >
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-none">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-none select-none">
               {currentWeekDays.map((day, index) => {
                 const isSelected = selectedDay && selectedDay.id === day.id;
                 return (
@@ -836,6 +910,23 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
               })}
             </div>
           </SortableContext>
+
+          <DragOverlay
+            zIndex={100}
+            dropAnimation={{
+              duration: 180,
+              easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+            }}
+          >
+            {activeDay && activeDayIndex !== -1 ? (
+              <DayTileCard
+                day={activeDay}
+                index={activeDayIndex}
+                isSelected={selectedDay?.id === activeDay.id}
+                isOverlay
+              />
+            ) : null}
+          </DragOverlay>
         </DndContext>
       </div>
 
