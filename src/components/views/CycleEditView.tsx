@@ -113,7 +113,7 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none ${
+      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none overflow-hidden ${
         isOverlay
           ? 'bg-neutral-900 dark:bg-neutral-900 border-2 border-amber-400 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/50 scale-105 z-50 cursor-grabbing opacity-100 pointer-events-none touch-none'
           : isDragging

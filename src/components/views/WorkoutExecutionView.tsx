@@ -409,7 +409,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
               <button
                 key={day.id}
                 onClick={() => onSelectDayId(day.id)}
-                className={`flex-1 min-w-[95px] sm:min-w-[110px] p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative shrink-0 ${
+                className={`w-32 min-w-[124px] max-w-[136px] flex-shrink-0 shrink-0 p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none ${
                   isSelected
                     ? isCompleted
                       ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
@@ -423,10 +423,10 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 title={day.title}
               >
                 {/* Top Row: Day indicator (e.g. D1) with completion status + colored type badge */}
-                <div className="flex items-center justify-between w-full gap-1 mb-1">
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center justify-between w-full gap-1 mb-1 min-w-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <span
-                      className={`text-[10px] font-bold uppercase tracking-wider ${
+                      className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
                         isSelected
                           ? 'text-black'
                           : isCompleted
@@ -459,7 +459,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                   </div>
 
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide leading-none shrink-0 ${
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 truncate max-w-[68px] text-center ${
                       isSelected
                         ? 'bg-black text-amber-400 shadow-sm'
                         : day.type === 'FBW'
