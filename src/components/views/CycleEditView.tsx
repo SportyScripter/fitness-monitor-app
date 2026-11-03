@@ -21,6 +21,7 @@ import {
 import {
   DndContext,
   closestCenter,
+  MouseSensor,
   PointerSensor,
   TouchSensor,
   useSensor,
@@ -112,14 +113,16 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none touch-none ${
+      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none ${
         isOverlay
-          ? 'bg-neutral-900 dark:bg-neutral-900 border-2 border-amber-400 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/50 scale-105 z-50 cursor-grabbing opacity-100 pointer-events-none'
+          ? 'bg-neutral-900 dark:bg-neutral-900 border-2 border-amber-400 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/50 scale-105 z-50 cursor-grabbing opacity-100 pointer-events-none touch-none'
+          : isDragging
+          ? 'touch-none opacity-30'
           : isSelected
           ? 'bg-neutral-900 border-amber-400 shadow-md ring-1 ring-amber-400 cursor-grab active:cursor-grabbing'
           : 'bg-neutral-950/90 border border-neutral-800 hover:border-neutral-700 cursor-grab active:cursor-grabbing'
       }`}
-      style={{ touchAction: 'none' }}
+      style={{ touchAction: isOverlay || isDragging ? 'none' : 'pan-x' }}
     >
       <div className="flex items-center justify-between gap-1 mb-1">
         <div className="flex items-center gap-1">
@@ -187,7 +190,7 @@ const SortableDayTile: React.FC<SortableDayTileProps> = ({
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     transition,
-    touchAction: 'none',
+    touchAction: isDragging ? 'none' : 'pan-x',
   };
 
   return (
@@ -196,7 +199,7 @@ const SortableDayTile: React.FC<SortableDayTileProps> = ({
       style={style}
       {...attributes}
       {...listeners}
-      className="shrink-0 flex-shrink-0 touch-none"
+      className={`shrink-0 flex-shrink-0 ${isDragging ? 'touch-none' : ''}`}
     >
       <DayTileCard
         day={day}
@@ -476,16 +479,25 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
     setIsEditingWeekParams(false);
   };
 
-  // DND-Kit Sensors for touch and mouse
+  // DND-Kit Sensors:
+  // - MouseSensor: Instant activation for desktop mouse (distance: 8px, zero delay)
+  // - TouchSensor & PointerSensor: Long-press for mobile touch (delay: 250ms, tolerance: 5px)
+  //   Allows fast swipes/flicks to scroll the horizontal days list without accidentally picking up tiles.
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 8,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 150,
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 250,
         tolerance: 5,
       },
     })

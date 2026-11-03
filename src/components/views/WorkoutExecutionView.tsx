@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Play,
   Flame,
@@ -96,6 +96,85 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
   const selectedDay =
     currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
+
+  // Session Progress Calculation: total planned sets vs completed sets in active session / logs
+  const { totalPlannedSets, completedSetsCount, completionPercentage } = useMemo(() => {
+    if (!selectedDay || !Array.isArray(selectedDay.exercises) || selectedDay.exercises.length === 0) {
+      return { totalPlannedSets: 0, completedSetsCount: 0, completionPercentage: 0 };
+    }
+
+    const totalPlanned = selectedDay.exercises.reduce((sum, ex) => {
+      const setsCount = Array.isArray(ex.plannedSetsDetails) && ex.plannedSetsDetails.length > 0
+        ? ex.plannedSetsDetails.length
+        : typeof ex.plannedSets === 'number' && ex.plannedSets > 0
+        ? ex.plannedSets
+        : 3;
+      return sum + setsCount;
+    }, 0);
+
+    const completedSetKeys = new Set<string>();
+
+    // 1. Completed sets from workoutLogs for selectedDay
+    const dayLogs = workoutLogs.filter((l) =>
+      (l.dayId && l.dayId === selectedDay.id) ||
+      (l.dayTitle === selectedDay.title && (l.dayId?.startsWith(`w${currentWeek}-`) || !l.dayId))
+    );
+    dayLogs.forEach((log) => {
+      const exKey = (log.exerciseName || log.exerciseId || 'ex').trim().toLowerCase();
+      completedSetKeys.add(`${exKey}_set_${log.setNumber}`);
+    });
+
+    // 2. Completed sets from activeOngoingWorkoutDay (live ongoing session)
+    if (
+      activeOngoingWorkoutDay &&
+      (activeOngoingWorkoutDay.id === selectedDay.id || activeOngoingWorkoutDay.title === selectedDay.title) &&
+      Array.isArray(activeOngoingWorkoutDay.exercises)
+    ) {
+      activeOngoingWorkoutDay.exercises.forEach((ex) => {
+        const exKey = ex.name.trim().toLowerCase();
+        if (Array.isArray(ex.plannedSetsDetails)) {
+          ex.plannedSetsDetails.forEach((s) => {
+            if (s.completed || s.isCompleted) {
+              completedSetKeys.add(`${exKey}_set_${s.setNumber}`);
+            }
+          });
+        }
+        if (Array.isArray(ex.completedSets)) {
+          ex.completedSets.forEach((s: any) => {
+            completedSetKeys.add(`${exKey}_set_${s.setNumber}`);
+          });
+        }
+      });
+    }
+
+    // 3. Completed sets marked directly in selectedDay.exercises
+    selectedDay.exercises.forEach((ex) => {
+      const exKey = ex.name.trim().toLowerCase();
+      if (Array.isArray(ex.plannedSetsDetails)) {
+        ex.plannedSetsDetails.forEach((s) => {
+          if (s.completed || s.isCompleted) {
+            completedSetKeys.add(`${exKey}_set_${s.setNumber}`);
+          }
+        });
+      }
+      if (Array.isArray(ex.completedSets)) {
+        ex.completedSets.forEach((s: any) => {
+          completedSetKeys.add(`${exKey}_set_${s.setNumber}`);
+        });
+      }
+    });
+
+    const completedCount = completedSetKeys.size;
+    const percentage = totalPlanned > 0
+      ? Math.min(100, Math.round((completedCount / totalPlanned) * 100))
+      : 0;
+
+    return {
+      totalPlannedSets: totalPlanned,
+      completedSetsCount: completedCount,
+      completionPercentage: percentage,
+    };
+  }, [selectedDay, workoutLogs, activeOngoingWorkoutDay, currentWeek]);
 
   const currentPhase = weeksList.find((w) => w.week === currentWeek) || {
     week: currentWeek,
@@ -318,18 +397,19 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         </div>
 
         {/* Day Selector Strip - Big tactile buttons with completion status */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none pt-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none pt-1">
           {currentWeekDays.map((day) => {
             const isSelected = selectedDay && selectedDay.id === day.id;
             const status = getDayStatus(day);
             const isCompleted = status === 'completed';
             const isInProgress = status === 'in_progress';
+            const dayLabel = (day as any).dayLabel || day.dayNamePolish || `Dzień ${day.dayNumber}`;
 
             return (
               <button
                 key={day.id}
                 onClick={() => onSelectDayId(day.id)}
-                className={`flex-1 min-w-[70px] p-2 rounded-2xl border text-center transition-all cursor-pointer touch-manipulation min-h-[58px] flex flex-col items-center justify-center relative ${
+                className={`flex-1 min-w-[95px] sm:min-w-[110px] p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative shrink-0 ${
                   isSelected
                     ? isCompleted
                       ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
@@ -342,79 +422,81 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 }`}
                 title={day.title}
               >
-                <div className="flex items-center gap-1.5 mb-1">
+                {/* Top Row: Day indicator (e.g. D1) with completion status + colored type badge */}
+                <div className="flex items-center justify-between w-full gap-1 mb-1">
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider ${
+                        isSelected
+                          ? 'text-black'
+                          : isCompleted
+                          ? 'text-emerald-800 dark:text-emerald-300 font-extrabold'
+                          : isInProgress
+                          ? 'text-amber-600 dark:text-amber-400 font-bold'
+                          : 'text-neutral-400'
+                      }`}
+                    >
+                      D{day.dayNumber}
+                    </span>
+                    {isCompleted && (
+                      <span
+                        className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
+                          isSelected
+                            ? 'bg-black text-emerald-400 ring-1 ring-black'
+                            : 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950'
+                        }`}
+                        title="Trening w 100% zrealizowany"
+                      >
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </span>
+                    )}
+                    {isInProgress && !isCompleted && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-sm"
+                        title="Trening w trakcie realizacji"
+                      />
+                    )}
+                  </div>
+
                   <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide leading-none shrink-0 ${
                       isSelected
-                        ? 'text-black'
-                        : isCompleted
-                        ? 'text-emerald-800 dark:text-emerald-300 font-extrabold'
-                        : isInProgress
-                        ? 'text-amber-600 dark:text-amber-400 font-bold'
-                        : 'text-neutral-400'
+                        ? 'bg-black text-amber-400 shadow-sm'
+                        : day.type === 'FBW'
+                        ? 'bg-amber-400 text-black'
+                        : day.type === 'RUNNING_HIIT'
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        : day.type === 'WEEKEND_HYROX'
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : day.type === 'REST_RECOVERY'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                     }`}
                   >
-                    D{day.dayNumber}
+                    {day.type === 'FBW'
+                      ? 'FBW'
+                      : day.type === 'RUNNING_HIIT'
+                      ? 'Running'
+                      : day.type === 'WEEKEND_HYROX'
+                      ? 'Hyrox'
+                      : day.type === 'REST_RECOVERY'
+                      ? 'Rest'
+                      : 'Custom'}
                   </span>
-                  {isCompleted && (
-                    <span
-                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
-                        isSelected
-                          ? 'bg-black text-emerald-400 ring-1 ring-black'
-                          : 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950'
-                      }`}
-                      title="Trening w 100% zrealizowany"
-                    >
-                      <Check className="w-2.5 h-2.5 stroke-[3]" />
-                    </span>
-                  )}
-                  {isInProgress && !isCompleted && (
-                    <span
-                      className="w-2 h-2 rounded-full bg-amber-500 shrink-0 shadow-sm"
-                      title="Trening w trakcie realizacji"
-                    />
-                  )}
                 </div>
 
-                <span
-                  className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide leading-none transition-colors ${
+                {/* Main Text: Full dayLabel (e.g. "Poniedziałek", "Wtorek") */}
+                <div
+                  className={`text-xs sm:text-[13px] font-extrabold truncate w-full text-left pt-0.5 ${
                     isSelected
-                      ? 'bg-black text-amber-400 shadow-sm'
-                      : day.type === 'FBW'
-                      ? 'bg-amber-400 text-black'
-                      : day.type === 'RUNNING_HIIT'
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      : day.type === 'WEEKEND_HYROX'
-                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                      : day.type === 'REST_RECOVERY'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                  }`}
-                >
-                  {day.type === 'FBW'
-                    ? 'FBW'
-                    : day.type === 'RUNNING_HIIT'
-                    ? 'Running'
-                    : day.type === 'WEEKEND_HYROX'
-                    ? 'Hyrox'
-                    : day.type === 'REST_RECOVERY'
-                    ? 'Rest'
-                    : 'Custom'}
-                </span>
-
-                <span
-                  className={`text-[9px] font-bold tracking-tight mt-1 truncate max-w-[65px] ${
-                    isSelected
-                      ? 'text-neutral-900 font-extrabold'
+                      ? 'text-black font-black'
                       : isCompleted
-                      ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
-                      : isInProgress
-                      ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                      : 'text-neutral-400'
+                      ? 'text-emerald-950 dark:text-white font-extrabold'
+                      : 'text-white'
                   }`}
                 >
-                  {day.exercises?.length ? `${day.exercises.length} ćw` : `${day.durationMinutes || 45}m`}
-                </span>
+                  {dayLabel}
+                </div>
               </button>
             );
           })}
@@ -476,6 +558,31 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 <span className="text-[10px] font-bold text-amber-400 underline shrink-0">
                   Zobacz wyniki
                 </span>
+              </div>
+            )}
+
+            {/* SESSION PROGRESS BAR (Bieżący postęp sesji) */}
+            {totalPlannedSets > 0 && (
+              <div className="p-3.5 rounded-2xl bg-neutral-950/90 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-400 font-semibold flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-amber-400" />
+                    Postęp sesji:
+                  </span>
+                  <span className="font-extrabold text-amber-400 font-mono-numbers">
+                    Wykonano {completedSetsCount} z {totalPlannedSets} serii ({completionPercentage}%)
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-neutral-800/80 p-0.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ease-out ${
+                      completionPercentage === 100
+                        ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'
+                        : 'bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)]'
+                    }`}
+                    style={{ width: `${Math.max(completedSetsCount > 0 ? 4 : 0, completionPercentage)}%` }}
+                  />
+                </div>
               </div>
             )}
 
