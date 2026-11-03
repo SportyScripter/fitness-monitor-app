@@ -249,6 +249,42 @@ export default function App() {
   const [moreSubView, setMoreSubView] = useState<MoreSubView>(null);
   const [selectedDayId, setSelectedDayId] = useState<string>('');
 
+  // Scroll positions per tab to guarantee zero scroll jumping on tab switch
+  const tabScrollPositions = useRef<Record<MainNavTab, number>>({
+    edit: 0,
+    workout: 0,
+    calendar: 0,
+    more: 0,
+  });
+
+  // Restore scroll position when activeTab changes
+  useEffect(() => {
+    const savedY = tabScrollPositions.current[activeTab] || 0;
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: savedY, behavior: 'instant' });
+    });
+  }, [activeTab]);
+
+  // Tab switch & double-click / active-tab click reset
+  const handleTabChange = (tab: MainNavTab) => {
+    if (activeTab === tab) {
+      handleTabReset(tab);
+    } else {
+      tabScrollPositions.current[activeTab] = window.scrollY;
+      setActiveTab(tab);
+      // Keep-alive: preserve subviews across tabs
+    }
+  };
+
+  const handleTabReset = (tab: MainNavTab) => {
+    if (tab === 'more') {
+      setMoreSubView(null);
+    }
+    tabScrollPositions.current[tab] = 0;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(() => {
     try {
       return localStorage.getItem('hyrox_spreadsheet_id');
@@ -1213,6 +1249,23 @@ export default function App() {
     handleUpdateCycle(updatedCycle);
   };
 
+  // Reorder days in active cycle's current week with dynamic day numbering
+  const handleReorderDays = (reorderedDays: WorkoutDay[]) => {
+    const updatedDays = reorderedDays.map((d, idx) => ({
+      ...d,
+      dayNumber: idx + 1,
+    }));
+
+    const updatedCycle: TrainingCycleCatalog = {
+      ...activeCycle,
+      weeksPlansMap: {
+        ...(activeCycle.weeksPlansMap || {}),
+        [currentWeek]: updatedDays,
+      },
+    };
+    handleUpdateCycle(updatedCycle);
+  };
+
   // Delete week from active cycle
   const handleDeleteWeek = (weekNumber: number) => {
     const updatedWeeksList = weeksList.filter((w) => w.week !== weekNumber);
@@ -1379,6 +1432,7 @@ export default function App() {
                 onResetPlanToDefault={handleResetPlanToDefault}
                 onCopyDayToWeek={handleCopyDayToWeek}
                 onCopyEntireWeekTo={handleCopyEntireWeekTo}
+                onReorderDays={handleReorderDays}
                 workoutLogs={workoutLogs}
                 onUpdatePhase={(updatedPhase) => {
                   const updatedWeeks = weeksList.map((w) => (w.week === updatedPhase.week ? updatedPhase : w));
@@ -1462,12 +1516,8 @@ export default function App() {
           {/* Sticky Bottom Navigation - 4 Touch-friendly Large Actions */}
           <BottomNavBar
             activeTab={activeTab}
-            onTabChange={(tab) => {
-              setActiveTab(tab);
-              if (tab !== 'more') {
-                setMoreSubView(null);
-              }
-            }}
+            onTabChange={handleTabChange}
+            onTabReset={handleTabReset}
           />
 
           {/* Left Slide-out Catalog Drawer (Training Cycles Manager) */}

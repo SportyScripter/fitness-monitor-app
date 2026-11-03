@@ -35,6 +35,7 @@ import {
   ExerciseDetailsModalData,
   DetailedSetComparison
 } from '../modals/ExerciseDetailsModal';
+import { calculateDayPlannedTonnage } from '../../utils/tonnageUtils';
 
 interface VolumeMatrixViewProps {
   currentWeek: number;
@@ -530,21 +531,9 @@ export const VolumeMatrixView: React.FC<VolumeMatrixViewProps> = ({
 
   // Total planned tonnage across activeDays (excluding cardio)
   const totalPlannedTonnage = useMemo(() => {
+    const mult = typeof currentPhase?.volumeMultiplier === 'number' ? currentPhase.volumeMultiplier : 1.0;
     return activeDays.reduce((daySum, day) => {
-      if (!day || !Array.isArray(day.exercises)) return daySum;
-      return (
-        daySum +
-        day.exercises.reduce((exSum, ex) => {
-          if (!ex || isCardioExercise(ex)) return exSum;
-          const weight = typeof ex.defaultWeightKg === 'number' ? ex.defaultWeightKg : 0;
-          const mult = typeof currentPhase?.volumeMultiplier === 'number' ? currentPhase.volumeMultiplier : 1.0;
-          const adjustedWeight = Math.round(weight * mult);
-          const repsRange = ex.targetRepsRange ? String(ex.targetRepsRange) : '8';
-          const reps = parseInt(repsRange.split('-')[0]) || 8;
-          const sets = typeof ex.plannedSets === 'number' ? ex.plannedSets : 3;
-          return exSum + adjustedWeight * reps * sets;
-        }, 0)
-      );
+      return daySum + calculateDayPlannedTonnage(day, mult);
     }, 0);
   }, [activeDays, currentPhase]);
 

@@ -22,6 +22,7 @@ import {
 import { RPE_RIR_SCALE_REFERENCE, MESOCYCLE_WEEKS } from '../../data/hyroxPlanData';
 import { WorkoutLogEntry, MesocyclePhase, WorkoutDay, MuscleGroup } from '../../types/hyrox';
 import { ExerciseProgressionModal } from '../modals/ExerciseProgressionModal';
+import { calculateDayPlannedTonnage } from '../../utils/tonnageUtils';
 
 export type TimeRangeFilter =
   | 'last_vs_prev'
@@ -296,15 +297,7 @@ export const Progression1RMView: React.FC<Progression1RMViewProps> = ({
     let plannedTonnage = 0;
     if (weekDays && weekDays.length > 0) {
       plannedTonnage = weekDays.reduce((sum, d) => {
-        if (!d.exercises) return sum;
-        return (
-          sum +
-          d.exercises.reduce((exSum, ex) => {
-            const w = Math.round(ex.defaultWeightKg * multiplier);
-            const r = parseInt(ex.targetRepsRange.split('-')[0]) || 8;
-            return exSum + w * r * ex.plannedSets;
-          }, 0)
-        );
+        return sum + calculateDayPlannedTonnage(d, multiplier);
       }, 0);
     } else {
       plannedTonnage = Math.round(18500 * multiplier);

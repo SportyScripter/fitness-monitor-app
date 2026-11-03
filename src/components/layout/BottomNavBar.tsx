@@ -7,12 +7,14 @@ export type MainNavTab = 'edit' | 'workout' | 'calendar' | 'more';
 interface BottomNavBarProps {
   activeTab: MainNavTab;
   onTabChange: (tab: MainNavTab) => void;
+  onTabReset?: (tab: MainNavTab) => void;
   unreadCount?: number;
 }
 
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   activeTab,
   onTabChange,
+  onTabReset,
 }) => {
   const scrollDirection = useScrollDirection({ threshold: 10 });
   const isMinimized = scrollDirection === 'down';
@@ -67,11 +69,32 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
 
+          const handleTabClick = () => {
+            if (isActive) {
+              if (onTabReset) {
+                onTabReset(tab.id);
+              } else {
+                onTabChange(tab.id);
+              }
+            } else {
+              onTabChange(tab.id);
+            }
+          };
+
+          const handleTabDoubleClick = () => {
+            if (onTabReset) {
+              onTabReset(tab.id);
+            } else {
+              onTabChange(tab.id);
+            }
+          };
+
           if (tab.isPrimary) {
             return (
               <button
                 key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+                onClick={handleTabClick}
+                onDoubleClick={handleTabDoubleClick}
                 className={`relative flex flex-col items-center justify-center flex-1 px-2 rounded-2xl transition-all duration-300 cursor-pointer group touch-manipulation ${
                   isMinimized ? 'min-h-[36px] py-1' : 'min-h-[58px] py-1.5'
                 }`}
@@ -113,7 +136,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           return (
             <button
               key={tab.id}
-              onClick={() => onTabChange(tab.id)}
+              onClick={handleTabClick}
+              onDoubleClick={handleTabDoubleClick}
               className={`relative flex flex-col items-center justify-center flex-1 px-2 rounded-xl transition-all duration-300 cursor-pointer group touch-manipulation ${
                 isMinimized ? 'min-h-[36px] py-1' : 'min-h-[58px] py-1.5'
               }`}

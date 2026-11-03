@@ -32,6 +32,7 @@ import { CopyWorkoutModal } from '../modals/CopyWorkoutModal';
 import { ExerciseChartModal } from '../modals/ExerciseChartModal';
 import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
 import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
+import { calculateDayPlannedTonnage, calculateExercisePlannedTonnage } from '../../utils/tonnageUtils';
 
 interface WeeklyPlanViewProps {
   activeCycle: TrainingCycleCatalog;
@@ -242,16 +243,8 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
     }
   };
 
-  const calculateDayPlannedTonnage = (day: WorkoutDay) => {
-    if (!day || !Array.isArray(day.exercises) || day.exercises.length === 0) return 0;
-    return day.exercises.reduce((sum, ex) => {
-      if (!ex) return sum;
-      const baseWeight = typeof ex.defaultWeightKg === 'number' ? ex.defaultWeightKg : 0;
-      const repsRange = ex.targetRepsRange ? String(ex.targetRepsRange) : '8';
-      const reps = parseInt(repsRange.split('-')[0]) || 8;
-      const sets = typeof ex.plannedSets === 'number' ? ex.plannedSets : 3;
-      return sum + baseWeight * reps * sets;
-    }, 0);
+  const calculateDayPlannedTonnageValue = (day: WorkoutDay) => {
+    return calculateDayPlannedTonnage(day);
   };
 
   const handleQuickDeleteExercise = (exId: string) => {
@@ -736,7 +729,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
               <div className="flex items-center justify-between text-xs text-neutral-400 mb-2">
                 <span>Zaplanowane ćwiczenia ({selectedDay.exercises.length})</span>
                 <span>
-                  Szacowany tonaż: <strong className="text-amber-400 font-mono-numbers">~{calculateDayPlannedTonnage(selectedDay).toLocaleString()} kg</strong>
+                  Szacowany tonaż: <strong className="text-amber-400 font-mono-numbers">~{calculateDayPlannedTonnageValue(selectedDay).toLocaleString()} kg</strong>
                 </span>
               </div>
 
@@ -759,7 +752,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
                     const baseWeight = typeof exercise.defaultWeightKg === 'number' ? exercise.defaultWeightKg : 0;
                     const displayWeight = baseWeight > 0 ? (baseWeight % 1 === 0 ? String(baseWeight) : baseWeight.toFixed(1)) : 'Ciało';
                     const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                    const plannedTonnage = baseWeight * baseReps * (exercise.plannedSets || 3);
+                    const plannedTonnage = calculateExercisePlannedTonnage(exercise);
 
                     // Find historical logs for this exercise, picking only the latest distinct session
                     const pastLogsForEx = workoutLogs

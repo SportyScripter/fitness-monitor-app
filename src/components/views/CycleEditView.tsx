@@ -30,6 +30,7 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
   arrayMove
 } from '@dnd-kit/sortable';
@@ -72,8 +73,96 @@ interface CycleEditViewProps {
     progressionDeltaKg: number
   ) => void;
   onUpdatePhase?: (updatedPhase: MesocyclePhase) => void;
+  onReorderDays?: (reorderedDays: WorkoutDay[]) => void;
   workoutLogs?: WorkoutLogEntry[];
 }
+
+interface SortableDayTileProps {
+  day: WorkoutDay;
+  index: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+const SortableDayTile: React.FC<SortableDayTileProps> = ({
+  day,
+  index,
+  isSelected,
+  onSelect,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: day.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.75 : 1,
+  };
+
+  const dynamicDayNumber = index + 1;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onSelect}
+      className={`p-2.5 rounded-2xl text-left border transition-all cursor-grab active:cursor-grabbing whitespace-nowrap shrink-0 touch-manipulation min-w-[125px] select-none ${
+        isDragging
+          ? 'shadow-2xl ring-2 ring-amber-400 scale-105 bg-neutral-900 border-amber-400'
+          : isSelected
+          ? 'bg-neutral-900 border-amber-400 shadow-md ring-1 ring-amber-400'
+          : 'bg-neutral-950/80 border-neutral-800 hover:border-neutral-700'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-1 mb-1">
+        <div className="flex items-center gap-1">
+          <GripVertical className="w-3 h-3 text-neutral-500 opacity-60 shrink-0" />
+          <span className="text-[10px] uppercase font-bold text-neutral-400">
+            Dzień {dynamicDayNumber}
+          </span>
+        </div>
+        <span
+          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold ${
+            day.type === 'FBW'
+              ? 'bg-amber-400 text-black'
+              : day.type === 'RUNNING_HIIT'
+              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+              : day.type === 'WEEKEND_HYROX'
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+              : day.type === 'REST_RECOVERY'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+          }`}
+        >
+          {day.type === 'RUNNING_HIIT'
+            ? 'Running'
+            : day.type === 'WEEKEND_HYROX'
+            ? 'Hyrox'
+            : day.type === 'REST_RECOVERY'
+            ? 'Rest'
+            : day.type === 'FBW'
+            ? 'FBW'
+            : 'Custom'}
+        </span>
+      </div>
+      <div className="text-xs font-bold text-white truncate max-w-[110px]">
+        {day.dayNamePolish || day.title}
+      </div>
+      <div className="text-[10px] text-neutral-400 truncate max-w-[110px]">
+        {day.exercises?.length || 0} ćwiczeń
+      </div>
+    </div>
+  );
+};
 
 interface SortableExerciseCardProps {
   exercise: Exercise;
@@ -264,6 +353,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
   onCopyDayToWeek,
   onCopyEntireWeekTo,
   onUpdatePhase,
+  onReorderDays,
   workoutLogs = [],
 }) => {
   // Local modals
@@ -290,6 +380,9 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
 
   const selectedDay =
     currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
+
+  const selectedDayIndex = selectedDay ? currentWeekDays.findIndex((d) => d && d.id === selectedDay.id) : -1;
+  const selectedDayDynamicNumber = selectedDayIndex !== -1 ? selectedDayIndex + 1 : selectedDay?.dayNumber || 1;
 
   const currentPhase = weeksList.find((w) => w.week === currentWeek) || {
     week: currentWeek,
@@ -366,6 +459,19 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
         ...selectedDay,
         exercises: reordered,
       });
+    }
+  };
+
+  const handleDayDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !currentWeekDays) return;
+
+    const oldIndex = currentWeekDays.findIndex((d) => d.id === active.id);
+    const newIndex = currentWeekDays.findIndex((d) => d.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(currentWeekDays, oldIndex, newIndex);
+      onReorderDays?.(reordered);
     }
   };
 
@@ -705,50 +811,32 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
           </button>
         </div>
 
-        {/* Horizontal Day Chips with touch-friendly size */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
-          {currentWeekDays.map((day) => {
-            const isSelected = selectedDay && selectedDay.id === day.id;
-            return (
-              <button
-                key={day.id}
-                onClick={() => onSelectDayId(day.id)}
-                className={`p-2.5 rounded-2xl text-left border transition-all cursor-pointer whitespace-nowrap shrink-0 touch-manipulation min-w-[120px] ${
-                  isSelected
-                    ? 'bg-neutral-900 border-amber-400 shadow-md ring-1 ring-amber-400'
-                    : 'bg-neutral-950/80 border-neutral-800 hover:border-neutral-700'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1 mb-1">
-                  <span className="text-[10px] uppercase font-bold text-neutral-400">
-                    Dzień {day.dayNumber}
-                  </span>
-                  <span
-                    className={`text-[9px] px-1.5 py-0.2 rounded font-extrabold ${
-                      day.type === 'FBW'
-                        ? 'bg-amber-400 text-black'
-                        : day.type === 'RUNNING_HIIT'
-                        ? 'bg-red-500/20 text-red-400'
-                        : day.type === 'WEEKEND_HYROX'
-                        ? 'bg-purple-500/20 text-purple-300'
-                        : day.type === 'REST_RECOVERY'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-blue-500/20 text-blue-300'
-                    }`}
-                  >
-                    {day.type.split('_')[0]}
-                  </span>
-                </div>
-                <div className="text-xs font-bold text-white truncate max-w-[110px]">
-                  {day.dayNamePolish}
-                </div>
-                <div className="text-[10px] text-neutral-400 truncate max-w-[110px]">
-                  {day.exercises?.length || 0} ćwiczeń
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {/* Horizontal Day Chips with touch-friendly size and drag-and-drop reordering */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDayDragEnd}
+        >
+          <SortableContext
+            items={currentWeekDays.map((d) => d.id)}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-none">
+              {currentWeekDays.map((day, index) => {
+                const isSelected = selectedDay && selectedDay.id === day.id;
+                return (
+                  <SortableDayTile
+                    key={day.id}
+                    day={day}
+                    index={index}
+                    isSelected={isSelected}
+                    onSelect={() => onSelectDayId(day.id)}
+                  />
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Selected Day Management & Exercises */}
@@ -759,7 +847,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                  Dzień {selectedDay.dayNumber} • {selectedDay.type}
+                  Dzień {selectedDayDynamicNumber} • {selectedDay.type}
                 </span>
                 <h2 className="text-lg font-black text-white font-heading mt-0.5">
                   {selectedDay.dayNamePolish}: {selectedDay.title}

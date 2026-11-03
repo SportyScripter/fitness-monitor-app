@@ -29,6 +29,7 @@ import {
 import { ExerciseChartModal } from '../modals/ExerciseChartModal';
 import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
 import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
+import { calculateDayPlannedTonnage } from '../../utils/tonnageUtils';
 
 interface WorkoutExecutionViewProps {
   activeCycle: TrainingCycleCatalog | null;
@@ -255,16 +256,8 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     });
   };
 
-  const calculateDayPlannedTonnage = (day: WorkoutDay) => {
-    if (!day || !Array.isArray(day.exercises) || day.exercises.length === 0) return 0;
-    return day.exercises.reduce((sum, ex) => {
-      if (!ex) return sum;
-      const baseWeight = typeof ex.defaultWeightKg === 'number' ? ex.defaultWeightKg : 0;
-      const repsRange = ex.targetRepsRange ? String(ex.targetRepsRange) : '8';
-      const reps = parseInt(repsRange.split('-')[0]) || 8;
-      const sets = typeof ex.plannedSets === 'number' ? ex.plannedSets : 3;
-      return sum + baseWeight * reps * sets;
-    }, 0);
+  const calculateDayPlannedTonnageValue = (day: WorkoutDay) => {
+    return calculateDayPlannedTonnage(day, currentPhase?.volumeMultiplier ?? 1.0);
   };
 
   return (
@@ -349,7 +342,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 }`}
                 title={day.title}
               >
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 mb-1">
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider ${
                       isSelected
@@ -384,25 +377,43 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 </div>
 
                 <span
-                  className={`text-[11px] font-extrabold truncate max-w-[65px] ${
-                    isSelected ? 'text-black font-black' : isCompleted ? 'text-emerald-950 dark:text-white font-extrabold' : 'text-white'
+                  className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wide leading-none transition-colors ${
+                    isSelected
+                      ? 'bg-black text-amber-400 shadow-sm'
+                      : day.type === 'FBW'
+                      ? 'bg-amber-400 text-black'
+                      : day.type === 'RUNNING_HIIT'
+                      ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      : day.type === 'WEEKEND_HYROX'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                      : day.type === 'REST_RECOVERY'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                   }`}
                 >
-                  {day.dayNamePolish?.slice(0, 3) || `D${day.dayNumber}`}
+                  {day.type === 'FBW'
+                    ? 'FBW'
+                    : day.type === 'RUNNING_HIIT'
+                    ? 'Running'
+                    : day.type === 'WEEKEND_HYROX'
+                    ? 'Hyrox'
+                    : day.type === 'REST_RECOVERY'
+                    ? 'Rest'
+                    : 'Custom'}
                 </span>
 
                 <span
-                  className={`text-[8px] uppercase font-bold tracking-tight mt-0.5 ${
+                  className={`text-[9px] font-bold tracking-tight mt-1 truncate max-w-[65px] ${
                     isSelected
                       ? 'text-neutral-900 font-extrabold'
                       : isCompleted
-                      ? 'text-emerald-700 dark:text-emerald-400 font-bold'
+                      ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
                       : isInProgress
                       ? 'text-amber-600 dark:text-amber-400 font-semibold'
-                      : 'text-neutral-500'
+                      : 'text-neutral-400'
                   }`}
                 >
-                  {day.type === 'RUNNING_HIIT' ? 'Bieg' : day.type === 'WEEKEND_HYROX' ? 'Hyrox' : day.type === 'REST_RECOVERY' ? 'Rest' : 'Siła'}
+                  {day.exercises?.length ? `${day.exercises.length} ćw` : `${day.durationMinutes || 45}m`}
                 </span>
               </button>
             );
@@ -538,7 +549,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 Ćwiczenia do wykonania ({selectedDay.exercises?.length || 0})
               </span>
               <span className="text-neutral-400">
-                Tonaż: <strong className="text-amber-400 font-mono-numbers">~{calculateDayPlannedTonnage(selectedDay).toLocaleString()} kg</strong>
+                Tonaż: <strong className="text-amber-400 font-mono-numbers">~{calculateDayPlannedTonnageValue(selectedDay).toLocaleString()} kg</strong>
               </span>
             </div>
 
