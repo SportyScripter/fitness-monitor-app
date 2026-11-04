@@ -97,13 +97,14 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
   isOverlay = false,
   onClick,
 }) => {
-  const dynamicDayNumber = index + 1;
+  const dynamicWorkoutNumber = index + 1;
+  const dayDisplayLabel = ((day as any).dayLabel || day.dayNamePolish || day.title || `Trening ${dynamicWorkoutNumber}`).replace(/^Dzień\s*(\d+)/i, 'Trening $1');
 
   // Placeholder rendered in the list in place of the dragged element
   if (isDragging && !isOverlay) {
     return (
       <div
-        className="w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-amber-400/60 bg-neutral-900/40 opacity-30 min-h-[74px] transition-all select-none touch-none"
+        className="w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-amber-400/60 bg-neutral-900/40 opacity-30 min-h-[74px] transition-all select-none touch-none whitespace-nowrap"
         aria-hidden="true"
         style={{ touchAction: 'none' }}
       />
@@ -113,7 +114,7 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
   return (
     <div
       onClick={onClick}
-      className={`w-[130px] min-w-[130px] max-w-[130px] shrink-0 flex-shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none overflow-hidden ${
+      className={`w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl text-left transition-all whitespace-nowrap select-none overflow-hidden ${
         isOverlay
           ? 'bg-neutral-900 dark:bg-neutral-900 border-2 border-amber-400 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/50 scale-105 z-50 cursor-grabbing opacity-100 pointer-events-none touch-none'
           : isDragging
@@ -124,15 +125,15 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
       }`}
       style={{ touchAction: isOverlay || isDragging ? 'none' : 'pan-x' }}
     >
-      <div className="flex items-center justify-between gap-1 mb-1">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1 shrink-0">
           <GripVertical className="w-3.5 h-3.5 text-neutral-400 opacity-70 shrink-0" />
-          <span className="text-[10px] uppercase font-bold text-neutral-400">
-            Dzień {dynamicDayNumber}
+          <span className="text-[10px] uppercase font-bold text-neutral-400 whitespace-nowrap">
+            Trening {dynamicWorkoutNumber}
           </span>
         </div>
         <span
-          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold shrink-0 ${
+          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold shrink-0 whitespace-nowrap ${
             day.type === 'FBW'
               ? 'bg-amber-400 text-black'
               : day.type === 'RUNNING_HIIT'
@@ -155,10 +156,10 @@ export const DayTileCard: React.FC<DayTileCardProps> = ({
             : 'Custom'}
         </span>
       </div>
-      <div className="text-xs font-bold text-white truncate max-w-[110px]">
-        {day.dayNamePolish || day.title}
+      <div className="text-xs font-bold text-white whitespace-nowrap">
+        {dayDisplayLabel}
       </div>
-      <div className="text-[10px] text-neutral-400 truncate max-w-[110px]">
+      <div className="text-[10px] text-neutral-400 whitespace-nowrap">
         {day.exercises?.length || 0} ćwiczeń
       </div>
     </div>
@@ -875,14 +876,14 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
       <div className="space-y-2">
         <div className="flex items-center justify-between px-1">
           <span className="text-xs font-black uppercase text-neutral-400 font-heading tracking-wider">
-            Dni w Tygodniu {currentWeek} ({currentWeekDays.length})
+            Treningi w Tygodniu {currentWeek} ({currentWeekDays.length})
           </span>
           <button
             onClick={() => onAddDay()}
             className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-400/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 text-amber-400" />
-            <span>+ Dodaj Dzień</span>
+            <span>+ Dodaj Trening</span>
           </button>
         </div>
 
@@ -950,10 +951,10 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                  Dzień {selectedDayDynamicNumber} • {selectedDay.type}
+                  Trening {selectedDayDynamicNumber} • {selectedDay.type}
                 </span>
                 <h2 className="text-lg font-black text-white font-heading mt-0.5">
-                  {selectedDay.dayNamePolish}: {selectedDay.title}
+                  {(selectedDay.dayNamePolish || selectedDay.title).replace(/^Dzień\s*(\d+)/i, 'Trening $1')}: {selectedDay.title}
                 </h2>
                 <p className="text-xs text-neutral-400 mt-0.5 line-clamp-1">
                   {selectedDay.subtitle}
@@ -968,7 +969,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black transition-all cursor-pointer shadow-sm touch-manipulation min-h-[44px]"
               >
                 <Edit2 className="w-3.5 h-3.5" />
-                <span>Dostosuj Dzień</span>
+                <span>Dostosuj Trening</span>
               </button>
 
               <button
@@ -976,7 +977,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-bold transition-all cursor-pointer touch-manipulation min-h-[44px]"
               >
                 <Copy className="w-3.5 h-3.5 text-amber-400" />
-                <span>Kopiuj Dzień</span>
+                <span>Kopiuj Trening</span>
               </button>
             </div>
           </div>
@@ -1008,7 +1009,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
           {exercisesList.length === 0 ? (
             <div className="p-8 text-center text-neutral-500 text-xs bg-neutral-950/60 rounded-2xl border border-neutral-800 space-y-3">
               <Dumbbell className="w-8 h-8 mx-auto text-neutral-600" />
-              <p>Brak ćwiczeń w tym dniu.</p>
+              <p>Brak ćwiczeń w tym treningu.</p>
               <button
                 onClick={() => {
                   setExerciseBeingEdited(null);
@@ -1056,14 +1057,14 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             <div className="pt-2 text-center">
               <button
                 onClick={() => {
-                  if (window.confirm(`Czy na pewno chcesz usunąć Dzień ${selectedDay.dayNumber} (${selectedDay.dayNamePolish})?`)) {
+                  if (window.confirm(`Czy na pewno chcesz usunąć Trening ${selectedDayDynamicNumber} (${selectedDay.dayNamePolish || selectedDay.title})?`)) {
                     onDeleteDay(selectedDay.id);
                   }
                 }}
                 className="text-xs text-red-400 hover:text-red-300 cursor-pointer font-bold inline-flex items-center gap-1"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Usuń ten dzień treningowy</span>
+                <span>Usuń trening</span>
               </button>
             </div>
           )}

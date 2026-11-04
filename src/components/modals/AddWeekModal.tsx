@@ -502,7 +502,7 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
                   <div>
                     <div className="font-bold text-xs text-white flex items-center gap-1.5">
                       <FilePlus2 className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Pusty tydzień (0 dni — dodam własne dni ręcznie)</span>
+                      <span>Pusty tydzień (0 treningów — dodam własne treningi ręcznie)</span>
                     </div>
                     <div className="text-[11px] text-neutral-400">
                       Zalecane dla nowych, własnych cykli treningowych

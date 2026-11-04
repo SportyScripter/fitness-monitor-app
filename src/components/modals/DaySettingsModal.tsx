@@ -17,7 +17,7 @@ const DAY_LABELS = [
   'Piątek',
   'Sobota',
   'Niedziela',
-  'Dzień Treningowy'
+  'Trening'
 ];
 
 const DAY_TYPES: { type: DayType; label: string; desc: string; badgeClasses: string }[] = [
@@ -60,14 +60,14 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
   onSaveDaySettings,
 }) => {
   const [dayType, setDayType] = useState<DayType>(day.type);
-  const [dayNamePolish, setDayNamePolish] = useState(day.dayNamePolish || `Dzień ${day.dayNumber}`);
+  const [dayNamePolish, setDayNamePolish] = useState(day.dayNamePolish || `Trening ${day.dayNumber}`);
   const [title, setTitle] = useState(day.title);
   const [subtitle, setSubtitle] = useState(day.subtitle);
   const [durationMinutes, setDurationMinutes] = useState(day.durationMinutes || 60);
 
   useEffect(() => {
     setDayType(day.type);
-    setDayNamePolish(day.dayNamePolish || `Dzień ${day.dayNumber}`);
+    setDayNamePolish(day.dayNamePolish || `Trening ${day.dayNumber}`);
     setTitle(day.title);
     setSubtitle(day.subtitle);
     setDurationMinutes(day.durationMinutes || 60);
@@ -80,7 +80,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
     const updated: WorkoutDay = {
       ...day,
       type: dayType,
-      dayNamePolish: dayNamePolish.trim() || `Dzień ${day.dayNumber}`,
+      dayNamePolish: dayNamePolish.trim() || `Trening ${day.dayNumber}`,
       title: title.trim() || 'Trening',
       subtitle: subtitle.trim() || '',
       durationMinutes: Number(durationMinutes) || 60,
@@ -100,10 +100,10 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-black text-white font-heading">
-                Dostosuj Parametry Dnia
+                Dostosuj Parametry Treningu
               </h3>
               <p className="text-[11px] text-neutral-400">
-                Dzień {day.dayNumber} • Ogólne parametry sesji treningowej
+                Trening {day.dayNumber} • Ogólne parametry sesji treningowej
               </p>
             </div>
           </div>
@@ -120,16 +120,16 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 pb-12 space-y-4 text-xs flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          {/* 1. Etykieta Dnia (Dzień tygodnia) */}
+          {/* 1. Etykieta Treningu (Dzień tygodnia / Nazwa) */}
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase font-bold text-neutral-300 block">
-              Etykieta Dnia (Dzień Tygodnia):
+              Etykieta Treningu (np. Dzień Tygodnia / Własna):
             </label>
             <input
               type="text"
               value={dayNamePolish}
               onChange={(e) => setDayNamePolish(e.target.value)}
-              placeholder="np. Poniedziałek, Dzień 1"
+              placeholder="np. Poniedziałek, Trening 1"
               className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 font-bold text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
               required
             />
@@ -152,10 +152,10 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
             </div>
           </div>
 
-          {/* 2. Typ Dnia */}
+          {/* 2. Typ Treningu */}
           <div className="space-y-1.5">
             <label className="text-[11px] uppercase font-bold text-neutral-300 block">
-              Typ Dnia Treningowego:
+              Typ Treningu:
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {DAY_TYPES.map((t) => {
@@ -249,7 +249,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
               className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-400/20 cursor-pointer flex items-center gap-1.5"
             >
               <Check className="w-4 h-4 stroke-[3]" />
-              <span>Zapisz Parametry Dnia</span>
+              <span>Zapisz Parametry Treningu</span>
             </button>
           </div>
         </form>

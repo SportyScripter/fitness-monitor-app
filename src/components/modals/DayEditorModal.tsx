@@ -339,9 +339,9 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-black">
-                  {dayNamePolish} (Dzień {day.dayNumber})
+                  {dayNamePolish} (Trening {day.dayNumber})
                 </span>
-                <span className="text-xs text-neutral-400">Edytor i Planowanie Dnia</span>
+                <span className="text-xs text-neutral-400">Edytor i Planowanie Treningu</span>
               </div>
               <h2 className="text-base sm:text-xl font-black text-white font-heading mt-0.5">
                 Konfiguracja Treningu & Ćwiczeń
@@ -362,14 +362,14 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
           {/* Day Settings Bar */}
           <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
-              Parametry i Nazewnictwo Dnia Treningowego
+              Parametry i Nazewnictwo Treningu
             </h3>
 
             {/* Flexible Naming Choice Section */}
             <div className="p-3 bg-neutral-900/90 rounded-xl border border-neutral-800 space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <label className="text-[10px] uppercase font-bold text-amber-300 block">
-                  Etykieta Dnia (Dzień Tygodnia / Trening 1 / Plan A / Własna):
+                  Etykieta Treningu (Trening 1 / Dzień Tygodnia / Plan A / Własna):
                 </label>
                 <span className="text-[10px] text-neutral-400">
                   Wybierz szybki szablon lub wpisz dowolną nazwę:
@@ -540,7 +540,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
               <div>
                 <h3 className="text-base font-bold text-white font-heading">
-                  Ćwiczenia w Tym Dniu ({exercises.length})
+                  Ćwiczenia w Tym Treningu ({exercises.length})
                 </h3>
                 <p className="text-xs text-neutral-400">
                   Możesz swobodnie modyfikować serie, powtórzenia, ciężar oraz kolejność ćwiczeń
@@ -553,7 +553,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                 className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-black transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-400/20"
               >
                 <Plus className="w-4 h-4" />
-                <span>Dodaj Ćwiczenie do Dnia</span>
+                <span>Dodaj Ćwiczenie do Treningu</span>
               </button>
             </div>
 
@@ -973,7 +973,7 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
                         type="submit"
                         className="px-4 py-2 rounded-lg bg-amber-400 text-black font-black uppercase text-[11px] cursor-pointer hover:bg-amber-300 transition-colors shadow-md shadow-amber-400/10"
                       >
-                        + Zapisz & Wstaw do Dnia
+                        + Zapisz & Wstaw do Treningu
                       </button>
                     </div>
                   </form>
@@ -985,9 +985,9 @@ export const DayEditorModal: React.FC<DayEditorModalProps> = ({
             {exercises.length === 0 ? (
               <div className="p-8 text-center text-neutral-500 text-xs bg-neutral-950/60 rounded-2xl border border-neutral-800">
                 <Dumbbell className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
-                <p>Ten dzień nie zawiera jeszcze żadnych ćwiczeń.</p>
+                <p>Ten trening nie zawiera jeszcze żadnych ćwiczeń.</p>
                 <p className="text-neutral-400 mt-1">
-                  Kliknij &quot;Dodaj Ćwiczenie do Dnia&quot; powyżej, aby zaplanować swój trening!
+                  Kliknij &quot;Dodaj Ćwiczenie do Treningu&quot; powyżej, aby zaplanować swój trening!
                 </p>
               </div>
             ) : (

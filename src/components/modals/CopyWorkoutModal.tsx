@@ -54,13 +54,13 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
   };
 
   const daysOfWeek = [
-    { num: 1, name: 'Dzień 1: Poniedziałek' },
-    { num: 2, name: 'Dzień 2: Wtorek' },
-    { num: 3, name: 'Dzień 3: Środa' },
-    { num: 4, name: 'Dzień 4: Czwartek' },
-    { num: 5, name: 'Dzień 5: Piątek' },
-    { num: 6, name: 'Dzień 6: Sobota' },
-    { num: 7, name: 'Dzień 7: Niedziela' },
+    { num: 1, name: 'Trening 1: Poniedziałek' },
+    { num: 2, name: 'Trening 2: Wtorek' },
+    { num: 3, name: 'Trening 3: Środa' },
+    { num: 4, name: 'Trening 4: Czwartek' },
+    { num: 5, name: 'Trening 5: Piątek' },
+    { num: 6, name: 'Trening 6: Sobota' },
+    { num: 7, name: 'Trening 7: Niedziela' },
   ];
 
   const maxSelectableWeek = Math.max(totalWeeksCount + 2, currentWeek + 2);
@@ -80,7 +80,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
                 Kopiuj Trening do Innego Tygodnia
               </h3>
               <p className="text-xs text-neutral-400">
-                Tydzień i dzień zostaną automatycznie utworzone, jeśli jeszcze nie istnieją
+                Tydzień i trening zostaną automatycznie utworzone, jeśli jeszcze nie istnieją
               </p>
             </div>
           </div>
@@ -106,7 +106,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
-            Ten Dzień ({sourceDay.dayNamePolish})
+            Ten Trening ({sourceDay.dayNamePolish})
           </button>
           <button
             type="button"
@@ -117,7 +117,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
                 : 'text-neutral-400 hover:text-white'
             }`}
           >
-            Cały Tydzień {currentWeek} (Wszystkie dni)
+            Cały Tydzień {currentWeek} (Wszystkie treningi)
           </button>
         </div>
 
@@ -173,7 +173,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
           {copyScope === 'single_day' && (
             <div>
               <label className="text-[10px] text-neutral-400 uppercase font-bold block mb-1">
-                Docelowy Dzień w Tygodniu:
+                Docelowy Trening w Tygodniu:
               </label>
               <select
                 value={targetDayNumber}
@@ -194,7 +194,7 @@ export const CopyWorkoutModal: React.FC<CopyWorkoutModalProps> = ({
         <div className="p-2.5 rounded-xl bg-amber-400/10 border border-amber-400/20 text-[11px] text-amber-300 flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
           <span>
-            Jeśli Tydzień {targetWeek} lub wybrany dzień jeszcze nie istnieją w Twoim cyklu, zostaną automatycznie utworzone i skonfigurowane!
+            Jeśli Tydzień {targetWeek} lub wybrany trening jeszcze nie istnieją w Twoim cyklu, zostaną automatycznie utworzone i skonfigurowane!
           </span>
         </div>
 

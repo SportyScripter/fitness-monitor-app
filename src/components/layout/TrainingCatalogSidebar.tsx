@@ -366,9 +366,9 @@ export const TrainingCatalogSidebar: React.FC<TrainingCatalogSidebarProps> = ({
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-neutral-400 uppercase font-semibold block">Dni w tyg.</span>
+                      <span className="text-[10px] text-neutral-400 uppercase font-semibold block">Treningi w tyg.</span>
                       <span className="font-bold text-amber-400 font-mono-numbers">
-                        {daysInWeekOne > 0 ? `${daysInWeekOne} dni` : 'Brak'}
+                        {daysInWeekOne > 0 ? `${daysInWeekOne} tren.` : 'Brak'}
                       </span>
                     </div>
                     <div>

@@ -398,18 +398,19 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
         {/* Day Selector Strip - Big tactile buttons with completion status */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none pt-1">
-          {currentWeekDays.map((day) => {
+          {currentWeekDays.map((day, index) => {
             const isSelected = selectedDay && selectedDay.id === day.id;
             const status = getDayStatus(day);
             const isCompleted = status === 'completed';
             const isInProgress = status === 'in_progress';
-            const dayLabel = (day as any).dayLabel || day.dayNamePolish || `Dzień ${day.dayNumber}`;
+            const dynamicWorkoutNumber = index + 1;
+            const dayLabel = ((day as any).dayLabel || day.dayNamePolish || `Trening ${dynamicWorkoutNumber}`).replace(/^Dzień\s*(\d+)/i, 'Trening $1');
 
             return (
               <button
                 key={day.id}
                 onClick={() => onSelectDayId(day.id)}
-                className={`w-32 min-w-[124px] max-w-[136px] flex-shrink-0 shrink-0 p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none ${
+                className={`w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none whitespace-nowrap ${
                   isSelected
                     ? isCompleted
                       ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
@@ -422,8 +423,8 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 }`}
                 title={day.title}
               >
-                {/* Top Row: Day indicator (e.g. D1) with completion status + colored type badge */}
-                <div className="flex items-center justify-between w-full gap-1 mb-1 min-w-0">
+                {/* Top Row: Dynamic Workout indicator (e.g. Trening 1) with completion status + colored type badge */}
+                <div className="flex items-center justify-between w-full gap-2 mb-1 min-w-0">
                   <div className="flex items-center gap-1 shrink-0">
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
@@ -436,7 +437,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                           : 'text-neutral-400'
                       }`}
                     >
-                      D{day.dayNumber}
+                      Trening {dynamicWorkoutNumber}
                     </span>
                     {isCompleted && (
                       <span
@@ -459,7 +460,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                   </div>
 
                   <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 truncate max-w-[68px] text-center ${
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 ${
                       isSelected
                         ? 'bg-black text-amber-400 shadow-sm'
                         : day.type === 'FBW'
@@ -487,7 +488,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
                 {/* Main Text: Full dayLabel (e.g. "Poniedziałek", "Wtorek") */}
                 <div
-                  className={`text-xs sm:text-[13px] font-extrabold truncate w-full text-left pt-0.5 ${
+                  className={`text-xs sm:text-[13px] font-extrabold whitespace-nowrap w-full text-left pt-0.5 ${
                     isSelected
                       ? 'text-black font-black'
                       : isCompleted
@@ -663,7 +664,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             {(!selectedDay.exercises || selectedDay.exercises.length === 0) ? (
               <div className="p-8 text-center text-neutral-500 text-xs bg-neutral-900 rounded-3xl border border-neutral-800">
                 <Dumbbell className="w-8 h-8 mx-auto mb-2 text-neutral-600" />
-                <p>Brak zaplanowanych ćwiczeń na ten dzień.</p>
+                <p>Brak zaplanowanych ćwiczeń na ten trening.</p>
               </div>
             ) : (
               <div className="space-y-3">

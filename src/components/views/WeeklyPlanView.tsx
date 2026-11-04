@@ -355,7 +355,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
               className="px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-400/20"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Dodaj Dzień Treningowy</span>
+              <span>+ Dodaj Trening</span>
             </button>
             <button
               onClick={onResetPlanToDefault}
@@ -491,7 +491,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
 
       {/* 7-Day Navigation Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {weekPlan.map((day) => {
+        {weekPlan.map((day, idx) => {
           const isSelected = day.id === selectedDayId;
           const badge = getDayTypeBadge(day.type);
           const Icon = badge.icon;
@@ -508,13 +508,13 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">
-                  Dzień {day.dayNumber}
+                  Trening {idx + 1}
                 </span>
                 <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-amber-400' : 'text-neutral-500'}`} />
               </div>
 
               <div className="text-xs font-bold text-white truncate font-heading">
-                {day.dayNamePolish}
+                {(day.dayNamePolish || day.title).replace(/^Dzień\s*(\d+)/i, 'Trening $1')}
               </div>
 
               <div className="text-[10px] text-neutral-400 truncate mt-0.5">
@@ -532,10 +532,10 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
           <button
             onClick={() => onAddDay()}
             className="p-3 rounded-2xl border border-dashed border-amber-400/40 hover:border-amber-400 bg-amber-400/5 hover:bg-amber-400/10 text-amber-300 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer group min-h-[72px]"
-            title="Dodaj kolejny dzień treningowy do tego tygodnia"
+            title="Dodaj kolejny trening do tego tygodnia"
           >
             <Plus className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span className="text-[11px] font-bold uppercase tracking-wider">Dodaj Dzień</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Dodaj Trening</span>
           </button>
         )}
       </div>
