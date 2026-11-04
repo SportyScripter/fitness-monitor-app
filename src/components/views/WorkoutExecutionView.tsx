@@ -40,6 +40,7 @@ import {
 import {
   SortableContext,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
   useSortable,
   arrayMove
 } from '@dnd-kit/sortable';
@@ -123,6 +124,176 @@ import { ExerciseEditModal } from '../modals/ExerciseEditModal';
 import { CopyWorkoutModal } from '../modals/CopyWorkoutModal';
 import { calculateDayPlannedTonnage } from '../../utils/tonnageUtils';
 
+interface SortableWorkoutDayTileProps {
+  day: WorkoutDay;
+  index: number;
+  isSelected: boolean;
+  isEditMode: boolean;
+  status: 'completed' | 'in_progress' | 'not_started';
+  onSelect: () => void;
+  onEdit: () => void;
+}
+
+const SortableWorkoutDayTile: React.FC<SortableWorkoutDayTileProps> = ({
+  day,
+  index,
+  isSelected,
+  isEditMode,
+  status,
+  onSelect,
+  onEdit,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: day.id,
+    disabled: !isEditMode,
+  });
+
+  const style: React.CSSProperties = isEditMode
+    ? {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : undefined,
+      }
+    : {};
+
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-amber-400/50 bg-neutral-900/30 opacity-35 min-h-[64px]"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const isCompleted = status === 'completed';
+  const isInProgress = status === 'in_progress';
+  const dynamicWorkoutNumber = index + 1;
+  const dayLabel = ((day as any).dayLabel || day.dayNamePolish || `Trening ${dynamicWorkoutNumber}`).replace(/^Dzień\s*(\d+)/i, 'Trening $1');
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      type="button"
+      {...(isEditMode ? attributes : {})}
+      {...(isEditMode ? listeners : {})}
+      onClick={() => {
+        if (isEditMode) {
+          onEdit();
+        } else {
+          onSelect();
+        }
+      }}
+      className={`w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border text-left transition-all min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none whitespace-nowrap ${
+        isEditMode
+          ? `touch-none cursor-grab active:cursor-grabbing ${
+              isSelected
+                ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-dashed ring-black shadow-md font-black scale-[1.02]'
+                : 'bg-neutral-950/90 text-amber-200 border-amber-500/50 hover:border-amber-400'
+            }`
+          : `cursor-pointer touch-manipulation ${
+              isSelected
+                ? isCompleted
+                  ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
+                  : 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
+                : isCompleted
+                ? 'bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-100 border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600/70 dark:ring-emerald-500/50 shadow-sm shadow-emerald-900/10 hover:bg-emerald-100 dark:hover:bg-emerald-950/50'
+                : isInProgress
+                ? 'bg-amber-500/10 dark:bg-amber-950/20 text-neutral-800 dark:text-neutral-200 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/40 hover:bg-amber-500/15'
+                : 'bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700'
+            }`
+      }`}
+      title={isEditMode ? `Przeciągnij, aby zmienić kolejność lub kliknij, aby dostosować Trening ${dynamicWorkoutNumber}` : day.title}
+    >
+      {/* Top Row: Dynamic Workout indicator (e.g. Trening 1) with completion status + colored type badge */}
+      <div className="flex items-center justify-between w-full gap-2 mb-1 min-w-0">
+        <div className="flex items-center gap-1 shrink-0">
+          {isEditMode && <GripVertical className="w-3 h-3 text-amber-400 shrink-0" />}
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+              isSelected
+                ? 'text-black'
+                : isCompleted
+                ? 'text-emerald-800 dark:text-emerald-300 font-extrabold'
+                : isInProgress
+                ? 'text-amber-600 dark:text-amber-400 font-bold'
+                : 'text-neutral-400'
+            }`}
+          >
+            Trening {dynamicWorkoutNumber}
+          </span>
+          {!isEditMode && isCompleted && (
+            <span
+              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
+                isSelected
+                  ? 'bg-black text-emerald-400 ring-1 ring-black'
+                  : 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950'
+              }`}
+              title="Trening w 100% zrealizowany"
+            >
+              <Check className="w-2.5 h-2.5 stroke-[3]" />
+            </span>
+          )}
+          {!isEditMode && isInProgress && !isCompleted && (
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-sm"
+              title="Trening w trakcie realizacji"
+            />
+          )}
+        </div>
+
+        <span
+          className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 ${
+            isSelected
+              ? 'bg-black text-amber-400 shadow-sm'
+              : day.type === 'FBW'
+              ? 'bg-amber-400 text-black'
+              : day.type === 'RUNNING_HIIT'
+              ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+              : day.type === 'WEEKEND_HYROX'
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+              : day.type === 'REST_RECOVERY'
+              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+          }`}
+        >
+          {day.type === 'FBW'
+            ? 'FBW'
+            : day.type === 'RUNNING_HIIT'
+            ? 'Running'
+            : day.type === 'WEEKEND_HYROX'
+            ? 'Hyrox'
+            : day.type === 'REST_RECOVERY'
+            ? 'Rest'
+            : 'Custom'}
+        </span>
+      </div>
+
+      {/* Main Text: Full dayLabel (e.g. "Poniedziałek", "Wtorek") */}
+      <div
+        className={`text-xs sm:text-[13px] font-extrabold whitespace-nowrap w-full text-left pt-0.5 ${
+          isSelected
+            ? 'text-black font-black'
+            : isCompleted
+            ? 'text-emerald-950 dark:text-white font-extrabold'
+            : 'text-white'
+        }`}
+      >
+        {dayLabel}
+      </div>
+    </button>
+  );
+};
+
 interface WorkoutExecutionViewProps {
   activeCycle: TrainingCycleCatalog | null;
   currentWeek: number;
@@ -134,6 +305,7 @@ interface WorkoutExecutionViewProps {
   onOpenSimulator: () => void;
   onOpenRecovery: () => void;
   onUpdateDay: (day: WorkoutDay) => void;
+  onReorderDays?: (reorderedDays: WorkoutDay[]) => void;
   workoutLogs: WorkoutLogEntry[];
   onSaveLogs?: (newEntries: WorkoutLogEntry[]) => void;
   onWeekChange: (week: number) => void;
@@ -169,6 +341,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   onOpenSimulator,
   onOpenRecovery,
   onUpdateDay,
+  onReorderDays,
   workoutLogs = [],
   onSaveLogs,
   onWeekChange,
@@ -558,6 +731,61 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     })
   );
 
+  // DND-Kit Sensors for horizontal workout day reordering:
+  // - Mouse: 8px distance for snappy desktop drag
+  // - Touch / Pointer: 200ms delay & 5px tolerance to allow normal swipe-scroll without accidental drag
+  const daySensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    })
+  );
+
+  const [activeDraggingDayId, setActiveDraggingDayId] = useState<string | null>(null);
+
+  const handleDayDragStart = (event: DragStartEvent) => {
+    setActiveDraggingDayId(String(event.active.id));
+  };
+
+  const handleDayDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDraggingDayId(null);
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = currentWeekDays.findIndex((d) => d.id === active.id);
+    const newIndex = currentWeekDays.findIndex((d) => d.id === over.id);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(currentWeekDays, oldIndex, newIndex);
+      if (onReorderDays) {
+        onReorderDays(reordered);
+      }
+    }
+  };
+
+  const handleDayDragCancel = () => {
+    setActiveDraggingDayId(null);
+  };
+
+  const activeDraggingDay = activeDraggingDayId
+    ? currentWeekDays.find((d) => d.id === activeDraggingDayId) || null
+    : null;
+  const activeDraggingDayIndex = activeDraggingDay
+    ? currentWeekDays.findIndex((d) => d.id === activeDraggingDay.id)
+    : -1;
+
   const [activeDraggingExerciseId, setActiveDraggingExerciseId] = useState<string | null>(null);
 
   const handleExerciseDragStart = (event: DragStartEvent) => {
@@ -701,121 +929,86 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
         {/* Day Selector Strip - Big tactile buttons with completion status and edit mode */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none pt-1">
-          {currentWeekDays.map((day, index) => {
-            const isSelected = selectedDay && selectedDay.id === day.id;
-            const status = getDayStatus(day);
-            const isCompleted = status === 'completed';
-            const isInProgress = status === 'in_progress';
-            const dynamicWorkoutNumber = index + 1;
-            const dayLabel = ((day as any).dayLabel || day.dayNamePolish || `Trening ${dynamicWorkoutNumber}`).replace(/^Dzień\s*(\d+)/i, 'Trening $1');
+          <DndContext
+            sensors={daySensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDayDragStart}
+            onDragEnd={handleDayDragEnd}
+            onDragCancel={handleDayDragCancel}
+            autoScroll={{
+              threshold: { x: 0.15, y: 0.15 },
+              acceleration: 8,
+            }}
+          >
+            <SortableContext
+              items={currentWeekDays.map((d) => d.id)}
+              strategy={horizontalListSortingStrategy}
+            >
+              {currentWeekDays.map((day, index) => {
+                const isSelected = selectedDay && selectedDay.id === day.id;
+                const status = getDayStatus(day);
 
-            return (
-              <button
-                key={day.id}
-                onClick={() => {
-                  if (isEditMode) {
-                    setSelectedDayToEdit(day);
-                    setIsDaySettingsModalOpen(true);
-                  } else {
-                    onSelectDayId(day.id);
-                  }
-                }}
-                className={`w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none whitespace-nowrap ${
-                  isEditMode
-                    ? isSelected
-                      ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-dashed ring-black shadow-md font-black scale-[1.02]'
-                      : 'bg-neutral-950/90 text-amber-200 border-amber-500/50 hover:border-amber-400'
-                    : isSelected
-                    ? isCompleted
-                      ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
-                      : 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
-                    : isCompleted
-                    ? 'bg-emerald-50/80 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-100 border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600/70 dark:ring-emerald-500/50 shadow-sm shadow-emerald-900/10 hover:bg-emerald-100 dark:hover:bg-emerald-950/50'
-                    : isInProgress
-                    ? 'bg-amber-500/10 dark:bg-amber-950/20 text-neutral-800 dark:text-neutral-200 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/40 hover:bg-amber-500/15'
-                    : 'bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700'
-                }`}
-                title={isEditMode ? `Dostosuj Trening ${dynamicWorkoutNumber}` : day.title}
-              >
-                {/* Top Row: Dynamic Workout indicator (e.g. Trening 1) with completion status + colored type badge */}
-                <div className="flex items-center justify-between w-full gap-2 mb-1 min-w-0">
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isEditMode && <Edit2 className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
+                return (
+                  <SortableWorkoutDayTile
+                    key={day.id}
+                    day={day}
+                    index={index}
+                    isSelected={isSelected}
+                    isEditMode={isEditMode}
+                    status={status}
+                    onSelect={() => onSelectDayId(day.id)}
+                    onEdit={() => {
+                      setSelectedDayToEdit(day);
+                      setIsDaySettingsModalOpen(true);
+                    }}
+                  />
+                );
+              })}
+            </SortableContext>
+
+            <DragOverlay dropAnimation={null}>
+              {activeDraggingDay ? (
+                <div className="w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border-2 border-amber-400 bg-neutral-900 text-left min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none whitespace-nowrap shadow-2xl z-50 ring-2 ring-amber-400/50">
+                  <div className="flex items-center justify-between w-full gap-2 mb-1 min-w-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <GripVertical className="w-3 h-3 text-amber-400 shrink-0" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider shrink-0 text-amber-300">
+                        Trening {activeDraggingDayIndex + 1}
+                      </span>
+                    </div>
+
                     <span
-                      className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-                        isSelected
-                          ? 'text-black'
-                          : isCompleted
-                          ? 'text-emerald-800 dark:text-emerald-300 font-extrabold'
-                          : isInProgress
-                          ? 'text-amber-600 dark:text-amber-400 font-bold'
-                          : 'text-neutral-400'
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 ${
+                        activeDraggingDay.type === 'FBW'
+                          ? 'bg-amber-400 text-black'
+                          : activeDraggingDay.type === 'RUNNING_HIIT'
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          : activeDraggingDay.type === 'WEEKEND_HYROX'
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                          : activeDraggingDay.type === 'REST_RECOVERY'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                       }`}
                     >
-                      Trening {dynamicWorkoutNumber}
+                      {activeDraggingDay.type === 'FBW'
+                        ? 'FBW'
+                        : activeDraggingDay.type === 'RUNNING_HIIT'
+                        ? 'Running'
+                        : activeDraggingDay.type === 'WEEKEND_HYROX'
+                        ? 'Hyrox'
+                        : activeDraggingDay.type === 'REST_RECOVERY'
+                        ? 'Rest'
+                        : 'Custom'}
                     </span>
-                    {!isEditMode && isCompleted && (
-                      <span
-                        className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
-                          isSelected
-                            ? 'bg-black text-emerald-400 ring-1 ring-black'
-                            : 'bg-emerald-600 dark:bg-emerald-500 text-white dark:text-neutral-950'
-                        }`}
-                        title="Trening w 100% zrealizowany"
-                      >
-                        <Check className="w-2.5 h-2.5 stroke-[3]" />
-                      </span>
-                    )}
-                    {!isEditMode && isInProgress && !isCompleted && (
-                      <span
-                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-sm"
-                        title="Trening w trakcie realizacji"
-                      />
-                    )}
                   </div>
 
-                  <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold uppercase tracking-tight leading-none shrink-0 ${
-                      isSelected
-                        ? 'bg-black text-amber-400 shadow-sm'
-                        : day.type === 'FBW'
-                        ? 'bg-amber-400 text-black'
-                        : day.type === 'RUNNING_HIIT'
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                        : day.type === 'WEEKEND_HYROX'
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : day.type === 'REST_RECOVERY'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    }`}
-                  >
-                    {day.type === 'FBW'
-                      ? 'FBW'
-                      : day.type === 'RUNNING_HIIT'
-                      ? 'Running'
-                      : day.type === 'WEEKEND_HYROX'
-                      ? 'Hyrox'
-                      : day.type === 'REST_RECOVERY'
-                      ? 'Rest'
-                      : 'Custom'}
-                  </span>
+                  <div className="text-xs sm:text-[13px] font-extrabold whitespace-nowrap w-full text-left pt-0.5 text-white">
+                    {((activeDraggingDay as any).dayLabel || activeDraggingDay.dayNamePolish || `Trening ${activeDraggingDayIndex + 1}`).replace(/^Dzień\s*(\d+)/i, 'Trening $1')}
+                  </div>
                 </div>
-
-                {/* Main Text: Full dayLabel (e.g. "Poniedziałek", "Wtorek") */}
-                <div
-                  className={`text-xs sm:text-[13px] font-extrabold whitespace-nowrap w-full text-left pt-0.5 ${
-                    isSelected
-                      ? 'text-black font-black'
-                      : isCompleted
-                      ? 'text-emerald-950 dark:text-white font-extrabold'
-                      : 'text-white'
-                  }`}
-                >
-                  {dayLabel}
-                </div>
-              </button>
-            );
-          })}
+              ) : null}
+            </DragOverlay>
+          </DndContext>
 
           {/* Przedostatni kafelek: Kopiuj trening */}
           {selectedDay && onCopyDayToWeek && (

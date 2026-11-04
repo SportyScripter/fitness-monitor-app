@@ -1452,6 +1452,7 @@ export default function App() {
                 }}
                 onAddDay={handleAddDay}
                 onDeleteDay={handleDeleteDay}
+                onReorderDays={handleReorderDays}
                 onCopyDayToWeek={handleCopyDayToWeek}
                 onCopyEntireWeekTo={handleCopyEntireWeekTo}
               />
