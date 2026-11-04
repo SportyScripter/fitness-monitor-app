@@ -27,11 +27,6 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     badge?: string;
   }[] = [
     {
-      id: 'edit',
-      label: 'Edycja',
-      icon: Sliders,
-    },
-    {
       id: 'workout',
       label: 'Trening',
       icon: Dumbbell,

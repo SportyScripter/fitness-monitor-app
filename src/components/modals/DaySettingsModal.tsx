@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Calendar, Clock, Layers, Sparkles } from 'lucide-react';
+import { X, Check, Calendar, Clock, Layers, Sparkles, Trash2 } from 'lucide-react';
 import { WorkoutDay, DayType } from '../../types/hyrox';
 
 interface DaySettingsModalProps {
@@ -7,6 +7,7 @@ interface DaySettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveDaySettings: (updatedDay: WorkoutDay) => void;
+  onDeleteDay?: (dayId: string) => void;
 }
 
 const DAY_LABELS = [
@@ -58,6 +59,7 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
   isOpen,
   onClose,
   onSaveDaySettings,
+  onDeleteDay,
 }) => {
   const [dayType, setDayType] = useState<DayType>(day.type);
   const [dayNamePolish, setDayNamePolish] = useState(day.dayNamePolish || `Trening ${day.dayNumber}`);
@@ -236,21 +238,40 @@ export const DaySettingsModal: React.FC<DaySettingsModalProps> = ({
           </div>
 
           {/* Footer Actions inside scrollable form */}
-          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold transition-colors cursor-pointer"
-            >
-              Anuluj
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-400/20 cursor-pointer flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>Zapisz Parametry Treningu</span>
-            </button>
+          <div className="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-between gap-2.5">
+            {onDeleteDay ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const label = day.dayNamePolish || day.title || `Trening ${day.dayNumber}`;
+                  if (window.confirm(`Czy na pewno chcesz usunąć trening "${label}"?`)) {
+                    onDeleteDay(day.id);
+                    onClose();
+                  }
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Usuń</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Anuluj
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-400/20 cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Zapisz Parametry Treningu</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>

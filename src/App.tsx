@@ -7,7 +7,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Header } from './components/layout/Header';
 import { BottomNavBar, MainNavTab } from './components/layout/BottomNavBar';
-import { CycleEditView } from './components/views/CycleEditView';
 import { WorkoutExecutionView } from './components/views/WorkoutExecutionView';
 import { MoreMenuView, MoreSubView } from './components/views/MoreMenuView';
 import { WeeklyPlanView } from './components/views/WeeklyPlanView';
@@ -1412,39 +1411,9 @@ export default function App() {
             onToggleTheme={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
           />
 
-          {/* Main Content Area - All 4 main views remain mounted in DOM to guarantee ZERO state loss on tab switch */}
+          {/* Main Content Area - All main views remain mounted in DOM to guarantee ZERO state loss on tab switch */}
           <main className="flex-1 w-full mx-auto px-3 py-4 lg:px-5 lg:py-5 lg:max-w-[1800px]">
-            {/* 1. Edycja: Zarządzanie strukturą wybranego cyklu, dodawanie ćwiczeń, tygodnie i parametry */}
-            <div className={activeTab === 'edit' ? 'block' : 'hidden'}>
-              <CycleEditView
-                activeCycle={activeCycle}
-                currentWeek={currentWeek}
-                weeksList={weeksList}
-                currentWeekDays={currentWeekDays}
-                selectedDayId={selectedDayId}
-                onSelectDayId={setSelectedDayId}
-                onWeekChange={handleWeekChange}
-                onOpenAddWeekModal={() => setIsAddWeekModalOpen(true)}
-                onDeleteWeek={handleDeleteWeek}
-                onUpdateDay={handleUpdateDay}
-                onAddDay={handleAddDay}
-                onDeleteDay={handleDeleteDay}
-                onResetPlanToDefault={handleResetPlanToDefault}
-                onCopyDayToWeek={handleCopyDayToWeek}
-                onCopyEntireWeekTo={handleCopyEntireWeekTo}
-                onReorderDays={handleReorderDays}
-                workoutLogs={workoutLogs}
-                onUpdatePhase={(updatedPhase) => {
-                  const updatedWeeks = weeksList.map((w) => (w.week === updatedPhase.week ? updatedPhase : w));
-                  handleUpdateCycle({
-                    ...activeCycle,
-                    weeksList: updatedWeeks,
-                  });
-                }}
-              />
-            </div>
-
-            {/* 2. Trening (Główna akcja): Ekran realizacji treningu, zestaw ćwiczeń do odhaczenia na dany dzień */}
+            {/* 1. Trening (Główna akcja): Ekran realizacji treningu i pełnego zarządzania cyklem */}
             <div className={activeTab === 'workout' ? 'block' : 'hidden'}>
               <WorkoutExecutionView
                 activeCycle={activeCycle}
@@ -1472,6 +1441,19 @@ export default function App() {
                 workoutLogs={workoutLogs}
                 onSaveLogs={handleSaveLogs}
                 onWeekChange={handleWeekChange}
+                onOpenAddWeekModal={() => setIsAddWeekModalOpen(true)}
+                onDeleteWeek={handleDeleteWeek}
+                onUpdatePhase={(updatedPhase) => {
+                  const updatedWeeks = weeksList.map((w) => (w.week === updatedPhase.week ? updatedPhase : w));
+                  handleUpdateCycle({
+                    ...activeCycle,
+                    weeksList: updatedWeeks,
+                  });
+                }}
+                onAddDay={handleAddDay}
+                onDeleteDay={handleDeleteDay}
+                onCopyDayToWeek={handleCopyDayToWeek}
+                onCopyEntireWeekTo={handleCopyEntireWeekTo}
               />
             </div>
 

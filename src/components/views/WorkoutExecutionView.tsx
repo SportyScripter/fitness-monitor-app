@@ -15,8 +15,96 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
-  Check
+  Check,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  Copy,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  GripVertical
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverlay
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+interface SortableExerciseCardWrapperProps {
+  id: string;
+  isReorderMode: boolean;
+  children: (sortable: {
+    setNodeRef: (element: HTMLElement | null) => void;
+    style: React.CSSProperties;
+    isDragging: boolean;
+    attributes: any;
+    listeners: any;
+  }) => React.ReactNode;
+}
+
+const SortableExerciseCardWrapper: React.FC<SortableExerciseCardWrapperProps> = ({
+  id,
+  isReorderMode,
+  children,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id,
+    disabled: !isReorderMode,
+  });
+
+  const style: React.CSSProperties = isReorderMode
+    ? {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : undefined,
+      }
+    : {};
+
+  if (isDragging) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className="w-full rounded-3xl p-4 border-2 border-dashed border-amber-400/50 bg-neutral-900/30 opacity-40 min-h-[140px] transition-all"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <>
+      {children({
+        setNodeRef,
+        style,
+        isDragging,
+        attributes,
+        listeners,
+      })}
+    </>
+  );
+};
 import {
   WorkoutDay,
   Exercise,
@@ -29,6 +117,10 @@ import {
 import { ExerciseChartModal } from '../modals/ExerciseChartModal';
 import { PreviousWorkoutModal } from '../modals/PreviousWorkoutModal';
 import { ExerciseDetailModal } from '../modals/ExerciseDetailModal';
+import { EditWeekParamsModal } from '../modals/EditWeekParamsModal';
+import { DaySettingsModal } from '../modals/DaySettingsModal';
+import { ExerciseEditModal } from '../modals/ExerciseEditModal';
+import { CopyWorkoutModal } from '../modals/CopyWorkoutModal';
 import { calculateDayPlannedTonnage } from '../../utils/tonnageUtils';
 
 interface WorkoutExecutionViewProps {
@@ -48,6 +140,22 @@ interface WorkoutExecutionViewProps {
   activeOngoingWorkoutDay?: WorkoutDay | null;
   isWorkoutMinimized?: boolean;
   onMaximizeWorkout?: () => void;
+  onOpenAddWeekModal?: () => void;
+  onDeleteWeek?: (weekNumber: number) => void;
+  onUpdatePhase?: (updatedPhase: MesocyclePhase) => void;
+  onAddDay?: (dayData?: Partial<WorkoutDay>) => void;
+  onDeleteDay?: (dayId: string) => void;
+  onCopyDayToWeek?: (
+    sourceDay: WorkoutDay,
+    targetWeek: number,
+    targetDayNumber: number,
+    progressionDeltaKg: number
+  ) => void;
+  onCopyEntireWeekTo?: (
+    sourceWeek: number,
+    targetWeek: number,
+    progressionDeltaKg: number
+  ) => void;
 }
 
 export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
@@ -67,11 +175,33 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   activeOngoingWorkoutDay,
   isWorkoutMinimized,
   onMaximizeWorkout,
+  onOpenAddWeekModal,
+  onDeleteWeek,
+  onUpdatePhase,
+  onAddDay,
+  onDeleteDay,
+  onCopyDayToWeek,
+  onCopyEntireWeekTo,
 }) => {
   const [chartExerciseName, setChartExerciseName] = useState<string | null>(null);
   const [isPreviousWorkoutModalOpen, setIsPreviousWorkoutModalOpen] = useState(false);
   const [activeDetailExercise, setActiveDetailExercise] = useState<Exercise | null>(null);
   const [expandedExerciseIds, setExpandedExerciseIds] = useState<Record<string, boolean>>({});
+
+  // Edit Mode & Modals State
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditWeekModalOpen, setIsEditWeekModalOpen] = useState(false);
+  const [selectedWeekToEdit, setSelectedWeekToEdit] = useState<MesocyclePhase | null>(null);
+  const [isDaySettingsModalOpen, setIsDaySettingsModalOpen] = useState(false);
+  const [selectedDayToEdit, setSelectedDayToEdit] = useState<WorkoutDay | null>(null);
+  const [isCopyWorkoutModalOpen, setIsCopyWorkoutModalOpen] = useState(false);
+  const [isExerciseEditModalOpen, setIsExerciseEditModalOpen] = useState(false);
+  const [exerciseToEdit, setExerciseToEdit] = useState<Exercise | null>(null);
+  const [openKebabExerciseId, setOpenKebabExerciseId] = useState<string | null>(null);
+
+  // Exercise Reorder State with Wiggle Effect
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  const [reorderExercises, setReorderExercises] = useState<Exercise[]>([]);
 
   if (!activeCycle) {
     return (
@@ -339,8 +469,137 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     return calculateDayPlannedTonnage(day, currentPhase?.volumeMultiplier ?? 1.0);
   };
 
+  // Exercise plan edit & reorder actions
+  const handleSaveExercise = (savedExercise: Exercise) => {
+    if (!selectedDay) return;
+    const exists = selectedDay.exercises?.some((e) => e.id === savedExercise.id);
+    let updatedExercises: Exercise[];
+    if (exists) {
+      updatedExercises = (selectedDay.exercises || []).map((e) =>
+        e.id === savedExercise.id ? savedExercise : e
+      );
+    } else {
+      updatedExercises = [...(selectedDay.exercises || []), savedExercise];
+    }
+    onUpdateDay({
+      ...selectedDay,
+      exercises: updatedExercises,
+    });
+  };
+
+  const handleDeleteExerciseFromPlan = (exerciseId: string) => {
+    if (!selectedDay) return;
+    const exerciseToDelete = selectedDay.exercises?.find((e) => e.id === exerciseId);
+    const exName = exerciseToDelete?.name || 'to ćwiczenie';
+    if (window.confirm(`Czy na pewno chcesz usunąć ćwiczenie "${exName}" z planu treningu?`)) {
+      const updatedExercises = (selectedDay.exercises || []).filter((e) => e.id !== exerciseId);
+      onUpdateDay({
+        ...selectedDay,
+        exercises: updatedExercises,
+      });
+    }
+  };
+
+  const handleMoveExercise = (fromIndex: number, toIndex: number) => {
+    if (!selectedDay || !selectedDay.exercises) return;
+    if (toIndex < 0 || toIndex >= selectedDay.exercises.length) return;
+    const updated = arrayMove(selectedDay.exercises, fromIndex, toIndex);
+    onUpdateDay({
+      ...selectedDay,
+      exercises: updated,
+    });
+  };
+
+  const handleStartReorderMode = () => {
+    if (!selectedDay || !selectedDay.exercises) return;
+    setReorderExercises([...selectedDay.exercises]);
+    setIsReorderMode(true);
+  };
+
+  const handleReorderMove = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= reorderExercises.length) return;
+    setReorderExercises((prev) => arrayMove(prev, fromIndex, toIndex));
+  };
+
+  const handleSaveReorder = () => {
+    if (!selectedDay) return;
+    onUpdateDay({
+      ...selectedDay,
+      exercises: reorderExercises,
+    });
+    setIsReorderMode(false);
+  };
+
+  const handleCancelReorder = () => {
+    setIsReorderMode(false);
+    setReorderExercises([]);
+  };
+
+  // DND-Kit Sensors for exercise reordering:
+  // - MouseSensor: Distance 8px for immediate desktop mouse drag
+  // - TouchSensor & PointerSensor: Delay 200ms, tolerance 5px to avoid accidental drags during mobile scrolling
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    })
+  );
+
+  const [activeDraggingExerciseId, setActiveDraggingExerciseId] = useState<string | null>(null);
+
+  const handleExerciseDragStart = (event: DragStartEvent) => {
+    setActiveDraggingExerciseId(String(event.active.id));
+  };
+
+  const handleExerciseDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveDraggingExerciseId(null);
+    if (!over || active.id === over.id) return;
+
+    setReorderExercises((items) => {
+      const oldIndex = items.findIndex((item) => item.id === active.id);
+      const newIndex = items.findIndex((item) => item.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        return arrayMove(items, oldIndex, newIndex);
+      }
+      return items;
+    });
+  };
+
+  const handleExerciseDragCancel = () => {
+    setActiveDraggingExerciseId(null);
+  };
+
+  const exercisesToDisplay = isReorderMode ? reorderExercises : (selectedDay?.exercises || []);
+
+  const activeDraggingExercise = activeDraggingExerciseId
+    ? exercisesToDisplay.find((e) => e.id === activeDraggingExerciseId) || null
+    : null;
+  const activeDraggingIndex = activeDraggingExercise
+    ? exercisesToDisplay.findIndex((e) => e.id === activeDraggingExercise.id)
+    : -1;
+  const shouldWiggle = isReorderMode && !activeDraggingExerciseId;
+
   return (
-    <div className="space-y-4 pb-24 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0">
+    <div
+      className="space-y-4 pb-24 w-full max-w-xl mx-auto lg:max-w-none lg:mx-0"
+      onClick={() => {
+        if (openKebabExerciseId) setOpenKebabExerciseId(null);
+      }}
+    >
       {/* Week Header info with quick change */}
       <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-4 shadow-lg">
         <div className="flex items-center justify-between gap-2 mb-2">
@@ -348,22 +607,40 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             <span className="px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-400 text-black shadow-sm">
               Tydzień {currentWeek}
             </span>
-            <span className="text-xs font-bold text-white font-heading truncate max-w-[180px] sm:max-w-xs">
+            <span className="text-xs font-bold text-white font-heading truncate max-w-[150px] sm:max-w-xs">
               {currentPhase.name.replace(/^Tydzień\s*\d+:\s*/i, '')}
             </span>
           </div>
 
-          {currentPhase.isDeload && (
-            <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
-              Deload
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {currentPhase.isDeload && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-black bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                Deload
+              </span>
+            )}
+
+            {/* Tryb Edycji Przełącznik */}
+            <button
+              type="button"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${
+                isEditMode
+                  ? 'bg-amber-400 text-black font-black ring-2 ring-amber-300 shadow-amber-400/30'
+                  : 'bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700'
+              }`}
+              title={isEditMode ? 'Tryb edycji aktywny - kliknij kafelek tygodnia lub treningu, aby go edytować' : 'Włącz tryb edycji'}
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              <span>Edytuj</span>
+              {isEditMode && <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
+            </button>
+          </div>
         </div>
 
         <div className="pt-2 border-t border-neutral-800/80">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] uppercase font-bold text-neutral-400 tracking-wider">
-              Wybierz tydzień
+              {isEditMode ? 'Kliknij tydzień, aby edytować parametry' : 'Wybierz tydzień'}
             </span>
           </div>
 
@@ -373,13 +650,26 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
               return (
                 <button
                   key={week.week}
-                  onClick={() => onWeekChange(week.week)}
+                  onClick={() => {
+                    if (isEditMode) {
+                      setSelectedWeekToEdit(week);
+                      setIsEditWeekModalOpen(true);
+                    } else {
+                      onWeekChange(week.week);
+                    }
+                  }}
                   className={`px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[42px] ${
                     isCurrent
-                      ? 'bg-amber-400 text-black font-black shadow-md shadow-amber-400/20 ring-2 ring-amber-300'
+                      ? isEditMode
+                        ? 'bg-amber-400 text-black font-black ring-2 ring-dashed ring-black shadow-md'
+                        : 'bg-amber-400 text-black font-black shadow-md shadow-amber-400/20 ring-2 ring-amber-300'
+                      : isEditMode
+                      ? 'bg-neutral-950 text-amber-300 border border-amber-500/40 hover:bg-neutral-800'
                       : 'bg-neutral-950 text-neutral-300 border border-neutral-800 hover:bg-neutral-800'
                   }`}
+                  title={isEditMode ? `Edytuj parametry Tygodnia ${week.week}` : `Przejdź do Tygodnia ${week.week}`}
                 >
+                  {isEditMode && <Edit2 className="w-3 h-3 text-amber-400 shrink-0" />}
                   <span>Tydzień {week.week}</span>
                   {week.isDeload && (
                     <span
@@ -393,10 +683,23 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 </button>
               );
             })}
+
+            {/* Ostatni kafelek na liście: + Dodaj tydzień */}
+            {onOpenAddWeekModal && (
+              <button
+                type="button"
+                onClick={onOpenAddWeekModal}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer touch-manipulation min-h-[42px] border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-950/40 text-neutral-400 hover:text-amber-400"
+                title="Dodaj nowy tydzień do cyklu"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Dodaj tydzień</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Day Selector Strip - Big tactile buttons with completion status */}
+        {/* Day Selector Strip - Big tactile buttons with completion status and edit mode */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none pt-1">
           {currentWeekDays.map((day, index) => {
             const isSelected = selectedDay && selectedDay.id === day.id;
@@ -409,9 +712,20 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             return (
               <button
                 key={day.id}
-                onClick={() => onSelectDayId(day.id)}
+                onClick={() => {
+                  if (isEditMode) {
+                    setSelectedDayToEdit(day);
+                    setIsDaySettingsModalOpen(true);
+                  } else {
+                    onSelectDayId(day.id);
+                  }
+                }}
                 className={`w-max min-w-[110px] shrink-0 p-2.5 rounded-2xl border text-left transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-between relative overflow-hidden select-none whitespace-nowrap ${
-                  isSelected
+                  isEditMode
+                    ? isSelected
+                      ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-dashed ring-black shadow-md font-black scale-[1.02]'
+                      : 'bg-neutral-950/90 text-amber-200 border-amber-500/50 hover:border-amber-400'
+                    : isSelected
                     ? isCompleted
                       ? 'bg-amber-400 text-black border-emerald-600 dark:border-emerald-500 ring-2 ring-emerald-600 dark:ring-emerald-500 shadow-md shadow-amber-400/20 font-black scale-[1.02]'
                       : 'bg-amber-400 text-black border-amber-300 shadow-md shadow-amber-400/20 font-black ring-2 ring-amber-300 scale-[1.02]'
@@ -421,11 +735,12 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                     ? 'bg-amber-500/10 dark:bg-amber-950/20 text-neutral-800 dark:text-neutral-200 border-amber-500/70 dark:border-amber-500/60 ring-1 ring-amber-500/40 hover:bg-amber-500/15'
                     : 'bg-neutral-950/80 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                 }`}
-                title={day.title}
+                title={isEditMode ? `Dostosuj Trening ${dynamicWorkoutNumber}` : day.title}
               >
                 {/* Top Row: Dynamic Workout indicator (e.g. Trening 1) with completion status + colored type badge */}
                 <div className="flex items-center justify-between w-full gap-2 mb-1 min-w-0">
                   <div className="flex items-center gap-1 shrink-0">
+                    {isEditMode && <Edit2 className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
                         isSelected
@@ -439,7 +754,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                     >
                       Trening {dynamicWorkoutNumber}
                     </span>
-                    {isCompleted && (
+                    {!isEditMode && isCompleted && (
                       <span
                         className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-sm shrink-0 ${
                           isSelected
@@ -451,7 +766,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                       </span>
                     )}
-                    {isInProgress && !isCompleted && (
+                    {!isEditMode && isInProgress && !isCompleted && (
                       <span
                         className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 shadow-sm"
                         title="Trening w trakcie realizacji"
@@ -501,6 +816,32 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
               </button>
             );
           })}
+
+          {/* Przedostatni kafelek: Kopiuj trening */}
+          {selectedDay && onCopyDayToWeek && (
+            <button
+              type="button"
+              onClick={() => setIsCopyWorkoutModalOpen(true)}
+              className="w-max min-w-[100px] shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-950/40 text-neutral-400 hover:text-amber-400 transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-center items-center gap-1 select-none whitespace-nowrap"
+              title="Kopiuj aktywny trening do innego tygodnia"
+            >
+              <Copy className="w-4 h-4 text-amber-400" />
+              <span className="text-[11px] font-bold">Kopiuj trening</span>
+            </button>
+          )}
+
+          {/* Ostatni kafelek: + Dodaj trening */}
+          {onAddDay && (
+            <button
+              type="button"
+              onClick={() => onAddDay()}
+              className="w-max min-w-[100px] shrink-0 p-2.5 rounded-2xl border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-950/40 text-neutral-400 hover:text-amber-400 transition-all cursor-pointer touch-manipulation min-h-[64px] flex flex-col justify-center items-center gap-1 select-none whitespace-nowrap"
+              title="Dodaj nowy trening do tego tygodnia"
+            >
+              <Plus className="w-4 h-4 text-amber-400" />
+              <span className="text-[11px] font-bold">+ Dodaj trening</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -667,210 +1008,391 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                 <p>Brak zaplanowanych ćwiczeń na ten trening.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {selectedDay.exercises.map((exercise, index) => {
-                  const isExpanded = !!expandedExerciseIds[exercise.id];
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragStart={handleExerciseDragStart}
+                onDragEnd={handleExerciseDragEnd}
+                onDragCancel={handleExerciseDragCancel}
+                autoScroll={{
+                  threshold: {
+                    x: 0.1,
+                    y: 0.15,
+                  },
+                  acceleration: 4,
+                  interval: 10,
+                }}
+              >
+                <SortableContext
+                  items={exercisesToDisplay.map((e) => e.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {exercisesToDisplay.map((exercise, index) => (
+                      <SortableExerciseCardWrapper
+                        key={exercise.id}
+                        id={exercise.id}
+                        isReorderMode={isReorderMode}
+                      >
+                        {({ setNodeRef, style, isDragging, attributes, listeners }) => {
+                          const isExpanded = !!expandedExerciseIds[exercise.id];
 
-                  // Active sets for this exercise (strictly scoped to this selected day)
-                  const currentSessionLogs = (workoutLogs || [])
-                    .filter(
-                      (l) =>
-                        l.exerciseName &&
-                        l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase() &&
-                        (l.dayId ? l.dayId === selectedDay.id : (l.dayTitle === selectedDay.title && l.dayId?.startsWith(`w${currentWeek}-`)))
-                    )
-                    .sort((a, b) => a.setNumber - b.setNumber);
+                    // Active sets for this exercise (strictly scoped to this selected day)
+                    const currentSessionLogs = (workoutLogs || [])
+                      .filter(
+                        (l) =>
+                          l.exerciseName &&
+                          l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase() &&
+                          (l.dayId ? l.dayId === selectedDay.id : (l.dayTitle === selectedDay.title && l.dayId?.startsWith(`w${currentWeek}-`)))
+                      )
+                      .sort((a, b) => a.setNumber - b.setNumber);
 
-                  const activeOngoingEx = activeOngoingWorkoutDay?.exercises?.find(
-                    (e) => e.id === exercise.id || e.name.trim().toLowerCase() === exercise.name.trim().toLowerCase()
-                  );
-
-                  const isCardio =
-                    exercise.category === 'cardio' ||
-                    exercise.exerciseType === 'RUNNING';
-
-                  let detailedSets: {
-                    setNumber: number;
-                    reps: number | string;
-                    weightKg: number;
-                    rir: number;
-                    rpe: number;
-                    completed?: boolean;
-                    distance?: number;
-                    distanceUnit?: 'm' | 'km';
-                    pace?: string;
-                    targetHr?: number;
-                  }[] = [];
-
-                  if (currentSessionLogs.length > 0) {
-                    detailedSets = currentSessionLogs.map((l) => ({
-                      setNumber: l.setNumber,
-                      reps: l.reps,
-                      weightKg: l.weightKg,
-                      rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
-                      rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
-                      completed: true,
-                      distance: l.targetDistance ?? exercise.targetDistance ?? 800,
-                      distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                      pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
-                      targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
-                    }));
-
-                    const plannedTotal = Math.max(
-                      exercise.plannedSets || 0,
-                      exercise.plannedSetsDetails?.length || 0,
-                      activeOngoingEx?.plannedSets || 0,
-                      activeOngoingEx?.plannedSetsDetails?.length || 0
+                    const activeOngoingEx = activeOngoingWorkoutDay?.exercises?.find(
+                      (e) => e.id === exercise.id || e.name.trim().toLowerCase() === exercise.name.trim().toLowerCase()
                     );
-                    for (let i = detailedSets.length + 1; i <= plannedTotal; i++) {
-                      const plannedItem =
-                        exercise.plannedSetsDetails?.find((p) => p.setNumber === i) ||
-                        activeOngoingEx?.plannedSetsDetails?.find((p) => p.setNumber === i);
-                      const baseReps = (plannedItem && plannedItem.reps !== undefined)
-                        ? plannedItem.reps
-                        : parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                      const baseW = (plannedItem && plannedItem.weightKg !== undefined) ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
-                      detailedSets.push({
-                        setNumber: i,
-                        reps: baseReps,
-                        weightKg: baseW,
-                        rir: plannedItem?.rir ?? exercise.targetRIR ?? 2,
-                        rpe: plannedItem?.rpe ?? exercise.targetRPE ?? 8,
-                        distance: plannedItem?.distance ?? exercise.targetDistance ?? 800,
-                        distanceUnit: (plannedItem?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                        pace: plannedItem?.pace || exercise.targetPace || '4:20',
-                        targetHr: plannedItem?.targetHr || plannedItem?.targetHR || exercise.targetHR || 165,
+
+                    const isCardio =
+                      exercise.category === 'cardio' ||
+                      exercise.exerciseType === 'RUNNING';
+
+                    let detailedSets: {
+                      setNumber: number;
+                      reps: number | string;
+                      weightKg: number;
+                      rir: number;
+                      rpe: number;
+                      completed?: boolean;
+                      distance?: number;
+                      distanceUnit?: 'm' | 'km';
+                      pace?: string;
+                      targetHr?: number;
+                    }[] = [];
+
+                    if (currentSessionLogs.length > 0) {
+                      detailedSets = currentSessionLogs.map((l) => ({
+                        setNumber: l.setNumber,
+                        reps: l.reps,
+                        weightKg: l.weightKg,
+                        rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
+                        rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
+                        completed: true,
+                        distance: l.targetDistance ?? exercise.targetDistance ?? 800,
+                        distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                        pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
+                        targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
+                      }));
+
+                      const plannedTotal = Math.max(
+                        exercise.plannedSets || 0,
+                        exercise.plannedSetsDetails?.length || 0,
+                        activeOngoingEx?.plannedSets || 0,
+                        activeOngoingEx?.plannedSetsDetails?.length || 0
+                      );
+                      for (let i = detailedSets.length + 1; i <= plannedTotal; i++) {
+                        const plannedItem =
+                          exercise.plannedSetsDetails?.find((p) => p.setNumber === i) ||
+                          activeOngoingEx?.plannedSetsDetails?.find((p) => p.setNumber === i);
+                        const baseReps = (plannedItem && plannedItem.reps !== undefined)
+                          ? plannedItem.reps
+                          : parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                        const baseW = (plannedItem && plannedItem.weightKg !== undefined) ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
+                        detailedSets.push({
+                          setNumber: i,
+                          reps: baseReps,
+                          weightKg: baseW,
+                          rir: plannedItem?.rir ?? exercise.targetRIR ?? 2,
+                          rpe: plannedItem?.rpe ?? exercise.targetRPE ?? 8,
+                          distance: plannedItem?.distance ?? exercise.targetDistance ?? 800,
+                          distanceUnit: (plannedItem?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                          pace: plannedItem?.pace || exercise.targetPace || '4:20',
+                          targetHr: plannedItem?.targetHr || plannedItem?.targetHR || exercise.targetHR || 165,
+                          completed: false,
+                        });
+                      }
+                    } else if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0) {
+                      detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => ({
+                        setNumber: s.setNumber || idx + 1,
+                        reps: s.reps ?? 8,
+                        weightKg: s.weightKg ?? 0,
+                        rir: s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2),
+                        rpe: s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8),
+                        distance: s.distance ?? exercise.targetDistance ?? 800,
+                        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                        pace: s.pace || exercise.targetPace || '4:20',
+                        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
                         completed: false,
+                      }));
+                    } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
+                      detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
+                        setNumber: s.setNumber || idx + 1,
+                        reps: s.reps ?? 8,
+                        weightKg: parseFloat(String(s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0)) || 0,
+                        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+                        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+                        distance: s.distance ?? exercise.targetDistance ?? 800,
+                        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                        pace: s.pace || exercise.targetPace || '4:20',
+                        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
+                        completed: false,
+                      }));
+                    } else {
+                      const count = Math.max(exercise.plannedSets || 1, activeOngoingEx?.plannedSets || 1);
+                      detailedSets = Array.from({ length: count }, (_, i) => {
+                        const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                        return {
+                          setNumber: i + 1,
+                          reps: baseReps,
+                          weightKg: exercise.defaultWeightKg || 0,
+                          rir: exercise.targetRIR ?? 2,
+                          rpe: exercise.targetRPE || 8,
+                          distance: exercise.targetDistance || 800,
+                          distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
+                          pace: exercise.targetPace || '4:20',
+                          targetHr: exercise.targetHR || 165,
+                          completed: false,
+                        };
                       });
                     }
-                  } else if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0) {
-                    detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => ({
-                      setNumber: s.setNumber || idx + 1,
-                      reps: s.reps ?? 8,
-                      weightKg: s.weightKg ?? 0,
-                      rir: s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2),
-                      rpe: s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8),
-                      distance: s.distance ?? exercise.targetDistance ?? 800,
-                      distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                      pace: s.pace || exercise.targetPace || '4:20',
-                      targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
-                      completed: false,
-                    }));
-                  } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
-                    detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
-                      setNumber: s.setNumber || idx + 1,
-                      reps: s.reps ?? 8,
-                      weightKg: parseFloat(String(s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0)) || 0,
-                      rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
-                      rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
-                      distance: s.distance ?? exercise.targetDistance ?? 800,
-                      distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                      pace: s.pace || exercise.targetPace || '4:20',
-                      targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
-                      completed: false,
-                    }));
-                  } else {
-                    const count = Math.max(exercise.plannedSets || 1, activeOngoingEx?.plannedSets || 1);
-                    detailedSets = Array.from({ length: count }, (_, i) => {
-                      const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                      return {
-                        setNumber: i + 1,
-                        reps: baseReps,
-                        weightKg: exercise.defaultWeightKg || 0,
-                        rir: exercise.targetRIR ?? 2,
-                        rpe: exercise.targetRPE || 8,
-                        distance: exercise.targetDistance || 800,
-                        distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
-                        pace: exercise.targetPace || '4:20',
-                        targetHr: exercise.targetHR || 165,
-                        completed: false,
-                      };
-                    });
-                  }
 
-                  // Dynamic Reps Display: e.g. "2-6" if different, or "6" if all equal
-                  const repsList = detailedSets
-                    .map((s) => (typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps)) || 0))
-                    .filter((n) => n > 0);
-                  let displayReps = exercise.targetRepsRange || '8';
-                  if (repsList.length > 0) {
-                    const minReps = Math.min(...repsList);
-                    const maxReps = Math.max(...repsList);
-                    displayReps = minReps === maxReps ? `${minReps}` : `${minReps}-${maxReps}`;
-                  }
+                    // Dynamic Reps Display: e.g. "2-6" if different, or "6" if all equal
+                    const repsList = detailedSets
+                      .map((s) => (typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps)) || 0))
+                      .filter((n) => n > 0);
+                    let displayReps = exercise.targetRepsRange || '8';
+                    if (repsList.length > 0) {
+                      const minReps = Math.min(...repsList);
+                      const maxReps = Math.max(...repsList);
+                      displayReps = minReps === maxReps ? `${minReps}` : `${minReps}-${maxReps}`;
+                    }
 
-                  // Dynamic Weight Display: e.g. "85 kg" if constant, "80-90 kg" if variable, "Ciało" if 0
-                  const weightList = detailedSets.map((s) => Number(s.weightKg) || 0);
-                  let displayWeightDynamic = 'Ciało';
-                  if (weightList.length > 0 && Math.max(...weightList) > 0) {
-                    const minW = Math.min(...weightList);
-                    const maxW = Math.max(...weightList);
-                    const minWStr = minW % 1 === 0 ? String(minW) : minW.toFixed(1);
-                    const maxWStr = maxW % 1 === 0 ? String(maxW) : maxW.toFixed(1);
-                    displayWeightDynamic =
-                      minW === maxW
-                        ? `${minWStr} ${exercise.unit || 'kg'}`
-                        : `${minWStr}-${maxWStr} ${exercise.unit || 'kg'}`;
-                  }
+                    // Dynamic Weight Display: e.g. "85 kg" if constant, "80-90 kg" if variable, "Ciało" if 0
+                    const weightList = detailedSets.map((s) => Number(s.weightKg) || 0);
+                    let displayWeightDynamic = 'Ciało';
+                    if (weightList.length > 0 && Math.max(...weightList) > 0) {
+                      const minW = Math.min(...weightList);
+                      const maxW = Math.max(...weightList);
+                      const minWStr = minW % 1 === 0 ? String(minW) : minW.toFixed(1);
+                      const maxWStr = maxW % 1 === 0 ? String(maxW) : maxW.toFixed(1);
+                      displayWeightDynamic =
+                        minW === maxW
+                          ? `${minWStr} ${exercise.unit || 'kg'}`
+                          : `${minWStr}-${maxWStr} ${exercise.unit || 'kg'}`;
+                    }
 
-                  // Historical comparison for this specific exercise
-                  const pastLogsForEx = workoutLogs
-                    .filter(
-                      (l) =>
-                        l.exerciseName &&
-                        l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase()
-                    )
-                    .sort((a, b) => (b.timestamp || b.dateStr).localeCompare(a.timestamp || a.dateStr));
-                  const lastExDate = pastLogsForEx[0]?.dateStr || pastLogsForEx[0]?.timestamp?.split('T')[0];
-                  const lastSets = lastExDate
-                    ? pastLogsForEx.filter(
-                        (l) => (l.dateStr || l.timestamp?.split('T')[0]) === lastExDate
+                    // Historical comparison for this specific exercise
+                    const pastLogsForEx = workoutLogs
+                      .filter(
+                        (l) =>
+                          l.exerciseName &&
+                          l.exerciseName.trim().toLowerCase() === exercise.name.trim().toLowerCase()
                       )
-                    : [];
+                      .sort((a, b) => (b.timestamp || b.dateStr).localeCompare(a.timestamp || a.dateStr));
+                    const lastExDate = pastLogsForEx[0]?.dateStr || pastLogsForEx[0]?.timestamp?.split('T')[0];
+                    const lastSets = lastExDate
+                      ? pastLogsForEx.filter(
+                          (l) => (l.dateStr || l.timestamp?.split('T')[0]) === lastExDate
+                        )
+                      : [];
 
-                  // Warunek sprawdzający, czy wszystkie serie tego ćwiczenia zostały oznaczone jako wykonane
-                  const isExerciseCompleted =
-                    (detailedSets.length > 0 && detailedSets.every((s) => s.completed)) ||
-                    (currentSessionLogs.length > 0 && currentSessionLogs.length >= (exercise.plannedSets || 1));
+                    // Warunek sprawdzający, czy wszystkie serie tego ćwiczenia zostały oznaczone jako wykonane
+                    const isExerciseCompleted =
+                      (detailedSets.length > 0 && detailedSets.every((s) => s.completed)) ||
+                      (currentSessionLogs.length > 0 && currentSessionLogs.length >= (exercise.plannedSets || 1));
 
-                  return (
-                    <div
-                      key={exercise.id}
-                      className={`rounded-3xl p-4 shadow-md space-y-3 transition-all ${
-                        isExerciseCompleted
-                          ? 'border-2 border-emerald-600 dark:border-emerald-500 bg-neutral-900/90 opacity-80 shadow-emerald-950/20'
-                          : 'bg-neutral-900 border border-neutral-800 hover:border-neutral-700'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                              #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim() || (isCardio ? 'Cardio / Bieg' : 'Ogólne')}
-                            </span>
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
-                              {isCardio ? (exercise.distanceUnit || 'm') : (exercise.unit || 'kg')}
-                            </span>
-                            {isExerciseCompleted && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/30 dark:border-emerald-800 inline-flex items-center gap-1 shadow-sm">
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                                <span>Wykonane</span>
+                          return (
+                            <div
+                              ref={setNodeRef}
+                              style={style}
+                              className={`rounded-3xl p-4 shadow-md space-y-3 transition-all relative ${
+                                isReorderMode
+                                  ? isDragging
+                                    ? 'ring-2 ring-amber-400 bg-neutral-900 shadow-2xl opacity-75 z-50'
+                                    : shouldWiggle
+                                    ? index % 2 === 0
+                                      ? 'animate-wiggle ring-2 ring-amber-400 bg-neutral-900 shadow-xl'
+                                      : 'animate-wiggle-delayed ring-2 ring-amber-400 bg-neutral-900 shadow-xl'
+                                    : 'ring-2 ring-amber-400/60 bg-neutral-900 shadow-xl'
+                                  : isExerciseCompleted
+                                  ? 'border-2 border-emerald-600 dark:border-emerald-500 bg-neutral-900/90 opacity-80 shadow-emerald-950/20'
+                                  : 'bg-neutral-900 border border-neutral-800 hover:border-neutral-700'
+                              }`}
+                            >
+                              {/* Tryb zmiany kolejności - pasek sterowania pozycją na karcie z uchwytem Drag & Drop */}
+                              {isReorderMode && (
+                                <div
+                                  {...attributes}
+                                  {...listeners}
+                                  className="flex items-center justify-between p-2.5 rounded-2xl bg-neutral-950 border border-amber-400/50 text-xs touch-none select-none cursor-grab active:cursor-grabbing hover:border-amber-400 transition-colors shadow-sm"
+                                  title="Chwyć za ten pasek, aby przeciągnąć i zmienić kolejność"
+                                >
+                                  <div className="flex items-center gap-2 pointer-events-none">
+                                    <GripVertical className="w-4 h-4 text-amber-400 shrink-0" />
+                                    <span className="font-extrabold text-amber-300">Pozycja #{index + 1}</span>
+                                    <span className="text-[10px] text-neutral-500 hidden sm:inline">(przeciągnij)</span>
+                                  </div>
+                                  <div
+                                    className="flex items-center gap-1.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onTouchStart={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      disabled={index === 0}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReorderMove(index, index - 1);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white font-bold cursor-pointer flex items-center gap-1 touch-manipulation active:scale-95 transition-all"
+                                      title="Przesuń wyżej"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                      <span>Góra</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={index === exercisesToDisplay.length - 1}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReorderMove(index, index + 1);
+                                      }}
+                                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-30 text-white font-bold cursor-pointer flex items-center gap-1 touch-manipulation active:scale-95 transition-all"
+                                      title="Przesuń niżej"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                      <span>Dół</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
+                                #{index + 1} • {exercise.muscleGroup?.split('(')[0]?.trim() || (isCardio ? 'Cardio / Bieg' : 'Ogólne')}
                               </span>
-                            )}
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
+                                {isCardio ? (exercise.distanceUnit || 'm') : (exercise.unit || 'kg')}
+                              </span>
+                              {!isReorderMode && isExerciseCompleted && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-200 dark:text-emerald-400 dark:bg-emerald-900/30 dark:border-emerald-800 inline-flex items-center gap-1 shadow-sm">
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                  <span>Wykonane</span>
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-base font-bold text-white font-heading">
+                              {exercise.name}
+                            </h3>
                           </div>
-                          <h3 className="text-base font-bold text-white font-heading">
-                            {exercise.name}
-                          </h3>
-                        </div>
 
-                        <button
-                          onClick={() => setChartExerciseName(exercise.name)}
-                          className="p-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 text-xs transition-colors cursor-pointer touch-manipulation"
-                          title="Wykres progresu"
-                        >
-                          <TrendingUp className="w-4 h-4" />
-                        </button>
-                      </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setChartExerciseName(exercise.name)}
+                              className="p-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 border border-neutral-800 text-xs transition-colors cursor-pointer touch-manipulation"
+                              title="Wykres progresu"
+                            >
+                              <TrendingUp className="w-4 h-4" />
+                            </button>
+
+                            {/* Menu Kebab (Trzy kropki) z 5 akcjami */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenKebabExerciseId(openKebabExerciseId === exercise.id ? null : exercise.id);
+                                }}
+                                className={`p-2 rounded-xl border text-xs transition-colors cursor-pointer touch-manipulation ${
+                                  openKebabExerciseId === exercise.id
+                                    ? 'bg-amber-400 text-black border-amber-300'
+                                    : 'bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-white border-neutral-800'
+                                }`}
+                                title="Więcej opcji ćwiczenia"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+
+                              {openKebabExerciseId === exercise.id && (
+                                <div
+                                  className="absolute right-0 top-full mt-1.5 w-44 bg-neutral-950 border border-neutral-700 rounded-2xl shadow-2xl py-1.5 z-40 animate-in fade-in zoom-in-95 text-xs text-left"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenKebabExerciseId(null);
+                                      setExerciseToEdit(exercise);
+                                      setIsExerciseEditModalOpen(true);
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-neutral-800 text-neutral-200 flex items-center gap-2 font-medium cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Edytuj</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={index === 0}
+                                    onClick={() => {
+                                      setOpenKebabExerciseId(null);
+                                      handleMoveExercise(index, index - 1);
+                                    }}
+                                    className={`w-full px-3 py-2 text-left hover:bg-neutral-800 flex items-center gap-2 font-medium cursor-pointer ${
+                                      index === 0 ? 'opacity-30 cursor-not-allowed' : 'text-neutral-200'
+                                    }`}
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5 text-neutral-400" />
+                                    <span>Przesuń w górę</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={index === exercisesToDisplay.length - 1}
+                                    onClick={() => {
+                                      setOpenKebabExerciseId(null);
+                                      handleMoveExercise(index, index + 1);
+                                    }}
+                                    className={`w-full px-3 py-2 text-left hover:bg-neutral-800 flex items-center gap-2 font-medium cursor-pointer ${
+                                      index === exercisesToDisplay.length - 1 ? 'opacity-30 cursor-not-allowed' : 'text-neutral-200'
+                                    }`}
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5 text-neutral-400" />
+                                    <span>Przesuń w dół</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenKebabExerciseId(null);
+                                      handleStartReorderMode();
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-neutral-800 text-amber-400 flex items-center gap-2 font-medium cursor-pointer"
+                                  >
+                                    <GripVertical className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Zmień kolejność</span>
+                                  </button>
+
+                                  <div className="border-t border-neutral-800 my-1" />
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenKebabExerciseId(null);
+                                      handleDeleteExerciseFromPlan(exercise.id);
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-red-500/20 text-red-400 flex items-center gap-2 font-medium cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Usuń</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
 
                       {/* Previous result tag */}
                       {lastSets.length > 0 && (
@@ -1069,16 +1591,194 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                           <span>Szczegóły & Odhacz Serie</span>
                         </button>
                       )}
+                            </div>
+                          );
+                        }}
+                      </SortableExerciseCardWrapper>
+                    ))}
+
+                    {/* Dodaj nowe ćwiczenie do treningu */}
+                    {!isReorderMode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExerciseToEdit(null);
+                          setIsExerciseEditModalOpen(true);
+                        }}
+                        className="w-full py-3.5 px-4 rounded-2xl border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-900/50 hover:bg-neutral-900 text-neutral-400 hover:text-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[48px] shadow-sm"
+                      >
+                        <Plus className="w-4 h-4 text-amber-400" />
+                        <span>+ Dodaj ćwiczenie do treningu</span>
+                      </button>
+                    )}
+                  </div>
+                </SortableContext>
+
+                <DragOverlay dropAnimation={null}>
+                  {activeDraggingExercise ? (
+                    <div className="w-full bg-neutral-900 border-2 border-amber-400 rounded-3xl p-4 shadow-[0_25px_60px_rgba(0,0,0,0.9)] ring-2 ring-amber-400/60 z-50 cursor-grabbing pointer-events-none select-none touch-none text-left space-y-3 opacity-100">
+                      <div className="flex items-center justify-between p-2.5 rounded-2xl bg-neutral-950 border border-amber-400/60 text-xs">
+                        <div className="flex items-center gap-2">
+                          <GripVertical className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="font-extrabold text-amber-300">
+                            Pozycja #{activeDraggingIndex + 1}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                          Przenoszenie...
+                        </span>
+                      </div>
+
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
+                              #{activeDraggingIndex + 1} • {activeDraggingExercise.muscleGroup?.split('(')[0]?.trim() || (activeDraggingExercise.category === 'cardio' || activeDraggingExercise.exerciseType === 'RUNNING' ? 'Cardio / Bieg' : 'Ogólne')}
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-neutral-950 text-neutral-400 border border-neutral-800">
+                              {activeDraggingExercise.unit || 'kg'}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-bold text-white font-heading">
+                            {activeDraggingExercise.name}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 p-2 rounded-xl bg-neutral-950 border border-neutral-800 text-center text-xs">
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Serie</span>
+                          <span className="font-extrabold text-white font-mono-numbers text-sm">
+                            {activeDraggingExercise.plannedSets || activeDraggingExercise.plannedSetsDetails?.length || 3}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Powtórzenia</span>
+                          <span className="font-extrabold text-white font-mono-numbers text-sm">
+                            {activeDraggingExercise.targetRepsRange || '8'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-400 uppercase font-semibold block">Ciężar</span>
+                          <span className="font-black text-amber-400 font-mono-numbers text-sm">
+                            {activeDraggingExercise.defaultWeightKg ? `${activeDraggingExercise.defaultWeightKg} ${activeDraggingExercise.unit || 'kg'}` : 'Ciało'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
         </div>
       ) : null}
 
+      {/* Tryb Reorganizacji - Dolny Panel Zatwierdzenia */}
+      {isReorderMode && (
+        <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-auto sm:w-[480px] z-50 bg-neutral-950/95 backdrop-blur-md border-2 border-amber-400 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-400 text-black flex items-center justify-center shrink-0">
+              <GripVertical className="w-4 h-4 animate-pulse" />
+            </div>
+            <div className="text-left min-w-0">
+              <div className="text-xs font-black text-white truncate">Tryb zmiany kolejności</div>
+              <div className="text-[10px] text-neutral-400 truncate">Użyj przycisków Góra/Dół na kartach</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCancelReorder}
+              className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold transition-colors cursor-pointer"
+            >
+              Anuluj
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveReorder}
+              className="px-4 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-amber-400/20 cursor-pointer"
+            >
+              Zatwierdź
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
+      {/* 1. Edit Week Parameters Modal */}
+      {isEditWeekModalOpen && selectedWeekToEdit && (
+        <EditWeekParamsModal
+          isOpen={isEditWeekModalOpen}
+          onClose={() => {
+            setIsEditWeekModalOpen(false);
+            setSelectedWeekToEdit(null);
+          }}
+          week={selectedWeekToEdit}
+          canDelete={weeksList.length > 1}
+          onSave={(updatedPhase: MesocyclePhase) => {
+            if (onUpdatePhase) onUpdatePhase(updatedPhase);
+            setIsEditWeekModalOpen(false);
+            setSelectedWeekToEdit(null);
+          }}
+          onDeleteWeek={onDeleteWeek}
+        />
+      )}
+
+      {/* 2. Day Settings Modal */}
+      {isDaySettingsModalOpen && selectedDayToEdit && (
+        <DaySettingsModal
+          day={selectedDayToEdit}
+          isOpen={isDaySettingsModalOpen}
+          onClose={() => {
+            setIsDaySettingsModalOpen(false);
+            setSelectedDayToEdit(null);
+          }}
+          onSaveDaySettings={(updatedDay) => {
+            onUpdateDay(updatedDay);
+            setIsDaySettingsModalOpen(false);
+            setSelectedDayToEdit(null);
+          }}
+          onDeleteDay={onDeleteDay}
+        />
+      )}
+
+      {/* 3. Copy Workout Modal */}
+      {isCopyWorkoutModalOpen && selectedDay && onCopyDayToWeek && (
+        <CopyWorkoutModal
+          isOpen={isCopyWorkoutModalOpen}
+          onClose={() => setIsCopyWorkoutModalOpen(false)}
+          sourceDay={selectedDay}
+          currentWeek={currentWeek}
+          totalWeeksCount={weeksList.length}
+          onCopyDayToWeek={onCopyDayToWeek}
+          onCopyEntireWeekTo={onCopyEntireWeekTo}
+        />
+      )}
+
+      {/* 4. Exercise Edit / Add Modal */}
+      {isExerciseEditModalOpen && selectedDay && (
+        <ExerciseEditModal
+          isOpen={isExerciseEditModalOpen}
+          onClose={() => {
+            setIsExerciseEditModalOpen(false);
+            setExerciseToEdit(null);
+          }}
+          exerciseToEdit={exerciseToEdit}
+          onSaveExercise={(savedExercise) => {
+            handleSaveExercise(savedExercise);
+            setIsExerciseEditModalOpen(false);
+            setExerciseToEdit(null);
+          }}
+          onDeleteExercise={(exerciseId) => {
+            handleDeleteExerciseFromPlan(exerciseId);
+            setIsExerciseEditModalOpen(false);
+            setExerciseToEdit(null);
+          }}
+        />
+      )}
+
+      {/* 5. Detail & Logging Modal */}
       {activeDetailExercise && selectedDay && (
         <ExerciseDetailModal
           isOpen={!!activeDetailExercise}
@@ -1093,6 +1793,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         />
       )}
 
+      {/* 6. Exercise Progress Chart Modal */}
       {chartExerciseName && (
         <ExerciseChartModal
           isOpen={!!chartExerciseName}
@@ -1104,6 +1805,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         />
       )}
 
+      {/* 7. Previous Workout Modal */}
       {selectedDay && isPreviousWorkoutModalOpen && (
         <PreviousWorkoutModal
           isOpen={isPreviousWorkoutModalOpen}

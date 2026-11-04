@@ -243,3 +243,24 @@ html[data-theme='light'] body {
   text-overflow: ellipsis;
   vertical-align: top;
 }
+
+@keyframes wiggle {
+  0% {
+    transform: rotate(-0.8deg) scale(0.995);
+  }
+  50% {
+    transform: rotate(0.8deg) scale(1.005);
+  }
+  100% {
+    transform: rotate(-0.8deg) scale(0.995);
+  }
+}
+
+.animate-wiggle {
+  animation: wiggle 0.24s ease-in-out infinite;
+}
+
+.animate-wiggle-delayed {
+  animation: wiggle 0.28s ease-in-out 0.12s infinite;
+}
+
