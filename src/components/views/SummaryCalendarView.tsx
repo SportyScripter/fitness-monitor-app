@@ -23,6 +23,40 @@ import {
 } from 'lucide-react';
 import { WorkoutLogEntry, SessionActivityType, MuscleGroup } from '../../types/hyrox';
 import { AddFreeWorkoutModal } from '../modals/AddFreeWorkoutModal';
+import { EXERCISE_CATALOG } from '../../data/exerciseCatalog';
+
+const isCardioLogEntry = (entry: WorkoutLogEntry): boolean => {
+  // 1. Sprawdź kategorię w oficjalnym katalogu ćwiczeń
+  const catItem = EXERCISE_CATALOG.find(
+    (c) => c.name.trim().toLowerCase() === (entry.exerciseName || '').trim().toLowerCase()
+  );
+  if (catItem) {
+    return catItem.category === 'cardio';
+  }
+
+  // 2. Jawny typ aktywności
+  if (entry.activityType === 'RUNNING' || entry.activityType === 'CYCLING') {
+    return true;
+  }
+  if (entry.activityType === 'STRENGTH') {
+    return false;
+  }
+
+  // 3. Sprawdzenie nazwy ćwiczenia
+  const name = (entry.exerciseName || '').toLowerCase();
+  if (
+    name.includes('bieg') ||
+    name.includes('run') ||
+    name.includes('cardio') ||
+    name.includes('rower') ||
+    name.includes('interwa') ||
+    name.includes('tempo')
+  ) {
+    return true;
+  }
+
+  return false;
+};
 
 interface SummaryCalendarViewProps {
   workoutLogs: WorkoutLogEntry[];
@@ -867,6 +901,7 @@ export const SummaryCalendarView: React.FC<SummaryCalendarViewProps> = ({
                           <div className="space-y-1.5 mt-2 max-h-56 overflow-y-auto pr-1">
                             {session.entries.map((entry, eIdx) => {
                               const exUnit = entry.unit || 'kg';
+                              const isCardio = isCardioLogEntry(entry);
                               return (
                                 <div
                                   key={entry.id || eIdx}
@@ -876,27 +911,35 @@ export const SummaryCalendarView: React.FC<SummaryCalendarViewProps> = ({
                                     <span className="font-bold text-white">{entry.exerciseName}</span>{' '}
                                     <span className="text-neutral-400">
                                       • S{entry.setNumber}:{' '}
-                                      {entry.weightKg > 0 ? (
-                                        <strong className="text-white font-mono-numbers">{entry.weightKg} {exUnit} × {entry.reps}</strong>
+                                      {!isCardio ? (
+                                        <strong className="text-white font-mono-numbers">
+                                          {entry.weightKg > 0 ? `${entry.weightKg} ${exUnit} × ${entry.reps}` : `${entry.reps} powt.`}
+                                        </strong>
                                       ) : entry.targetDistance ? (
-                                        <strong className="text-white font-mono-numbers">{entry.targetDistance} {entry.distanceUnit || 'km'}</strong>
+                                        <strong className="text-white font-mono-numbers">
+                                          {entry.targetDistance} {entry.distanceUnit || 'm'}
+                                        </strong>
                                       ) : (
                                         <strong className="text-white font-mono-numbers">{entry.reps} powt.</strong>
                                       )}
                                     </span>
 
-                                    {/* Pace & HR if recorded */}
-                                    {entry.targetPace &&
-                                    entry.targetPace.trim() !== '' &&
-                                    entry.targetPace.trim() !== '0' && (
-                                      <span className="ml-1.5 text-emerald-400 font-bold">
-                                        • {entry.actualPace || entry.targetPace}
-                                      </span>
-                                    )}
-                                    {entry.targetHR && Number(entry.targetHR) > 0 && (
-                                      <span className="ml-1.5 text-rose-400 font-bold">
-                                        • {entry.actualHR || entry.targetHR} bpm
-                                      </span>
+                                    {/* Pace & HR ONLY for cardio/running exercises */}
+                                    {isCardio && (
+                                      <>
+                                        {entry.targetPace &&
+                                        entry.targetPace.trim() !== '' &&
+                                        entry.targetPace.trim() !== '0' && (
+                                          <span className="ml-1.5 text-emerald-400 font-bold">
+                                            • {entry.actualPace || entry.targetPace}
+                                          </span>
+                                        )}
+                                        {entry.targetHR && Number(entry.targetHR) > 0 && (
+                                          <span className="ml-1.5 text-rose-400 font-bold">
+                                            • {entry.actualHR || entry.targetHR} bpm
+                                          </span>
+                                        )}
+                                      </>
                                     )}
                                   </div>
 

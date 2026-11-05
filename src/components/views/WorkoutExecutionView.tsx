@@ -607,12 +607,12 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
         activityType: isExCardio ? 'RUNNING' : 'STRENGTH',
         unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || (isExCardio ? 'm' : 'kg'),
-        targetDistance: s.distance || activeDetailExercise.targetDistance,
-        distanceUnit: s.distanceUnit || activeDetailExercise.distanceUnit || 'm',
-        targetPace: s.pace || activeDetailExercise.targetPace,
-        actualPace: s.pace || activeDetailExercise.targetPace,
-        targetHR: s.targetHr || activeDetailExercise.targetHR,
-        actualHR: s.targetHr || activeDetailExercise.targetHR,
+        targetDistance: isExCardio ? (s.distance || activeDetailExercise.targetDistance) : undefined,
+        distanceUnit: isExCardio ? (s.distanceUnit || activeDetailExercise.distanceUnit || 'm') : undefined,
+        targetPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
+        actualPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
+        targetHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
+        actualHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
       }));
 
     if (newEntries.length > 0 && onSaveLogs) {

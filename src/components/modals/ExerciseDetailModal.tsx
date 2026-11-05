@@ -561,12 +561,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                   <div className="w-full overflow-x-auto">
                     {isCardio ? (
                       /* CARDIO / BIEG: Dystans, Tempo, HR, Status, Delete (bez RPE) */
-                      <table className="w-full text-left text-xs">
+                      <table className="w-full text-left text-xs min-w-[500px]">
                         <thead>
                           <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
                             <th className="w-10 pb-1.5">Seria</th>
-                            <th className="pb-1.5 px-1">Dystans</th>
-                            <th className="pb-1.5 px-1">Tempo docelowe</th>
+                            <th className="pb-1.5 px-1 min-w-[130px]">Dystans</th>
+                            <th className="pb-1.5 px-1 min-w-[100px]">Tempo docelowe</th>
                             <th className="w-24 pb-1.5 px-1 text-center">HR (bpm)</th>
                             <th className="w-12 pb-1.5 text-center">Status</th>
                             <th className="w-8 pb-1.5"></th>
@@ -600,12 +600,12 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                                         updateSetField(idx, 'distance', isNaN(num) ? 800 : num);
                                       }
                                     }}
-                                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                    className="w-24 min-w-[80px] bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                   />
                                   <select
                                     value={set.distanceUnit || 'm'}
                                     onChange={(e) => updateSetField(idx, 'distanceUnit', e.target.value as 'm' | 'km')}
-                                    className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400"
+                                    className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 shrink-0"
                                   >
                                     <option value="m">m</option>
                                     <option value="km">km</option>
