@@ -15,6 +15,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -24,6 +25,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Brush,
 } from 'recharts';
 import { BodyMeasurement } from '../../types/measurements';
 import { SyncStatus } from '../../hooks/useMeasurements';
@@ -79,6 +81,20 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
         fatMass: m.fatMassKg,
       }));
   }, [measurements]);
+
+  // Zoom & Pan state via Brush
+  const [resetKey, setResetKey] = useState<number>(0);
+  const [brushIndices, setBrushIndices] = useState<{ startIndex: number; endIndex: number } | null>(null);
+
+  const isZoomed = useMemo(() => {
+    if (!brushIndices || chartData.length <= 1) return false;
+    return brushIndices.startIndex > 0 || brushIndices.endIndex < chartData.length - 1;
+  }, [brushIndices, chartData.length]);
+
+  const handleResetZoom = () => {
+    setBrushIndices(null);
+    setResetKey((prev) => prev + 1);
+  };
 
   // Statistics Summary Cards
   const stats = useMemo(() => {
@@ -216,6 +232,19 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
               Trend wagi, tkanki tłuszczowej oraz obwodów ciała
             </p>
           </div>
+
+          {/* Dyskretny przycisk resetowania powiększenia */}
+          {isZoomed && (
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border border-amber-400/30 text-xs font-bold transition-all cursor-pointer animate-in fade-in"
+              title="Resetuj powiększenie do pełnego zakresu dat"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Resetuj powiększenie</span>
+            </button>
+          )}
         </div>
 
         {/* Interactive Line Filters */}
@@ -299,14 +328,46 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
           </button>
         </div>
 
-        {/* Recharts Container */}
-        <div className="h-64 w-full pt-2">
+        {/* Recharts Container with Dual Y-Axis and Interactive Brush Zoom */}
+        <div className="h-72 sm:h-80 w-full pt-2">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <LineChart
+                data={chartData}
+                margin={{ top: 10, right: showBf ? 10 : 15, left: -10, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
                 <XAxis dataKey="date" stroke="#737373" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#737373" tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+
+                {/* Lewa oś Y: Waga i obwody (kg / cm) z dynamicznym zakresem */}
+                <YAxis
+                  yAxisId="left"
+                  orientation="left"
+                  stroke="#737373"
+                  tick={{ fontSize: 10, fill: '#a3a3a3' }}
+                  domain={[
+                    (dataMin: number) => (Number.isFinite(dataMin) ? Math.max(0, Math.floor(dataMin - 3)) : 'auto'),
+                    (dataMax: number) => (Number.isFinite(dataMax) ? Math.ceil(dataMax + 3) : 'auto'),
+                  ]}
+                  tickFormatter={(val) => `${Math.round(val)}`}
+                  width={38}
+                />
+
+                {/* Prawa oś Y: Procent tkanki tłuszczowej BF (%) z dedykowaną skalą */}
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#a855f7"
+                  tick={{ fontSize: 10, fill: '#c084fc' }}
+                  domain={[
+                    (dataMin: number) => (Number.isFinite(dataMin) ? Math.max(0, Math.floor(dataMin - 2)) : 5),
+                    (dataMax: number) => (Number.isFinite(dataMax) ? Math.min(100, Math.ceil(dataMax + 2)) : 35),
+                  ]}
+                  tickFormatter={(val) => `${val}%`}
+                  hide={!showBf}
+                  width={38}
+                />
+
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#0a0a0a',
@@ -319,76 +380,118 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     const row = items?.[0]?.payload;
                     return row ? `Data: ${row.fullDate}` : lbl;
                   }}
+                  formatter={(value: any, name: any) => {
+                    if (value === undefined || value === null) return ['--', name];
+                    if (name?.toString().includes('Body Fat') || name?.toString().includes('BF')) {
+                      return [`${value}%`, name];
+                    }
+                    if (name?.toString().includes('Waga')) {
+                      return [`${value} kg`, name];
+                    }
+                    return [`${value} cm`, name];
+                  }}
                 />
+
                 {showWeight && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="weight"
                     name="Waga (kg)"
                     stroke="#f59e0b"
                     strokeWidth={3}
-                    dot={{ fill: '#f59e0b', r: 4 }}
-                    activeDot={{ r: 6 }}
+                    dot={{ fill: '#f59e0b', r: 3.5 }}
+                    activeDot={{ r: 5 }}
                   />
                 )}
                 {showBf && (
                   <Line
+                    yAxisId="right"
                     type="monotone"
                     dataKey="bf"
                     name="Body Fat (%)"
                     stroke="#a855f7"
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     dot={{ fill: '#a855f7', r: 3 }}
+                    activeDot={{ r: 5 }}
                   />
                 )}
                 {showWaist && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="waist"
                     name="Talia (cm)"
                     stroke="#10b981"
                     strokeWidth={2}
-                    dot={{ fill: '#10b981', r: 3 }}
+                    dot={{ fill: '#10b981', r: 2.5 }}
                   />
                 )}
                 {showAbdomen && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="abdomen"
                     name="Brzuch (cm)"
                     stroke="#f97316"
                     strokeWidth={2}
-                    dot={{ fill: '#f97316', r: 3 }}
+                    dot={{ fill: '#f97316', r: 2.5 }}
                   />
                 )}
                 {showChest && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="chest"
                     name="Klatka (cm)"
                     stroke="#0284c7"
                     strokeWidth={2}
-                    dot={{ fill: '#0284c7', r: 3 }}
+                    dot={{ fill: '#0284c7', r: 2.5 }}
                   />
                 )}
                 {showBiceps && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="biceps"
                     name="Biceps (cm)"
                     stroke="#eab308"
                     strokeWidth={2}
-                    dot={{ fill: '#eab308', r: 3 }}
+                    dot={{ fill: '#eab308', r: 2.5 }}
                   />
                 )}
                 {showThigh && (
                   <Line
+                    yAxisId="left"
                     type="monotone"
                     dataKey="thigh"
                     name="Udo (cm)"
                     stroke="#84cc16"
                     strokeWidth={2}
-                    dot={{ fill: '#84cc16', r: 3 }}
+                    dot={{ fill: '#84cc16', r: 2.5 }}
+                  />
+                )}
+
+                {/* Interaktywny Brush do Zoom & Pan */}
+                {chartData.length > 1 && (
+                  <Brush
+                    key={`brush-${resetKey}`}
+                    dataKey="date"
+                    height={30}
+                    stroke="#f59e0b"
+                    fill="#171717"
+                    travellerWidth={10}
+                    startIndex={brushIndices ? brushIndices.startIndex : undefined}
+                    endIndex={brushIndices ? brushIndices.endIndex : undefined}
+                    onChange={(range) => {
+                      if (typeof range?.startIndex === 'number' && typeof range?.endIndex === 'number') {
+                        setBrushIndices({
+                          startIndex: range.startIndex,
+                          endIndex: range.endIndex,
+                        });
+                      }
+                    }}
+                    tickFormatter={(lbl) => lbl}
                   />
                 )}
               </LineChart>
