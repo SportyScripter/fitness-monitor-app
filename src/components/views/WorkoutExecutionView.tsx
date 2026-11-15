@@ -295,6 +295,70 @@ const SortableWorkoutDayTile: React.FC<SortableWorkoutDayTileProps> = ({
   );
 };
 
+interface LastSessionHistoryTagProps {
+  lastExDate: string;
+  lastSets: WorkoutLogEntry[];
+  isCardio: boolean;
+}
+
+const LastSessionHistoryTag: React.FC<LastSessionHistoryTagProps> = ({
+  lastExDate,
+  lastSets,
+  isCardio,
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const orderedSets = useMemo(
+    () => [...lastSets].sort((a, b) => (a.setNumber || 1) - (b.setNumber || 1)),
+    [lastSets]
+  );
+
+  const summaryText = isCardio
+    ? orderedSets
+        .map(
+          (s) =>
+            `${s.targetDistance || 800}${s.distanceUnit || 'm'} @ ${
+              s.actualPace || s.targetPace || '4:20'
+            }`
+        )
+        .join(' | ')
+    : orderedSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ');
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsExpanded((prev) => !prev);
+      }}
+      className={`w-full text-left p-2 rounded-xl bg-neutral-950 border transition-colors text-[11px] text-amber-300 flex gap-1.5 cursor-pointer select-none ${
+        isExpanded
+          ? 'items-start border-amber-400/40 bg-neutral-950/95'
+          : 'items-center border-neutral-800/80 hover:border-amber-400/40'
+      }`}
+      title={isExpanded ? 'Kliknij, aby zwinąć' : 'Kliknij, aby zobaczyć wszystkie serie'}
+      aria-expanded={isExpanded}
+    >
+      <History className={`w-3.5 h-3.5 text-amber-400 shrink-0 ${isExpanded ? 'mt-0.5' : ''}`} />
+      <span
+        className={`flex-1 min-w-0 ${
+          isExpanded ? 'whitespace-normal break-words leading-relaxed' : 'truncate'
+        }`}
+      >
+        Ostatnio ({lastExDate}):{' '}
+        <strong className="text-white font-mono-numbers">{summaryText}</strong>
+      </span>
+      <span className={`text-neutral-400 shrink-0 ${isExpanded ? 'mt-0.5' : ''}`}>
+        {isExpanded ? (
+          <ChevronUp className="w-3.5 h-3.5" />
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5" />
+        )}
+      </span>
+    </button>
+  );
+};
+
 interface WorkoutExecutionViewProps {
   activeCycle: TrainingCycleCatalog | null;
   currentWeek: number;
@@ -1635,19 +1699,13 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                           </div>
                         </div>
 
-                      {/* Previous result tag */}
+                      {/* Previous result tag (expandable) */}
                       {lastSets.length > 0 && (
-                        <div className="p-2 rounded-xl bg-neutral-950 border border-neutral-800/80 text-[11px] text-amber-300 flex items-center gap-1.5">
-                          <History className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span className="truncate">
-                            Ostatnio ({lastExDate}):{' '}
-                            <strong className="text-white font-mono-numbers">
-                              {isCardio
-                                ? lastSets.map((s) => `${s.targetDistance || 800}${s.distanceUnit || 'm'} @ ${s.actualPace || s.targetPace || '4:20'}`).join(' | ')
-                                : lastSets.map((s) => `${s.weightKg}${s.unit || 'kg'}×${s.reps}`).join(' | ')}
-                            </strong>
-                          </span>
-                        </div>
+                        <LastSessionHistoryTag
+                          lastExDate={lastExDate || ''}
+                          lastSets={lastSets}
+                          isCardio={isCardio}
+                        />
                       )}
 
                       {/* Numeric summary grid with Chevron toggle next to Przerwa */}

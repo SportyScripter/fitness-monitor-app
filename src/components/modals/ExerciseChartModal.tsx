@@ -1,23 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   TrendingUp,
   Dumbbell,
   Calendar,
-  Award,
   BarChart3,
-  Flame,
-  ArrowUpRight,
-  Info,
   ChevronDown,
   ChevronUp,
   Activity,
-  Timer,
-  HeartPulse,
-  Navigation
+  RotateCcw,
 } from 'lucide-react';
-import { WorkoutLogEntry, Exercise, RUNNING_TYPES, RunningType } from '../../types/hyrox';
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from 'recharts';
+import { WorkoutLogEntry, Exercise } from '../../types/hyrox';
 import { EXERCISE_CATALOG } from '../../data/exerciseCatalog';
+
+type ChartDragZone = 'y-left' | 'x' | 'pan';
+
+interface ChartDragSnapshot {
+  zone: ChartDragZone;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  plotWidth: number;
+  plotHeight: number;
+  initXDomain: [number, number];
+  initYDomain: [number, number];
+}
+
+const CHART_LEFT_AXIS_WIDTH = 52;
+const CHART_X_AXIS_HEIGHT = 34;
 
 interface ExerciseChartModalProps {
   exerciseName: string;
@@ -81,7 +103,16 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
 }) => {
   const [strengthMetric, setStrengthMetric] = useState<'weight' | 'estimated1rm' | 'tonnage'>('weight');
   const [cardioMetric, setCardioMetric] = useState<'distance' | 'pace' | 'hr'>('distance');
+  const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
+
+  // TradingView-style zoom & pan state
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<ChartDragSnapshot | null>(null);
+  const [activeDragZone, setActiveDragZone] = useState<ChartDragZone | null>(null);
+  const [hoverZone, setHoverZone] = useState<ChartDragZone | null>(null);
+  const [xDomain, setXDomain] = useState<[number, number] | null>(null);
+  const [yDomain, setYDomain] = useState<[number, number] | null>(null);
 
   const toggleDateExpand = (dateKey: string) => {
     setExpandedDates((prev) => ({
@@ -90,16 +121,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
     }));
   };
 
-  if (!isOpen) return null;
-
-  // Filter logs for this specific exercise
-  const exerciseLogs = workoutLogs.filter(
-    (l) => l.exerciseName && l.exerciseName.trim().toLowerCase() === exerciseName.trim().toLowerCase()
-  );
-
-  // Zabezpieczenie typu ćwiczenia:
-  // Domyślnie zawsze siła (fallback dla wartości pustych/undefined/null lub 'strength').
-  // Widok Cardio jest renderowany TYLKO i wyłącznie wtedy, gdy kategoria jest jawnie równa 'cardio'.
+  // Resolve category safely
   const catalogMatch =
     !category && !exercise?.category
       ? EXERCISE_CATALOG.find(
@@ -109,91 +131,99 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
 
   const resolvedCategory = exercise?.category || category || catalogMatch?.category;
   const isCardio = resolvedCategory === 'cardio';
+  const isPaceMetric = isCardio && cardioMetric === 'pace';
+
+  // Filter logs for this specific exercise
+  const exerciseLogs = useMemo(
+    () =>
+      workoutLogs.filter(
+        (l) => l.exerciseName && l.exerciseName.trim().toLowerCase() === exerciseName.trim().toLowerCase()
+      ),
+    [workoutLogs, exerciseName]
+  );
 
   // Group logs by date / session
   interface SessionSummary {
     dateStr: string;
     sets: WorkoutLogEntry[];
-    // Strength metrics
     maxWeight: number;
     totalTonnage: number;
     max1RM: number;
     avgRpe: number;
-    // Cardio metrics
     totalDistanceKm: number;
     bestPaceSeconds: number;
     bestPaceFormatted: string;
     avgHr: number;
   }
 
-  const sessionsMap: Record<string, SessionSummary> = {};
+  const sessionHistory = useMemo(() => {
+    const sessionsMap: Record<string, SessionSummary> = {};
 
-  exerciseLogs.forEach((l) => {
-    const key = l.dateStr || (l.timestamp ? l.timestamp.split('T')[0] : 'Bieżąca sesja');
-    if (!sessionsMap[key]) {
-      sessionsMap[key] = {
-        dateStr: key,
-        sets: [],
-        maxWeight: 0,
-        totalTonnage: 0,
-        max1RM: 0,
-        avgRpe: 0,
-        totalDistanceKm: 0,
-        bestPaceSeconds: Infinity,
-        bestPaceFormatted: '-',
-        avgHr: 0,
-      };
-    }
-    const session = sessionsMap[key];
-    session.sets.push(l);
+    exerciseLogs.forEach((l) => {
+      const key = l.dateStr || (l.timestamp ? l.timestamp.split('T')[0] : 'Bieżąca sesja');
+      if (!sessionsMap[key]) {
+        sessionsMap[key] = {
+          dateStr: key,
+          sets: [],
+          maxWeight: 0,
+          totalTonnage: 0,
+          max1RM: 0,
+          avgRpe: 0,
+          totalDistanceKm: 0,
+          bestPaceSeconds: Infinity,
+          bestPaceFormatted: '-',
+          avgHr: 0,
+        };
+      }
+      const session = sessionsMap[key];
+      session.sets.push(l);
 
-    // Strength computations
-    if (l.weightKg > session.maxWeight) {
-      session.maxWeight = l.weightKg;
-    }
-    session.totalTonnage += l.tonnageKg || l.weightKg * l.reps;
+      if (l.weightKg > session.maxWeight) {
+        session.maxWeight = l.weightKg;
+      }
+      session.totalTonnage += l.tonnageKg || l.weightKg * l.reps;
 
-    const epley = Math.round(l.weightKg * (1 + l.reps / 30));
-    if (epley > session.max1RM) {
-      session.max1RM = epley;
-    }
+      const epley = Math.round(l.weightKg * (1 + l.reps / 30));
+      if (epley > session.max1RM) {
+        session.max1RM = epley;
+      }
 
-    // Cardio computations
-    const distMeters = getSetDistanceInMeters(l);
-    session.totalDistanceKm += distMeters / 1000;
+      const distMeters = getSetDistanceInMeters(l);
+      session.totalDistanceKm += distMeters / 1000;
 
-    const rawPace = l.actualPace || l.targetPace || (l as any).pace;
-    const paceSec = parsePaceToSeconds(rawPace);
-    if (paceSec > 0 && paceSec < session.bestPaceSeconds) {
-      session.bestPaceSeconds = paceSec;
-      session.bestPaceFormatted = formatSecondsToPace(paceSec);
-    }
-  });
+      const rawPace = l.actualPace || l.targetPace || (l as any).pace;
+      const paceSec = parsePaceToSeconds(rawPace);
+      if (paceSec > 0 && paceSec < session.bestPaceSeconds) {
+        session.bestPaceSeconds = paceSec;
+        session.bestPaceFormatted = formatSecondsToPace(paceSec);
+      }
+    });
 
-  const sessionHistory = Object.values(sessionsMap)
-    .map((s) => {
-      // Calculate avg HR for the session
-      const validHrs = s.sets
-        .map((set) => set.actualHR || set.targetHR || (set as any).targetHr)
-        .filter((hr): hr is number => typeof hr === 'number' && hr > 0);
-      const avgHr = validHrs.length > 0 ? Math.round(validHrs.reduce((a, b) => a + b, 0) / validHrs.length) : 0;
+    return Object.values(sessionsMap)
+      .map((s) => {
+        const validHrs = s.sets
+          .map((set) => set.actualHR || set.targetHR || (set as any).targetHr)
+          .filter((hr): hr is number => typeof hr === 'number' && hr > 0);
+        const avgHr =
+          validHrs.length > 0 ? Math.round(validHrs.reduce((a, b) => a + b, 0) / validHrs.length) : 0;
 
-      return {
-        ...s,
-        bestPaceSeconds: s.bestPaceSeconds === Infinity ? 0 : s.bestPaceSeconds,
-        avgHr,
-      };
-    })
-    .sort((a, b) => new Date(a.dateStr).getTime() - new Date(b.dateStr).getTime());
+        return {
+          ...s,
+          bestPaceSeconds: s.bestPaceSeconds === Infinity ? 0 : s.bestPaceSeconds,
+          avgHr,
+        };
+      })
+      .sort((a, b) => new Date(a.dateStr).getTime() - new Date(b.dateStr).getTime());
+  }, [exerciseLogs]);
 
   // === 1. TOP CARDS CALCULATIONS ===
-  // Strength Top Cards:
   const allTimeMaxWeight = Math.max(...exerciseLogs.map((l) => l.weightKg || 0), 0);
   const allTimeMax1RM = Math.max(...sessionHistory.map((s) => s.max1RM), 0);
-  const allTimeTotalTonnage = exerciseLogs.reduce((sum, l) => sum + (l.tonnageKg || l.weightKg * l.reps || 0), 0);
+  const allTimeTotalTonnage = exerciseLogs.reduce(
+    (sum, l) => sum + (l.tonnageKg || l.weightKg * l.reps || 0),
+    0
+  );
 
-  // Cardio Top Cards:
-  // "Najdłuższy Dystans": max distance from a single session
   const maxSessionDistanceKm = Math.max(...sessionHistory.map((s) => s.totalDistanceKm), 0);
   const maxSessionDistanceFormatted =
     maxSessionDistanceKm >= 1
@@ -202,15 +232,15 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
       ? `${Math.round(maxSessionDistanceKm * 1000)} m`
       : '-';
 
-  // "Najlepsze Tempo": lowest time per km across all logged sets
   const allValidPacesSec = exerciseLogs
     .map((l) => parsePaceToSeconds(l.actualPace || l.targetPace || (l as any).pace))
     .filter((sec) => sec > 0);
   const allTimeBestPaceSec = allValidPacesSec.length > 0 ? Math.min(...allValidPacesSec) : 0;
-  const allTimeBestPaceFormatted = allTimeBestPaceSec > 0 ? `${formatSecondsToPace(allTimeBestPaceSec)} min/km` : '-';
+  const allTimeBestPaceFormatted =
+    allTimeBestPaceSec > 0 ? `${formatSecondsToPace(allTimeBestPaceSec)} min/km` : '-';
 
-  // "Łączny Dystans": sum of all distances across all sessions in km
-  const allTimeTotalDistanceKm = exerciseLogs.reduce((sum, l) => sum + getSetDistanceInMeters(l), 0) / 1000;
+  const allTimeTotalDistanceKm =
+    exerciseLogs.reduce((sum, l) => sum + getSetDistanceInMeters(l), 0) / 1000;
   const allTimeTotalDistanceFormatted =
     allTimeTotalDistanceKm >= 1
       ? `${allTimeTotalDistanceKm.toFixed(allTimeTotalDistanceKm % 1 === 0 ? 0 : 2)} km`
@@ -218,45 +248,335 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
       ? `${Math.round(allTimeTotalDistanceKm * 1000)} m`
       : '0 km';
 
-  // === 2. CHART VALUES & MAPPING ===
-  let chartValues: number[] = [];
-  let chartMaxVal = 10;
-  let chartMinVal = 0;
-  let latestDisplayValue = '-';
+  // === 2. CHART DATA & TRADINGVIEW INTERACTIVITY ===
+  const chartData = useMemo(() => {
+    return sessionHistory.map((s, idx) => {
+      let value: number | null = 0;
+      if (isCardio) {
+        if (cardioMetric === 'distance') {
+          value = Number(s.totalDistanceKm.toFixed(2));
+        } else if (cardioMetric === 'pace') {
+          value = s.bestPaceSeconds > 0 ? s.bestPaceSeconds : null;
+        } else {
+          value = s.avgHr > 0 ? s.avgHr : null;
+        }
+      } else {
+        if (strengthMetric === 'tonnage') value = Math.round(s.totalTonnage);
+        else if (strengthMetric === 'estimated1rm') value = s.max1RM;
+        else value = s.maxWeight;
+      }
 
-  if (isCardio) {
-    if (cardioMetric === 'distance') {
-      chartValues = sessionHistory.map((s) => s.totalDistanceKm);
-      chartMaxVal = Math.max(...chartValues, 1);
-      chartMinVal = 0;
-      const latest = chartValues[chartValues.length - 1] || 0;
-      latestDisplayValue = `${latest.toFixed(1)} km`;
-    } else if (cardioMetric === 'pace') {
-      chartValues = sessionHistory.map((s) => s.bestPaceSeconds);
-      const positivePaces = chartValues.filter((v) => v > 0);
-      chartMaxVal = positivePaces.length > 0 ? Math.max(...positivePaces) : 360;
-      chartMinVal = positivePaces.length > 0 ? Math.min(...positivePaces) : 240;
-      const latest = chartValues[chartValues.length - 1] || 0;
-      latestDisplayValue = latest > 0 ? `${formatSecondsToPace(latest)} min/km` : '-';
-    } else {
-      // 'hr'
-      chartValues = sessionHistory.map((s) => s.avgHr);
-      chartMaxVal = Math.max(...chartValues, 100);
-      chartMinVal = 0;
-      const latest = chartValues[chartValues.length - 1] || 0;
-      latestDisplayValue = latest > 0 ? `${Math.round(latest)} bpm` : '-';
-    }
-  } else {
-    chartValues = sessionHistory.map((s) => {
-      if (strengthMetric === 'tonnage') return s.totalTonnage;
-      if (strengthMetric === 'estimated1rm') return s.max1RM;
-      return s.maxWeight;
+      return {
+        idx,
+        dateStr: s.dateStr,
+        displayDate: s.dateStr.length >= 10 ? s.dateStr.slice(5) : s.dateStr,
+        value,
+        setsCount: s.sets.length,
+        maxWeight: s.maxWeight,
+        max1RM: s.max1RM,
+        totalTonnage: Math.round(s.totalTonnage),
+        totalDistanceKm: Number(s.totalDistanceKm.toFixed(2)),
+        bestPaceFormatted: s.bestPaceFormatted,
+        avgHr: s.avgHr,
+      };
     });
-    chartMaxVal = Math.max(...chartValues, 10);
-    chartMinVal = 0;
-    const latest = chartValues[chartValues.length - 1] || 0;
-    latestDisplayValue = `${latest} kg`;
-  }
+  }, [sessionHistory, isCardio, cardioMetric, strengthMetric]);
+
+  const latestDisplayValue = useMemo(() => {
+    if (chartData.length === 0) return '-';
+    const latestPoint = [...chartData].reverse().find((d) => d.value !== null) || chartData[chartData.length - 1];
+    const latest = latestPoint?.value ?? 0;
+    if (isCardio) {
+      if (cardioMetric === 'distance') return `${Number(latest).toFixed(1)} km`;
+      if (cardioMetric === 'pace') return latest > 0 ? `${formatSecondsToPace(Number(latest))} min/km` : '-';
+      return latest > 0 ? `${Math.round(Number(latest))} bpm` : '-';
+    }
+    return `${Number(latest).toLocaleString()} kg`;
+  }, [chartData, isCardio, cardioMetric]);
+
+  const defaultXDomain = useMemo<[number, number]>(() => {
+    const n = chartData.length;
+    if (n <= 1) return [-0.5, 0.5];
+    return [-0.25, n - 1 + 0.25];
+  }, [chartData.length]);
+
+  const effectiveXDomain = xDomain ?? defaultXDomain;
+
+  const autoYDomain = useMemo<[number, number]>(() => {
+    const n = chartData.length;
+    if (n === 0) return [0, 100];
+    const startIdx = Math.max(0, Math.floor(effectiveXDomain[0]) - 1);
+    const endIdx = Math.min(n - 1, Math.ceil(effectiveXDomain[1]) + 1);
+    const slice = chartData.slice(startIdx, endIdx + 1);
+    const pool = slice.length > 0 ? slice : chartData;
+
+    const vals = pool
+      .map((d) => d.value)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+
+    if (vals.length === 0) return isPaceMetric ? [200, 360] : [0, 100];
+
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min;
+
+    if (chartType === 'bar' && !isPaceMetric) {
+      const topPad = span > 0 ? Math.max(1, span * 0.16) : Math.max(2, max * 0.18);
+      const bottom = min >= 0 ? Math.max(0, Number((min - topPad * 0.5).toFixed(1))) : 0;
+      return [bottom, Number((max + topPad).toFixed(1))];
+    }
+
+    const pad = span > 0 ? Math.max(isPaceMetric ? 5 : 1.5, span * 0.18) : isPaceMetric ? 15 : 5;
+    return [Math.max(0, Number((min - pad).toFixed(1))), Number((max + pad).toFixed(1))];
+  }, [chartData, effectiveXDomain, chartType, isPaceMetric]);
+
+  const effectiveYDomain = yDomain ?? autoYDomain;
+
+  const xTicks = useMemo(() => {
+    const n = chartData.length;
+    if (n === 0) return [];
+    const minIdx = Math.max(0, Math.ceil(effectiveXDomain[0]));
+    const maxIdx = Math.min(n - 1, Math.floor(effectiveXDomain[1]));
+    if (minIdx > maxIdx) return [];
+    const count = maxIdx - minIdx + 1;
+    const step = Math.max(1, Math.ceil(count / 7));
+    const ticks: number[] = [];
+    for (let i = minIdx; i <= maxIdx; i += step) {
+      ticks.push(i);
+    }
+    return ticks;
+  }, [chartData.length, effectiveXDomain]);
+
+  const visibleBarData = useMemo(() => {
+    const n = chartData.length;
+    if (n === 0) return [];
+    const startIdx = Math.max(0, Math.floor(effectiveXDomain[0]));
+    const endIdx = Math.min(n - 1, Math.ceil(effectiveXDomain[1]));
+    if (startIdx > endIdx) return chartData;
+    return chartData.slice(startIdx, endIdx + 1);
+  }, [chartData, effectiveXDomain]);
+
+  const isChartAdjusted = Boolean(xDomain || yDomain);
+  const reverseYAxis = isPaceMetric && chartType === 'line';
+
+  const handleResetZoom = useCallback(() => {
+    setXDomain(null);
+    setYDomain(null);
+  }, []);
+
+  // Reset zoom when modal opens, exercise changes, or active metric / chart type changes
+  useEffect(() => {
+    setXDomain(null);
+    setYDomain(null);
+  }, [exerciseName, isOpen, strengthMetric, cardioMetric, chartType]);
+
+  const detectZone = useCallback((relX: number, relY: number, height: number): ChartDragZone => {
+    if (relX <= CHART_LEFT_AXIS_WIDTH) return 'y-left';
+    if (relY >= height - CHART_X_AXIS_HEIGHT) return 'x';
+    return 'pan';
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (chartData.length === 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = chartContainerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    const zone = detectZone(relX, relY, rect.height);
+
+    const plotWidth = Math.max(40, rect.width - CHART_LEFT_AXIS_WIDTH - 14);
+    const plotHeight = Math.max(40, rect.height - CHART_X_AXIS_HEIGHT - 10);
+
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture is unavailable
+    }
+
+    dragRef.current = {
+      zone,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      plotWidth,
+      plotHeight,
+      initXDomain: [...effectiveXDomain] as [number, number],
+      initYDomain: [...effectiveYDomain] as [number, number],
+    };
+    setActiveDragZone(zone);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = chartContainerRef.current;
+    if (!el || chartData.length === 0) return;
+
+    const snap = dragRef.current;
+    if (!snap) {
+      if (e.pointerType === 'mouse') {
+        const rect = el.getBoundingClientRect();
+        const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.height);
+        setHoverZone(zone);
+      }
+      return;
+    }
+
+    const dx = e.clientX - snap.startX;
+    const dy = e.clientY - snap.startY;
+    const n = chartData.length;
+
+    if (snap.zone === 'y-left') {
+      const [initMin, initMax] = snap.initYDomain;
+      const initSpan = Math.max(0.5, initMax - initMin);
+      const center = (initMin + initMax) / 2;
+      const factor = Math.exp(dy * 0.0085);
+      const maxSpan = Math.max(500, initSpan * 8);
+      const newSpan = Math.min(maxSpan, Math.max(0.5, initSpan * factor));
+      let nextMin = center - newSpan / 2;
+      let nextMax = center + newSpan / 2;
+      if (nextMin < 0) {
+        nextMin = 0;
+        nextMax = newSpan;
+      }
+      setYDomain([Number(nextMin.toFixed(2)), Number(nextMax.toFixed(2))]);
+    } else if (snap.zone === 'x') {
+      const [initMin, initMax] = snap.initXDomain;
+      const initSpan = Math.max(0.4, initMax - initMin);
+      const center = (initMin + initMax) / 2;
+      const factor = Math.exp(-dx * 0.0085);
+      const minSpan = n <= 1 ? 0.4 : 0.65;
+      const maxSpan = Math.max(n + 2, 6);
+      const newSpan = Math.min(maxSpan, Math.max(minSpan, initSpan * factor));
+      let nextMin = center - newSpan / 2;
+      let nextMax = center + newSpan / 2;
+      const minBound = -newSpan * 0.5;
+      const maxBound = Math.max(0, n - 1) + newSpan * 0.5;
+      if (nextMin < minBound) {
+        nextMin = minBound;
+        nextMax = nextMin + newSpan;
+      }
+      if (nextMax > maxBound) {
+        nextMax = maxBound;
+        nextMin = nextMax - newSpan;
+      }
+      setXDomain([nextMin, nextMax]);
+    } else {
+      // Pan X and Y without changing scale
+      const [initXMin, initXMax] = snap.initXDomain;
+      const xSpan = Math.max(0.4, initXMax - initXMin);
+      const shiftX = -(dx / snap.plotWidth) * xSpan;
+      let nextXMin = initXMin + shiftX;
+      let nextXMax = initXMax + shiftX;
+      const minAllowedX = -xSpan * 0.65;
+      const maxAllowedX = Math.max(0, n - 1) + xSpan * 0.65;
+      if (nextXMin < minAllowedX) {
+        nextXMin = minAllowedX;
+        nextMaxClamp();
+      }
+      function nextMaxClamp() {
+        nextXMax = nextXMin + xSpan;
+      }
+      if (nextXMax > maxAllowedX) {
+        nextXMax = maxAllowedX;
+        nextXMin = nextXMax - xSpan;
+      }
+      setXDomain([nextXMin, nextXMax]);
+
+      const [initYMin, initYMax] = snap.initYDomain;
+      const ySpan = Math.max(0.5, initYMax - initYMin);
+      const shiftY = (reverseYAxis ? -1 : 1) * (dy / snap.plotHeight) * ySpan;
+      let nextYMin = initYMin + shiftY;
+      let nextYMax = initYMax + shiftY;
+      if (nextYMin < 0) {
+        nextYMin = 0;
+        nextYMax = ySpan;
+      }
+      setYDomain([Number(nextYMin.toFixed(2)), Number(nextYMax.toFixed(2))]);
+    }
+  };
+
+  const endDrag = (e?: React.PointerEvent<HTMLDivElement>) => {
+    if (e && chartContainerRef.current && dragRef.current) {
+      try {
+        if (chartContainerRef.current.hasPointerCapture(e.pointerId)) {
+          chartContainerRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    dragRef.current = null;
+    setActiveDragZone(null);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = chartContainerRef.current;
+    if (!el || chartData.length === 0) return;
+    const rect = el.getBoundingClientRect();
+    const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.height);
+    if (zone === 'y-left') {
+      setYDomain(null);
+    } else if (zone === 'x') {
+      setXDomain(null);
+    } else {
+      handleResetZoom();
+    }
+  };
+
+  // Smooth wheel zoom on X or Y axis
+  useEffect(() => {
+    const el = chartContainerRef.current;
+    if (!isOpen || !el || chartData.length === 0) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.height);
+      const factor = Math.exp(e.deltaY * 0.0018);
+
+      if (zone === 'y-left') {
+        const [min, max] = effectiveYDomain;
+        const span = Math.max(0.5, max - min);
+        const center = (min + max) / 2;
+        const maxSpan = Math.max(500, span * 8);
+        const nextSpan = Math.min(maxSpan, Math.max(0.5, span * factor));
+        const nextMin = Math.max(0, center - nextSpan / 2);
+        setYDomain([Number(nextMin.toFixed(2)), Number((nextMin + nextSpan).toFixed(2))]);
+      } else {
+        const n = chartData.length;
+        const [min, max] = effectiveXDomain;
+        const span = Math.max(0.4, max - min);
+        const plotW = Math.max(40, rect.width - CHART_LEFT_AXIS_WIDTH - 14);
+        const anchorRatio = Math.min(
+          1,
+          Math.max(0, (e.clientX - rect.left - CHART_LEFT_AXIS_WIDTH) / plotW)
+        );
+        const anchorVal = min + anchorRatio * span;
+        const minSpan = n <= 1 ? 0.4 : 0.65;
+        const maxSpan = Math.max(n + 2, 6);
+        const nextSpan = Math.min(maxSpan, Math.max(minSpan, span * factor));
+        const nextMin = anchorVal - anchorRatio * nextSpan;
+        setXDomain([nextMin, nextMin + nextSpan]);
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [isOpen, chartData.length, detectZone, effectiveYDomain, effectiveXDomain]);
+
+  const currentZone = activeDragZone ?? hoverZone;
+  const chartCursorClass =
+    currentZone === 'y-left'
+      ? 'cursor-ns-resize'
+      : currentZone === 'x'
+      ? 'cursor-ew-resize'
+      : activeDragZone === 'pan'
+      ? 'cursor-grabbing'
+      : 'cursor-grab';
+
+  if (!isOpen) return null;
 
   // === 3. GROUPED HISTORY LIST (ACCORDION) ===
   interface DailyGroup {
@@ -518,7 +838,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
             )}
           </div>
 
-          {/* Visual Chart */}
+          {/* Interactive Recharts Visualization (Line / Bar + TradingView Zoom & Pan) */}
           <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 shrink-0">
             {sessionHistory.length === 0 ? (
               <div className="py-12 text-center text-xs text-neutral-500">
@@ -534,91 +854,297 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-neutral-600 dark:text-neutral-400 flex-wrap gap-1">
-                  <span>Historia {sessionHistory.length} sesji treningowych</span>
-                  <div className="flex items-center gap-2">
-                    {isCardio && cardioMetric === 'pace' && (
-                      <span className="text-[10px] text-amber-500 dark:text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded font-medium">
-                        Oś odwrócona (wyższy słupek = szybsze tempo)
+                {/* Header row with session count, latest value, reset button, and Line/Bar Toggle */}
+                <div className="flex items-start sm:items-center justify-between gap-2 flex-wrap">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-600 dark:text-neutral-400">
+                      <span>Historia {sessionHistory.length} sesji</span>
+                      <span className="font-mono-numbers text-amber-600 dark:text-amber-400 font-bold">
+                        • Najnowszy: {latestDisplayValue}
+                      </span>
+                    </div>
+                    {isPaceMetric && (
+                      <span className="inline-block text-[10px] text-amber-600 dark:text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded font-medium">
+                        {chartType === 'line'
+                          ? 'Oś odwrócona (wyżej = szybsze tempo)'
+                          : 'Niższy słupek = szybsze tempo'}
                       </span>
                     )}
-                    <span className="font-mono-numbers text-amber-600 dark:text-amber-400 font-bold">
-                      Najnowszy: {latestDisplayValue}
-                    </span>
+                  </div>
+
+                  {/* Top-right controls: Reset Zoom + Chart Type Toggle ("Liniowy" / "Słupkowy") */}
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    {isChartAdjusted && (
+                      <button
+                        type="button"
+                        onClick={handleResetZoom}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 text-amber-600 dark:text-amber-400 border border-amber-400/30 text-[10px] font-bold transition-all cursor-pointer"
+                        title="Resetuj powiększenie i przesunięcie osi"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset</span>
+                      </button>
+                    )}
+
+                    <div
+                      className="inline-flex items-center p-0.5 rounded-xl bg-neutral-200/80 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800"
+                      role="group"
+                      aria-label="Typ wykresu"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setChartType('line')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          chartType === 'line'
+                            ? 'bg-amber-400 text-black font-black shadow-sm'
+                            : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <TrendingUp className="w-3 h-3" />
+                        <span>Liniowy</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartType('bar')}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                          chartType === 'bar'
+                            ? 'bg-amber-400 text-black font-black shadow-sm'
+                            : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <BarChart3 className="w-3 h-3" />
+                        <span>Słupkowy</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Bar / Column Chart */}
-                <div className="h-44 flex items-end gap-2 pt-4 px-2 overflow-x-auto scrollbar-none">
-                  {sessionHistory.map((s, idx) => {
-                    let val = 0;
-                    let displayValStr = '';
-                    let heightPct = 50;
+                {/* TradingView Interactive Recharts Area */}
+                <div
+                  ref={chartContainerRef}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                  onPointerLeave={() => {
+                    if (!dragRef.current) setHoverZone(null);
+                  }}
+                  onDoubleClick={handleDoubleClick}
+                  style={{ touchAction: 'none' }}
+                  className={`relative h-56 sm:h-64 w-full pt-1 select-none ${chartCursorClass}`}
+                >
+                  {/* Axis hover/drag highlight strips */}
+                  <div
+                    className={`pointer-events-none absolute top-1 bottom-[34px] left-0 w-[52px] rounded-l-xl transition-colors ${
+                      currentZone === 'y-left' ? 'bg-amber-400/10 border-r border-amber-400/30' : ''
+                    }`}
+                  />
+                  <div
+                    className={`pointer-events-none absolute bottom-0 left-[52px] right-3 h-[34px] rounded-b-xl transition-colors ${
+                      currentZone === 'x' ? 'bg-amber-400/10 border-t border-amber-400/30' : ''
+                    }`}
+                  />
 
-                    if (isCardio) {
-                      if (cardioMetric === 'distance') {
-                        val = s.totalDistanceKm;
-                        displayValStr = `${val.toFixed(1)}km`;
-                        heightPct = chartMaxVal > 0 ? Math.max(15, Math.round((val / chartMaxVal) * 100)) : 15;
-                      } else if (cardioMetric === 'pace') {
-                        val = s.bestPaceSeconds;
-                        displayValStr = val > 0 ? `${formatSecondsToPace(val)}` : '-';
-                        // Inverted Y-axis for pace: lower time in seconds = better result = HIGHER bar
-                        if (val <= 0) {
-                          heightPct = 15;
-                        } else if (chartMaxVal === chartMinVal) {
-                          heightPct = 70;
-                        } else {
-                          // Scale inverted: val == chartMinVal (fastest) -> 95%, val == chartMaxVal (slowest) -> 20%
-                          const ratio = (chartMaxVal - val) / (chartMaxVal - chartMinVal || 1);
-                          heightPct = Math.max(20, Math.min(95, Math.round(20 + ratio * 75)));
-                        }
-                      } else {
-                        // 'hr'
-                        val = s.avgHr;
-                        displayValStr = val > 0 ? `${Math.round(val)} bpm` : '-';
-                        heightPct = chartMaxVal > 0 ? Math.max(15, Math.round((val / chartMaxVal) * 100)) : 15;
-                      }
-                    } else {
-                      val =
-                        strengthMetric === 'tonnage'
-                          ? s.totalTonnage
-                          : strengthMetric === 'estimated1rm'
-                          ? s.max1RM
-                          : s.maxWeight;
-                      displayValStr = `${val}kg`;
-                      heightPct = chartMaxVal > 0 ? Math.max(15, Math.round((val / chartMaxVal) * 100)) : 15;
-                    }
-
-                    const isLatest = idx === sessionHistory.length - 1;
-
-                    return (
-                      <div
-                        key={idx}
-                        className="flex-1 min-w-[42px] max-w-[64px] flex flex-col items-center justify-end h-full group"
+                  <ResponsiveContainer width="100%" height="100%">
+                    {chartType === 'line' ? (
+                      <LineChart
+                        data={chartData}
+                        margin={{ top: 10, right: 12, left: 2, bottom: 4 }}
                       >
-                        <span className="text-[10px] font-mono-numbers font-bold text-neutral-500 dark:text-neutral-400 mb-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {displayValStr}
-                        </span>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(115, 115, 115, 0.22)" />
+                        <XAxis
+                          type="number"
+                          dataKey="idx"
+                          domain={effectiveXDomain}
+                          ticks={xTicks}
+                          allowDataOverflow
+                          stroke="#737373"
+                          tick={{ fontSize: 10, fill: '#9ca3af' }}
+                          tickFormatter={(val) => chartData[Math.round(Number(val))]?.displayDate || ''}
+                          height={30}
+                        />
+                        <YAxis
+                          stroke="#737373"
+                          domain={effectiveYDomain}
+                          reversed={reverseYAxis}
+                          allowDataOverflow
+                          tick={{ fontSize: 10, fill: '#9ca3af' }}
+                          width={48}
+                          tickFormatter={(val) => {
+                            if (!Number.isFinite(val)) return '';
+                            if (isPaceMetric) return formatSecondsToPace(Math.round(Number(val)));
+                            if (isCardio && cardioMetric === 'distance') {
+                              return `${Math.round(Number(val) * 10) / 10}`;
+                            }
+                            return `${Math.round(Number(val))}`;
+                          }}
+                        />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || !payload.length) return null;
+                            const d = payload[0].payload;
+                            let metricLabel = '';
+                            if (isCardio) {
+                              if (cardioMetric === 'distance') {
+                                metricLabel =
+                                  d.value !== null
+                                    ? `Dystans: ${
+                                        d.value >= 1
+                                          ? `${Number(d.value).toFixed(2)} km`
+                                          : `${Math.round(Number(d.value) * 1000)} m`
+                                      }`
+                                    : 'Dystans: -';
+                              } else if (cardioMetric === 'pace') {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Najlepsze Tempo: ${formatSecondsToPace(Number(d.value))} min/km`
+                                    : 'Tempo: -';
+                              } else {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Średnie HR: ${Math.round(Number(d.value))} bpm`
+                                    : 'Tętno: -';
+                              }
+                            } else {
+                              if (strengthMetric === 'tonnage') {
+                                metricLabel = `Tonaż Sesji: ${Number(d.value).toLocaleString()} kg`;
+                              } else if (strengthMetric === 'estimated1rm') {
+                                metricLabel = `Szacowane 1RM: ${d.value} kg`;
+                              } else {
+                                metricLabel = `Ciężar Max: ${d.value} kg`;
+                              }
+                            }
 
-                        <div className="w-full bg-neutral-200 dark:bg-neutral-900 rounded-xl overflow-hidden p-1 flex flex-col justify-end h-32 border border-neutral-300 dark:border-neutral-800">
-                          <div
-                            className={`w-full rounded-lg transition-all duration-500 ${
-                              isLatest
-                                ? 'bg-gradient-to-t from-amber-500 to-amber-300 shadow-md shadow-amber-400/20'
-                                : 'bg-neutral-400 dark:bg-neutral-700 group-hover:bg-amber-400/70'
-                            }`}
-                            style={{ height: `${heightPct}%` }}
-                          />
-                        </div>
+                            return (
+                              <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-700 shadow-xl text-xs space-y-1">
+                                <div className="text-[10px] text-neutral-400 font-bold">
+                                  {d.dateStr}
+                                </div>
+                                <div className="text-amber-400 font-mono-numbers font-black text-sm">
+                                  {metricLabel}
+                                </div>
+                                <div className="text-[11px] text-neutral-400">
+                                  {isCardio
+                                    ? `${d.setsCount} ${d.setsCount === 1 ? 'odcinek' : 'odcinków'}`
+                                    : `Ciężar max: ${d.maxWeight} kg • ${d.setsCount} serii`}
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#f59e0b"
+                          strokeWidth={3}
+                          dot={{ fill: '#f59e0b', r: 4, stroke: '#18181b', strokeWidth: 2 }}
+                          activeDot={{ r: 6, fill: '#fbbf24' }}
+                          connectNulls
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    ) : (
+                      <BarChart
+                        data={visibleBarData}
+                        margin={{ top: 10, right: 12, left: 2, bottom: 4 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(115, 115, 115, 0.22)" vertical={false} />
+                        <XAxis
+                          dataKey="displayDate"
+                          stroke="#737373"
+                          tick={{ fontSize: 10, fill: '#9ca3af' }}
+                          height={30}
+                        />
+                        <YAxis
+                          stroke="#737373"
+                          domain={effectiveYDomain}
+                          allowDataOverflow
+                          tick={{ fontSize: 10, fill: '#9ca3af' }}
+                          width={48}
+                          tickFormatter={(val) => {
+                            if (!Number.isFinite(val)) return '';
+                            if (isPaceMetric) return formatSecondsToPace(Math.round(Number(val)));
+                            if (isCardio && cardioMetric === 'distance') {
+                              return `${Math.round(Number(val) * 10) / 10}`;
+                            }
+                            return `${Math.round(Number(val))}`;
+                          }}
+                        />
+                        <Tooltip
+                          cursor={{ fill: 'rgba(245, 158, 11, 0.08)' }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload || !payload.length) return null;
+                            const d = payload[0].payload;
+                            let metricLabel = '';
+                            if (isCardio) {
+                              if (cardioMetric === 'distance') {
+                                metricLabel =
+                                  d.value !== null
+                                    ? `Dystans: ${
+                                        d.value >= 1
+                                          ? `${Number(d.value).toFixed(2)} km`
+                                          : `${Math.round(Number(d.value) * 1000)} m`
+                                      }`
+                                    : 'Dystans: -';
+                              } else if (cardioMetric === 'pace') {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Najlepsze Tempo: ${formatSecondsToPace(Number(d.value))} min/km`
+                                    : 'Tempo: -';
+                              } else {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Średnie HR: ${Math.round(Number(d.value))} bpm`
+                                    : 'Tętno: -';
+                              }
+                            } else {
+                              if (strengthMetric === 'tonnage') {
+                                metricLabel = `Tonaż Sesji: ${Number(d.value).toLocaleString()} kg`;
+                              } else if (strengthMetric === 'estimated1rm') {
+                                metricLabel = `Szacowane 1RM: ${d.value} kg`;
+                              } else {
+                                metricLabel = `Ciężar Max: ${d.value} kg`;
+                              }
+                            }
 
-                        <span className="text-[9px] text-neutral-500 mt-1.5 block truncate max-w-[50px]">
-                          {s.dateStr.slice(5)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                            return (
+                              <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-700 shadow-xl text-xs space-y-1">
+                                <div className="text-[10px] text-neutral-400 font-bold">
+                                  {d.dateStr}
+                                </div>
+                                <div className="text-amber-400 font-mono-numbers font-black text-sm">
+                                  {metricLabel}
+                                </div>
+                                <div className="text-[11px] text-neutral-400">
+                                  {isCardio
+                                    ? `${d.setsCount} ${d.setsCount === 1 ? 'odcinek' : 'odcinków'}`
+                                    : `Ciężar max: ${d.maxWeight} kg • ${d.setsCount} serii`}
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Bar
+                          dataKey="value"
+                          radius={[6, 6, 0, 0]}
+                          maxBarSize={44}
+                          isAnimationActive={false}
+                        >
+                          {visibleBarData.map((entry) => (
+                            <Cell
+                              key={entry.idx}
+                              fill={entry.idx === chartData.length - 1 ? '#f59e0b' : '#737373'}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
                 </div>
+
+                <p className="text-[10px] text-neutral-500 text-center">
+                  Przeciągnij oś Y / X aby skalować • Przeciągnij siatkę aby przesuwać • Dwuklik resetuje
+                </p>
               </div>
             )}
           </div>
