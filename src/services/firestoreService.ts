@@ -2,7 +2,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
+  getDocsFromServer,
   setDoc,
   deleteDoc,
   writeBatch,
@@ -23,6 +25,7 @@ export const LOCAL_STORAGE_CYCLES_KEY = 'hyrox_training_cycles_list';
 export const LOCAL_STORAGE_ACTIVE_CYCLE_KEY = 'hyrox_active_cycle_id';
 export const LOCAL_STORAGE_LOGS_KEY = 'hyrox_workout_logs';
 export const LOCAL_STORAGE_RECOVERY_KEY = 'hyrox_recovery_history';
+export const LOCAL_STORAGE_LAST_UPDATED_KEY = 'hyrox_last_updated';
 const LOCAL_STORAGE_MIGRATED_PREFIX = 'hyrox_device_migrated_';
 
 export interface LocalTrainingData {
@@ -30,9 +33,57 @@ export interface LocalTrainingData {
   activeCycleId: string;
   logs: WorkoutLogEntry[];
   recovery: DailyRecoveryData[];
+  lastUpdated: number | null;
   hasAnyData: boolean;
   hasLogs: boolean;
   hasCycles: boolean;
+}
+
+/**
+ * Normalizes any numeric timestamp, ISO string, or Firestore Timestamp into epoch milliseconds.
+ */
+export function parseTimestampMillis(val: unknown): number | null {
+  if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+    return val;
+  }
+  if (val && typeof (val as any).toMillis === 'function') {
+    const ms = (val as any).toMillis();
+    return Number.isFinite(ms) && ms > 0 ? ms : null;
+  }
+  if (typeof val === 'string' && val.trim()) {
+    const num = Number(val);
+    if (Number.isFinite(num) && num > 0) return num;
+    const parsed = Date.parse(val);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * Reads local modification timestamp from localStorage without mutating storage.
+ */
+export function readLocalLastUpdated(): number | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_LAST_UPDATED_KEY);
+    return parseTimestampMillis(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persists or clears the local modification timestamp in localStorage.
+ */
+export function writeLocalLastUpdated(ts: number | null): void {
+  try {
+    if (ts !== null && Number.isFinite(ts) && ts > 0) {
+      localStorage.setItem(LOCAL_STORAGE_LAST_UPDATED_KEY, String(ts));
+    } else {
+      localStorage.removeItem(LOCAL_STORAGE_LAST_UPDATED_KEY);
+    }
+  } catch (err) {
+    console.warn('Błąd zapisu lastUpdated do localStorage:', err);
+  }
 }
 
 /**
@@ -89,6 +140,7 @@ export function readLocalTrainingData(): LocalTrainingData {
     activeCycleId = cycles[0].id;
   }
 
+  const lastUpdated = readLocalLastUpdated();
   const hasLogs = logs.length > 0;
   const hasCycles = cycles.length > 0;
   const hasRecovery = recovery.length > 0;
@@ -99,6 +151,7 @@ export function readLocalTrainingData(): LocalTrainingData {
     activeCycleId,
     logs,
     recovery,
+    lastUpdated,
     hasAnyData,
     hasLogs,
     hasCycles,
@@ -136,10 +189,29 @@ export interface CloudSyncStatus {
   cloudActiveCycleId: string;
   cloudLogs: WorkoutLogEntry[];
   cloudRecovery: DailyRecoveryData[];
+  cloudLastUpdated: number | null;
+  localLastUpdated: number | null;
   isCloudMigrated: boolean;
   isCloudAccountInitialized: boolean;
   localData: LocalTrainingData;
   isDeviceMigrated: boolean;
+}
+
+/**
+ * Fetches only the cloud user document timestamp from Firestore server (1 read).
+ */
+export async function fetchCloudLastUpdated(userId: string): Promise<number | null> {
+  if (!userId) return null;
+  const userDocRef = doc(db, 'users', userId);
+  try {
+    const snap = await getDocFromServer(userDocRef).catch(() => getDoc(userDocRef));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return parseTimestampMillis(data?.lastUpdated ?? data?.updatedAt);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `users/${userId}`);
+    return null;
+  }
 }
 
 /**
@@ -154,10 +226,10 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
 
   try {
     const [cyclesSnap, userDocSnap, logsSnap, recoverySnap] = await Promise.all([
-      getDocs(cyclesColRef),
-      getDoc(userDocRef),
-      getDocs(logsColRef),
-      getDocs(recoveryColRef),
+      getDocsFromServer(cyclesColRef).catch(() => getDocs(cyclesColRef)),
+      getDocFromServer(userDocRef).catch(() => getDoc(userDocRef)),
+      getDocsFromServer(logsColRef).catch(() => getDocs(logsColRef)),
+      getDocsFromServer(recoveryColRef).catch(() => getDocs(recoveryColRef)),
     ]);
 
     const cloudCycles: TrainingCycleCatalog[] = cyclesSnap.docs.map(
@@ -170,17 +242,20 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       (d) => d.data() as DailyRecoveryData
     );
 
+    const userData = userDocSnap.exists() ? userDocSnap.data() : null;
     const hasCloudData = cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0;
     const isCloudAccountInitialized =
-      userDocSnap.exists() &&
-      (userDocSnap.data()?.isInitialized === true ||
-       userDocSnap.data()?.isMigrated === true);
-    const isCloudMigrated = userDocSnap.exists() && userDocSnap.data()?.isMigrated === true;
+      Boolean(userData) &&
+      (userData?.isInitialized === true || userData?.isMigrated === true);
+    const isCloudMigrated = Boolean(userData) && userData?.isMigrated === true;
+    const cloudLastUpdated = userData
+      ? parseTimestampMillis(userData.lastUpdated ?? userData.updatedAt)
+      : null;
 
-    // Use saved active cycle, or first cycle in list, or empty string. NEVER force default cycle!
+    // Use saved active cycle, or first cycle in list, or empty string.
     const activeCycleId =
-      userDocSnap.exists() && userDocSnap.data()?.activeCycleId
-        ? userDocSnap.data().activeCycleId
+      userData?.activeCycleId
+        ? userData.activeCycleId
         : cloudCycles[0]?.id || '';
 
     const localData = readLocalTrainingData();
@@ -195,6 +270,8 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudActiveCycleId: activeCycleId,
       cloudLogs: sanitizeAndDeduplicateLogs(cloudLogs),
       cloudRecovery,
+      cloudLastUpdated,
+      localLastUpdated: localData.lastUpdated,
       isCloudMigrated,
       isCloudAccountInitialized,
       localData,
@@ -202,7 +279,6 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
     };
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, `users/${userId}`);
-    // Fallback if network issue
     const localData = readLocalTrainingData();
     return {
       hasCloudData: false,
@@ -213,6 +289,8 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudActiveCycleId: '',
       cloudLogs: [],
       cloudRecovery: [],
+      cloudLastUpdated: null,
+      localLastUpdated: localData.lastUpdated,
       isCloudMigrated: false,
       isCloudAccountInitialized: false,
       localData,
@@ -222,8 +300,171 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
 }
 
 /**
- * Upload local data to Cloud Firestore (Option 1: "Wyślij dane z telefonu do chmury")
- * Strictly preserves local data and uploads it to Firestore.
+ * Manual Hard Pull: Strictly reads live state from Firestore server and overwrites localStorage.
+ */
+export async function pullCloudDataAndOverwriteLocal(userId: string): Promise<{
+  cycles: TrainingCycleCatalog[];
+  activeCycleId: string;
+  logs: WorkoutLogEntry[];
+  recovery: DailyRecoveryData[];
+  lastUpdated: number;
+  hasCloudData: boolean;
+}> {
+  const cyclesColRef = collection(db, 'users', userId, 'cycles');
+  const userDocRef = doc(db, 'users', userId);
+  const logsColRef = collection(db, 'users', userId, 'workout_logs');
+  const recoveryColRef = collection(db, 'users', userId, 'recovery');
+
+  try {
+    const [cyclesSnap, userDocSnap, logsSnap, recoverySnap] = await Promise.all([
+      getDocsFromServer(cyclesColRef),
+      getDocFromServer(userDocRef),
+      getDocsFromServer(logsColRef),
+      getDocsFromServer(recoveryColRef),
+    ]);
+
+    const cloudCycles: TrainingCycleCatalog[] = cyclesSnap.docs.map(
+      (d) => d.data() as TrainingCycleCatalog
+    );
+    const cloudLogs = sanitizeAndDeduplicateLogs(
+      logsSnap.docs.map((d) => d.data() as WorkoutLogEntry)
+    );
+    const cloudRecovery: DailyRecoveryData[] = recoverySnap.docs.map(
+      (d) => d.data() as DailyRecoveryData
+    );
+
+    const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+    const activeCycleId = userData?.activeCycleId || cloudCycles[0]?.id || '';
+    const cloudLastUpdated =
+      parseTimestampMillis(userData?.lastUpdated ?? userData?.updatedAt) ?? Date.now();
+    const hasCloudData =
+      cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0 || Boolean(userData);
+
+    applyCloudDataToLocalStorage({
+      cycles: cloudCycles,
+      activeCycleId,
+      logs: cloudLogs,
+      recovery: cloudRecovery,
+      lastUpdated: cloudLastUpdated,
+    });
+    markDeviceMigrated(userId);
+
+    return {
+      cycles: cloudCycles,
+      activeCycleId,
+      logs: cloudLogs,
+      recovery: cloudRecovery,
+      lastUpdated: cloudLastUpdated,
+      hasCloudData,
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `users/${userId}`);
+    throw error;
+  }
+}
+
+/**
+ * Manual Hard Push (Hard Replace):
+ * Replaces Cloud Firestore state completely with local device state, deleting stale cloud documents
+ * and storing the exact same `lastUpdated` timestamp on Firestore.
+ */
+export async function replaceCloudWithLocalData(
+  userId: string,
+  localData: {
+    cycles: TrainingCycleCatalog[];
+    activeCycleId: string;
+    logs: WorkoutLogEntry[];
+    recovery: DailyRecoveryData[];
+    lastUpdated: number;
+  }
+): Promise<number> {
+  const userDocRef = doc(db, 'users', userId);
+  const cyclesColRef = collection(db, 'users', userId, 'cycles');
+  const logsColRef = collection(db, 'users', userId, 'workout_logs');
+  const recoveryColRef = collection(db, 'users', userId, 'recovery');
+  const syncTimestamp = localData.lastUpdated || Date.now();
+
+  try {
+    // 1. Inspect existing docs so stale deleted items are removed during hard replace
+    const [existingCyclesSnap, existingLogsSnap, existingRecoverySnap] = await Promise.all([
+      getDocsFromServer(cyclesColRef).catch(() => getDocs(cyclesColRef)),
+      getDocsFromServer(logsColRef).catch(() => getDocs(logsColRef)),
+      getDocsFromServer(recoveryColRef).catch(() => getDocs(recoveryColRef)),
+    ]);
+
+    const keepCycleIds = new Set((localData.cycles || []).map((c) => c.id));
+    const deduplicatedLogs = sanitizeAndDeduplicateLogs(localData.logs || []);
+    const keepLogIds = new Set(deduplicatedLogs.map((l) => l.id));
+    const recoveryList = localData.recovery || [];
+    const keepRecoveryIds = new Set(recoveryList.map((r) => r.date));
+
+    const deleteRefs = [
+      ...existingCyclesSnap.docs.filter((d) => !keepCycleIds.has(d.id)).map((d) => d.ref),
+      ...existingLogsSnap.docs.filter((d) => !keepLogIds.has(d.id)).map((d) => d.ref),
+      ...existingRecoverySnap.docs.filter((d) => !keepRecoveryIds.has(d.id)).map((d) => d.ref),
+    ];
+
+    const chunkSize = 400;
+    for (let i = 0; i < deleteRefs.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      deleteRefs.slice(i, i + chunkSize).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+
+    // 2. Hard-write current cycles (full document overwrite, no merge)
+    for (const cycle of localData.cycles || []) {
+      const cleanCycle = JSON.parse(JSON.stringify({ ...cycle, lastUpdated: syncTimestamp }));
+      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cleanCycle);
+    }
+
+    // 3. Hard-write current workout logs in chunks
+    for (let i = 0; i < deduplicatedLogs.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      const chunk = deduplicatedLogs.slice(i, i + chunkSize);
+      chunk.forEach((log: WorkoutLogEntry) => {
+        const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
+        batch.set(logRef, JSON.parse(JSON.stringify(log)));
+      });
+      await batch.commit();
+    }
+
+    // 4. Hard-write current recovery entries in chunks
+    for (let i = 0; i < recoveryList.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      const chunk = recoveryList.slice(i, i + chunkSize);
+      chunk.forEach((rec: DailyRecoveryData) => {
+        const recRef = doc(db, 'users', userId, 'recovery', rec.date);
+        batch.set(recRef, JSON.parse(JSON.stringify(rec)));
+      });
+      await batch.commit();
+    }
+
+    // 5. Update user document with matching timestamp
+    await setDoc(
+      userDocRef,
+      {
+        userId,
+        activeCycleId: localData.activeCycleId || localData.cycles[0]?.id || '',
+        isMigrated: true,
+        isInitialized: true,
+        lastUpdated: syncTimestamp,
+        updatedAt: new Date(syncTimestamp).toISOString(),
+      },
+      { merge: true }
+    );
+
+    writeLocalLastUpdated(syncTimestamp);
+    markDeviceMigrated(userId);
+    console.log('[Firestore] Zapisano pełny stan lokalny do chmury (Hard Replace).');
+    return syncTimestamp;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
+    throw error;
+  }
+}
+
+/**
+ * Upload local data to Cloud Firestore (alias delegating to replaceCloudWithLocalData)
  */
 export async function uploadLocalDataToCloud(
   userId: string,
@@ -232,76 +473,34 @@ export async function uploadLocalDataToCloud(
     activeCycleId: string;
     logs: WorkoutLogEntry[];
     recovery: DailyRecoveryData[];
+    lastUpdated?: number;
   }
 ): Promise<void> {
-  const userDocRef = doc(db, 'users', userId);
-  try {
-    // 1. Update user document with migration and initialized flag
-    await setDoc(
-      userDocRef,
-      {
-        userId,
-        activeCycleId: localData.activeCycleId || localData.cycles[0]?.id || '',
-        isMigrated: true,
-        isInitialized: true,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-
-    // 2. Save cycles (only the actual cycles, no forced defaults)
-    for (const cycle of localData.cycles) {
-      const cleanCycle = JSON.parse(JSON.stringify(cycle));
-      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cleanCycle, { merge: true });
-    }
-
-    // 3. Save logs in chunks
-    const deduplicated = sanitizeAndDeduplicateLogs(localData.logs);
-    const chunkSize = 400;
-    for (let i = 0; i < deduplicated.length; i += chunkSize) {
-      const batch = writeBatch(db);
-      const chunk = deduplicated.slice(i, i + chunkSize);
-      chunk.forEach((log: WorkoutLogEntry) => {
-        const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
-        batch.set(logRef, JSON.parse(JSON.stringify(log)), { merge: true });
-      });
-      await batch.commit();
-    }
-
-    // 4. Save recovery
-    if (localData.recovery && localData.recovery.length > 0) {
-      const batch = writeBatch(db);
-      localData.recovery.forEach((rec: DailyRecoveryData) => {
-        const recRef = doc(db, 'users', userId, 'recovery', rec.date);
-        batch.set(recRef, JSON.parse(JSON.stringify(rec)), { merge: true });
-      });
-      await batch.commit();
-    }
-
-    // 5. Mark migrated on device
-    markDeviceMigrated(userId);
-    console.log('[Firestore] Dane lokalne pomyślnie zmigrowane do chmury.');
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
-    throw error;
-  }
+  await replaceCloudWithLocalData(userId, {
+    ...localData,
+    lastUpdated: localData.lastUpdated ?? Date.now(),
+  });
 }
 
 /**
- * Overwrite local data with Cloud Firestore (Option 2: "Pobierz stan z chmury")
- * Writes cloud data to localStorage so offline and local caches stay up to date.
+ * Overwrite local data with Cloud Firestore
+ * Writes cloud data and timestamp to localStorage so offline and local caches stay up to date.
  */
 export function applyCloudDataToLocalStorage(data: {
   cycles: TrainingCycleCatalog[];
   activeCycleId: string;
   logs: WorkoutLogEntry[];
   recovery: DailyRecoveryData[];
+  lastUpdated?: number | null;
 }): void {
   try {
     localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(data.cycles));
     localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, data.activeCycleId);
     localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(data.logs));
     localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(data.recovery));
+    if (data.lastUpdated !== undefined) {
+      writeLocalLastUpdated(data.lastUpdated);
+    }
   } catch (err) {
     console.warn('Błąd zapisu do localStorage podczas synchronizacji:', err);
   }

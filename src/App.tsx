@@ -25,21 +25,13 @@ import { SyncConflictModal } from './components/modals/SyncConflictModal';
 import { useAuth } from './context/AuthContext';
 import {
   checkCloudSyncStatus,
-  uploadLocalDataToCloud,
+  replaceCloudWithLocalData,
+  pullCloudDataAndOverwriteLocal,
   applyCloudDataToLocalStorage,
-  subscribeToCycles,
-  subscribeToWorkoutLogs,
-  subscribeToRecovery,
-  saveCycleToFirestore,
-  deleteCycleFromFirestore,
-  saveActiveCycleId,
-  saveWorkoutLogsBatch,
-  deleteWorkoutLogEntry,
-  deleteWorkoutSessionLogs,
-  saveRecoveryEntry,
+  fetchCloudLastUpdated,
+  readLocalLastUpdated,
+  writeLocalLastUpdated,
   markDeviceMigrated,
-  isDeviceMigrated,
-  readLocalTrainingData,
   LOCAL_STORAGE_CYCLES_KEY,
   LOCAL_STORAGE_ACTIVE_CYCLE_KEY,
   LOCAL_STORAGE_LOGS_KEY,
@@ -314,6 +306,28 @@ export default function App() {
     }
   });
 
+  // Timestamp-based Manual Sync State
+  const [lastUpdated, setLastUpdated] = useState<number | null>(() => readLocalLastUpdated());
+  const [cloudLastUpdated, setCloudLastUpdated] = useState<number | null>(null);
+  const [syncActionState, setSyncActionState] = useState<{
+    isLoading: boolean;
+    action: 'pull' | 'push' | 'refresh' | null;
+    message: string | null;
+    error: string | null;
+  }>({
+    isLoading: false,
+    action: null,
+    message: null,
+    error: null,
+  });
+
+  const touchLocalLastUpdated = (explicitTs?: number): number => {
+    const ts = explicitTs ?? Date.now();
+    setLastUpdated(ts);
+    writeLocalLastUpdated(ts);
+    return ts;
+  };
+
   // Sync Conflict & Initialization State
   const [hasDataConflict, setHasDataConflict] = useState<boolean>(false);
   const [isSyncInitialized, setIsSyncInitialized] = useState<boolean>(false);
@@ -329,14 +343,15 @@ export default function App() {
 
   const syncedUserRef = useRef<string | null>(null);
 
-  // Initial Sync & Migration Orchestration
-  // Enforces Rule 1 (local data priority when cloud is empty) and Rule 2 (hard stop on conflict)
+  // Initial Login Sync (Smart Sync for empty devices only; otherwise preserve local state & fetch cloud timestamp)
   useEffect(() => {
     if (!user?.uid) {
       syncedUserRef.current = null;
       setIsSyncInitialized(false);
       setHasDataConflict(false);
+      setCloudLastUpdated(null);
       setConflictModal({ isOpen: false, cloudStatus: null, isLoading: false });
+      setSyncActionState({ isLoading: false, action: null, message: null, error: null });
       return;
     }
 
@@ -349,43 +364,72 @@ export default function App() {
       .then(async (status) => {
         if (!isMounted || !status) return;
 
-        const { hasCloudData, isDeviceMigrated: deviceMigrated, localData } = status;
+        const { hasCloudData, localData, localLastUpdated } = status;
         const hasLocalData = localData.hasAnyData;
+        const isFreshEmptyDevice = !hasLocalData && localLastUpdated === null;
 
-        // RULE 2: Wymuszenie Modala przy konflikcie (Twardy Stop):
-        // Jeśli chmura MA dane ORAZ localStorage MA dane (i brak flagi migracji na tym urządzeniu),
-        // funkcja musi natychmiast przerwać inicjalizację i ustawić stan hasDataConflict: true.
-        // Modal z wyborem MUSI fizycznie blokować interfejs. Aplikacja nie ma prawa dotknąć localStorage ani Firestore!
-        if (hasCloudData && hasLocalData && !deviceMigrated) {
-          console.warn('[Sync] Wykryto konflikt: dane na telefonie i w chmurze. Blokada interfejsu (Twardy Stop).');
-          setHasDataConflict(true);
-          setConflictModal({
-            isOpen: true,
-            cloudStatus: status,
-            isLoading: false,
-          });
-          setIsDataLoading(false);
-          return; // STOP! Do not touch storage, do not attach listeners.
-        }
+        setCloudLastUpdated(status.cloudLastUpdated);
 
-        // RULE 1: Zakaz nadpisywania lokalnych danych przy pierwszym logowaniu:
-        // Jeśli Firestore jest pusty, a w localStorage znajdują się JAKIEKOLWIEK dane (cykle/logi),
-        // funkcja inicjalizująca musi BEZWZGLĘDNIE zapisać je do chmury.
-        // Wczytanie domyślnego planu (DEFAULT_TRAINING_CYCLES) może nastąpić TYLKO wtedy, gdy ZARÓWNO chmura, jak i localStorage są całkowicie puste.
-        if (!hasCloudData && hasLocalData) {
-          console.log('[Sync] Firestore pusty, wykryto dane lokalne. Zapisywanie danych z telefonu do chmury...');
-          const cyclesToUpload = localData.cycles.length > 0 ? localData.cycles : (cyclesList.length > 0 ? cyclesList : DEFAULT_TRAINING_CYCLES);
-          const activeIdToUpload = localData.activeCycleId || activeCycleId || cyclesToUpload[0].id;
-          const logsToUpload = localData.logs.length > 0 ? localData.logs : workoutLogs;
-          const recoveryToUpload = localData.recovery.length > 0 ? localData.recovery : recoveryHistory;
+        // 4. Puste urządzenie (Smart Sync):
+        // Jeśli localStorage jest puste i nie ma lastUpdated, pobierz cicho dokument z Firestore jako stan startowy
+        if (isFreshEmptyDevice) {
+          if (hasCloudData) {
+            console.log('[Smart Sync] Puste urządzenie — pobieranie stanu startowego z chmury...');
+            const syncedTs = status.cloudLastUpdated ?? Date.now();
+            setCyclesList(status.cloudCycles);
+            setActiveCycleId(status.cloudActiveCycleId);
+            setWorkoutLogs(status.cloudLogs);
+            setRecoveryHistory(status.cloudRecovery);
+            setLastUpdated(syncedTs);
+            setCloudLastUpdated(status.cloudLastUpdated ?? syncedTs);
+            applyCloudDataToLocalStorage({
+              cycles: status.cloudCycles,
+              activeCycleId: status.cloudActiveCycleId,
+              logs: status.cloudLogs,
+              recovery: status.cloudRecovery,
+              lastUpdated: syncedTs,
+            });
+            markDeviceMigrated(user.uid);
+            syncedUserRef.current = user.uid;
+            setIsSyncInitialized(true);
+            setIsDataLoading(false);
+            return;
+          }
 
-          await uploadLocalDataToCloud(user.uid, {
-            cycles: cyclesToUpload,
-            activeCycleId: activeIdToUpload,
-            logs: logsToUpload,
-            recovery: recoveryToUpload,
-          });
+          if (!status.isCloudAccountInitialized && !status.isCloudMigrated) {
+            console.log('[Smart Sync] Całkowicie nowe konto — inicjalizacja planu startowego...');
+            const initTs = Date.now();
+            const defaultCycles = DEFAULT_TRAINING_CYCLES.map((c) => ({ ...c, lastUpdated: initTs }));
+            const defaultActive = defaultCycles[0].id;
+            setCyclesList(defaultCycles);
+            setActiveCycleId(defaultActive);
+            setLastUpdated(initTs);
+            applyCloudDataToLocalStorage({
+              cycles: defaultCycles,
+              activeCycleId: defaultActive,
+              logs: [],
+              recovery: [],
+              lastUpdated: initTs,
+            });
+            await replaceCloudWithLocalData(user.uid, {
+              cycles: defaultCycles,
+              activeCycleId: defaultActive,
+              logs: [],
+              recovery: [],
+              lastUpdated: initTs,
+            });
+            setCloudLastUpdated(initTs);
+            syncedUserRef.current = user.uid;
+            setIsSyncInitialized(true);
+            setIsDataLoading(false);
+            return;
+          }
 
+          // Existing cloud account with 0 items on fresh device
+          if (status.cloudLastUpdated) {
+            setLastUpdated(status.cloudLastUpdated);
+            writeLocalLastUpdated(status.cloudLastUpdated);
+          }
           markDeviceMigrated(user.uid);
           syncedUserRef.current = user.uid;
           setIsSyncInitialized(true);
@@ -393,68 +437,8 @@ export default function App() {
           return;
         }
 
-        // Case 3: Cloud has data, Local is empty (e.g. fresh phone/clean browser of existing user)
-        if (hasCloudData && !hasLocalData) {
-          console.log('[Sync] Pobieranie danych z konta chmurowego...');
-          setCyclesList(status.cloudCycles);
-          setActiveCycleId(status.cloudActiveCycleId);
-          setWorkoutLogs(status.cloudLogs);
-          setRecoveryHistory(status.cloudRecovery);
-          applyCloudDataToLocalStorage({
-            cycles: status.cloudCycles,
-            activeCycleId: status.cloudActiveCycleId,
-            logs: status.cloudLogs,
-            recovery: status.cloudRecovery,
-          });
-          markDeviceMigrated(user.uid);
-          syncedUserRef.current = user.uid;
-          setIsSyncInitialized(true);
-          setIsDataLoading(false);
-          return;
-        }
-
-        // Case 4: BRAND NEW EMPTY ACCOUNT INITIALIZATION ONLY!
-        // Domyślny cykl ładuj TYLKO podczas pierwszej, jednorazowej inicjalizacji całkowicie nowego, pustego konta!
-        const isBrandNewAccount = !status.isCloudAccountInitialized && !deviceMigrated && !status.isCloudMigrated;
-        if (!hasCloudData && !hasLocalData && isBrandNewAccount) {
-          console.log('[Sync] Całkowicie nowe konto. Jednorazowa inicjalizacja domyślnym planem...');
-          const defaultCycles = DEFAULT_TRAINING_CYCLES;
-          const defaultActive = defaultCycles[0].id;
-          setCyclesList(defaultCycles);
-          setActiveCycleId(defaultActive);
-          applyCloudDataToLocalStorage({
-            cycles: defaultCycles,
-            activeCycleId: defaultActive,
-            logs: [],
-            recovery: [],
-          });
-          await uploadLocalDataToCloud(user.uid, {
-            cycles: defaultCycles,
-            activeCycleId: defaultActive,
-            logs: [],
-            recovery: [],
-          });
-          markDeviceMigrated(user.uid);
-          syncedUserRef.current = user.uid;
-          setIsSyncInitialized(true);
-          setIsDataLoading(false);
-          return;
-        }
-
-        // Case 5: Existing account (or subcollection cycles in Firestore is empty)
-        // If cycles collection in Firestore is empty, leave empty list. NEVER inject default cycle!
-        console.log(`[Sync] Wczytano stan z chmury: ${status.cloudCycles.length} cykli, ${status.cloudLogs.length} logów.`);
-        setCyclesList(status.cloudCycles);
-        setActiveCycleId(status.cloudActiveCycleId);
-        setWorkoutLogs(status.cloudLogs);
-        setRecoveryHistory(status.cloudRecovery);
-        applyCloudDataToLocalStorage({
-          cycles: status.cloudCycles,
-          activeCycleId: status.cloudActiveCycleId,
-          logs: status.cloudLogs,
-          recovery: status.cloudRecovery,
-        });
-        markDeviceMigrated(user.uid);
+        // Device already has local data or local lastUpdated:
+        // Never overwrite or auto-merge! User decides manually via "Więcej -> Synchronizacja danych".
         syncedUserRef.current = user.uid;
         setIsSyncInitialized(true);
         setIsDataLoading(false);
@@ -469,46 +453,115 @@ export default function App() {
     };
   }, [user?.uid]);
 
-  // Firestore Realtime Subscriptions
-  // Runs ONLY after initial sync / migration has completed and there is NO active conflict!
+  // Refresh cloud timestamp whenever user visits "Więcej" tab
   useEffect(() => {
-    if (!user?.uid || !isSyncInitialized || hasDataConflict) {
-      return;
+    if (activeTab === 'more' && user?.uid) {
+      fetchCloudLastUpdated(user.uid)
+        .then((ts) => {
+          setCloudLastUpdated(ts);
+        })
+        .catch((err) => {
+          console.warn('Nie udało się odświeżyć daty chmury:', err);
+        });
     }
+  }, [activeTab, user?.uid]);
 
-    const unsubCycles = subscribeToCycles(user.uid, (cycles) => {
-      console.log(`[Firestore onSnapshot] Odebrano cykle z chmury: ${cycles.length}`);
-      setCyclesList(cycles);
-      try {
-        localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(cycles));
-      } catch {}
-      setActiveCycleId((prevActiveId) => {
-        if (cycles.length === 0) return '';
-        if (cycles.some((c) => c.id === prevActiveId)) return prevActiveId;
-        return cycles[0]?.id || '';
+  // Manual Sync Action: Refresh cloud timestamp on demand
+  const handleRefreshCloudTimestamp = async () => {
+    if (!user?.uid) return;
+    setSyncActionState({ isLoading: true, action: 'refresh', message: null, error: null });
+    try {
+      const ts = await fetchCloudLastUpdated(user.uid);
+      setCloudLastUpdated(ts);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: 'Sprawdzono aktualny stan chmury.',
+        error: null,
       });
-    });
+    } catch (err) {
+      console.error('Błąd odświeżania statusu chmury:', err);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: null,
+        error: 'Nie udało się odczytać znacznika czasu z Firestore.',
+      });
+    }
+  };
 
-    const unsubLogs = subscribeToWorkoutLogs(user.uid, (logs) => {
-      setWorkoutLogs(logs);
-      try {
-        localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(logs));
-      } catch {}
-    });
+  // Manual Hard Pull: "Pobierz z chmury (Nadpisz to urządzenie)"
+  const handleManualPullFromCloud = async () => {
+    if (!user?.uid) return;
+    const confirmed = window.confirm(
+      'Uwaga: Obecne dane na tym urządzeniu zostaną bezpowrotnie zastąpione danymi z chmury. Czy na pewno?'
+    );
+    if (!confirmed) return;
 
-    const unsubRecovery = subscribeToRecovery(user.uid, (rec) => {
-      setRecoveryHistory(rec);
-      try {
-        localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(rec));
-      } catch {}
-    });
+    setSyncActionState({ isLoading: true, action: 'pull', message: null, error: null });
+    try {
+      const pulled = await pullCloudDataAndOverwriteLocal(user.uid);
+      setCyclesList(pulled.cycles);
+      setActiveCycleId(pulled.activeCycleId);
+      setWorkoutLogs(pulled.logs);
+      setRecoveryHistory(pulled.recovery);
+      setLastUpdated(pulled.lastUpdated);
+      setCloudLastUpdated(pulled.lastUpdated);
+      setActiveWorkoutDay(null);
+      setIsWorkoutMinimized(false);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: 'Pobrano dane z chmury i zastąpiono stan tego urządzenia.',
+        error: null,
+      });
+    } catch (err) {
+      console.error('Błąd pobierania danych z chmury:', err);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: null,
+        error: 'Nie udało się pobrać danych z chmury. Sprawdź połączenie z internetem.',
+      });
+    }
+  };
 
-    return () => {
-      unsubCycles();
-      unsubLogs();
-      unsubRecovery();
-    };
-  }, [user?.uid, isSyncInitialized, hasDataConflict]);
+  // Manual Hard Push: "Wyślij do chmury (Nadpisz chmurę)"
+  const handleManualPushToCloud = async () => {
+    if (!user?.uid) return;
+    const confirmed = window.confirm(
+      'Uwaga: Dane w chmurze zostaną zastąpione stanem z tego urządzenia.'
+    );
+    if (!confirmed) return;
+
+    setSyncActionState({ isLoading: true, action: 'push', message: null, error: null });
+    try {
+      const syncTs = lastUpdated ?? touchLocalLastUpdated();
+      const savedTs = await replaceCloudWithLocalData(user.uid, {
+        cycles: cyclesList,
+        activeCycleId,
+        logs: workoutLogs,
+        recovery: recoveryHistory,
+        lastUpdated: syncTs,
+      });
+      setLastUpdated(savedTs);
+      setCloudLastUpdated(savedTs);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: 'Wysłano stan z tego urządzenia i nadpisano dane w chmurze.',
+        error: null,
+      });
+    } catch (err) {
+      console.error('Błąd wysyłania danych do chmury:', err);
+      setSyncActionState({
+        isLoading: false,
+        action: null,
+        message: null,
+        error: 'Nie udało się zapisać danych w chmurze. Spróbuj ponownie.',
+      });
+    }
+  };
 
   // Modal Action 1: "Wyślij dane z telefonu do chmury"
   const handleKeepLocalAndUpload = async () => {
@@ -520,14 +573,17 @@ export default function App() {
       const activeIdToUpload = localData.activeCycleId || activeCycleId || cyclesToUpload[0]?.id;
       const logsToUpload = localData.logs.length > 0 ? localData.logs : workoutLogs;
       const recoveryToUpload = localData.recovery.length > 0 ? localData.recovery : recoveryHistory;
+      const syncTs = lastUpdated ?? touchLocalLastUpdated();
 
-      await uploadLocalDataToCloud(user.uid, {
+      await replaceCloudWithLocalData(user.uid, {
         cycles: cyclesToUpload,
         activeCycleId: activeIdToUpload,
         logs: logsToUpload,
         recovery: recoveryToUpload,
+        lastUpdated: syncTs,
       });
 
+      setCloudLastUpdated(syncTs);
       markDeviceMigrated(user.uid);
       syncedUserRef.current = user.uid;
       setHasDataConflict(false);
@@ -545,15 +601,19 @@ export default function App() {
     try {
       setConflictModal((prev) => ({ ...prev, isLoading: true }));
       const status = conflictModal.cloudStatus;
+      const cloudTs = status.cloudLastUpdated ?? Date.now();
       setCyclesList(status.cloudCycles);
       setActiveCycleId(status.cloudActiveCycleId);
       setWorkoutLogs(status.cloudLogs);
       setRecoveryHistory(status.cloudRecovery);
+      setLastUpdated(cloudTs);
+      setCloudLastUpdated(status.cloudLastUpdated ?? cloudTs);
       applyCloudDataToLocalStorage({
         cycles: status.cloudCycles,
         activeCycleId: status.cloudActiveCycleId,
         logs: status.cloudLogs,
         recovery: status.cloudRecovery,
+        lastUpdated: cloudTs,
       });
       markDeviceMigrated(user.uid);
       syncedUserRef.current = user.uid;
@@ -575,35 +635,29 @@ export default function App() {
   const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false);
   const [isAddWeekModalOpen, setIsAddWeekModalOpen] = useState(false);
 
-  // Helper to persist updated cycles (both localStorage and Firestore)
+  // Helper to persist updated cycles locally and bump lastUpdated
   const persistCycles = (updatedCycles: TrainingCycleCatalog[]) => {
-    setCyclesList(updatedCycles);
+    const ts = touchLocalLastUpdated();
+    const stamped = updatedCycles.map((c) => ({ ...c, lastUpdated: ts }));
+    setCyclesList(stamped);
     try {
-      localStorage.setItem('hyrox_training_cycles_list', JSON.stringify(updatedCycles));
+      localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(stamped));
     } catch (e) {
       console.warn(e);
-    }
-    if (user?.uid) {
-      updatedCycles.forEach((c) => {
-        saveCycleToFirestore(user.uid, c).catch((err) =>
-          console.warn('Błąd zapisu cyklu do Firestore:', err)
-        );
-      });
     }
   };
 
   // Select another cycle as active - immediately switches to "Trening" and finds next uncompleted day
   const handleSelectCycle = (cycleId: string, listOverride?: TrainingCycleCatalog[]) => {
+    const changed = cycleId !== activeCycleId;
     setActiveCycleId(cycleId);
     try {
       localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, cycleId);
     } catch (e) {
       console.warn(e);
     }
-    if (user?.uid && cycleId) {
-      saveActiveCycleId(user.uid, cycleId).catch((err) =>
-        console.warn('Błąd zapisu aktywnego cyklu do Firestore:', err)
-      );
+    if (changed) {
+      touchLocalLastUpdated();
     }
 
     const currentList = listOverride || cyclesList;
@@ -656,35 +710,29 @@ export default function App() {
     }
   }, [currentWeek, activeCycleId, currentWeekDays, selectedDayId, workoutLogs]);
 
-  // Create new cycle - saves to both localStorage and Firestore immediately
-  const handleCreateCycle = async (newCycle: TrainingCycleCatalog) => {
-    const updated = [...cyclesList.filter((c) => c.id !== newCycle.id), newCycle];
+  // Create new cycle - saves locally and updates lastUpdated
+  const handleCreateCycle = (newCycle: TrainingCycleCatalog) => {
+    const ts = touchLocalLastUpdated();
+    const stampedCycle: TrainingCycleCatalog = { ...newCycle, lastUpdated: ts };
+    const updated = [...cyclesList.filter((c) => c.id !== stampedCycle.id), stampedCycle];
     setCyclesList(updated);
-    setActiveCycleId(newCycle.id);
+    setActiveCycleId(stampedCycle.id);
 
     try {
       localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(updated));
-      localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, newCycle.id);
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, stampedCycle.id);
     } catch (e) {
       console.warn('Błąd zapisu do localStorage:', e);
     }
 
-    if (user?.uid) {
-      try {
-        await saveCycleToFirestore(user.uid, newCycle);
-        await saveActiveCycleId(user.uid, newCycle.id);
-        console.log(`[Firestore] Nowy cykl ${newCycle.id} ("${newCycle.name}") zapisany pomyślnie.`);
-      } catch (err) {
-        console.error('Błąd zapisu nowego cyklu do chmury:', err);
-      }
-    }
-
-    handleSelectCycle(newCycle.id, updated);
+    handleSelectCycle(stampedCycle.id, updated);
   };
 
-  // Update existing cycle - saves to both localStorage and Firestore immediately
-  const handleUpdateCycle = async (updatedCycle: TrainingCycleCatalog) => {
-    const updated = cyclesList.map((c) => (c.id === updatedCycle.id ? updatedCycle : c));
+  // Update existing cycle - saves locally and updates lastUpdated
+  const handleUpdateCycle = (updatedCycle: TrainingCycleCatalog) => {
+    const ts = touchLocalLastUpdated();
+    const stampedCycle: TrainingCycleCatalog = { ...updatedCycle, lastUpdated: ts };
+    const updated = cyclesList.map((c) => (c.id === stampedCycle.id ? stampedCycle : c));
     setCyclesList(updated);
 
     try {
@@ -692,18 +740,11 @@ export default function App() {
     } catch (e) {
       console.warn('Błąd zapisu do localStorage:', e);
     }
-
-    if (user?.uid) {
-      try {
-        await saveCycleToFirestore(user.uid, updatedCycle);
-      } catch (err) {
-        console.error('Błąd aktualizacji cyklu w chmurze:', err);
-      }
-    }
   };
 
-  // Delete cycle - allows deleting all cycles without restriction
-  const handleDeleteCycle = async (cycleId: string) => {
+  // Delete cycle - allows deleting all cycles locally and updates lastUpdated
+  const handleDeleteCycle = (cycleId: string) => {
+    touchLocalLastUpdated();
     const updated = cyclesList.filter((c) => c.id !== cycleId);
     setCyclesList(updated);
 
@@ -711,14 +752,6 @@ export default function App() {
       localStorage.setItem(LOCAL_STORAGE_CYCLES_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn('Błąd zapisu do localStorage:', e);
-    }
-
-    if (user?.uid) {
-      try {
-        await deleteCycleFromFirestore(user.uid, cycleId);
-      } catch (err) {
-        console.error('Błąd usuwania cyklu z chmury:', err);
-      }
     }
 
     if (activeCycleId === cycleId) {
@@ -1305,39 +1338,34 @@ export default function App() {
     }
   };
 
-  // Save workout logs with deduplication and write to both localStorage and Firestore
+  // Save workout logs with deduplication locally and bump lastUpdated
   const handleSaveLogs = (newEntries: WorkoutLogEntry[]) => {
     if (!newEntries || newEntries.length === 0) return;
     const combined = [...workoutLogs, ...newEntries];
     const updated = deduplicateWorkoutLogs(combined);
     setWorkoutLogs(updated);
+    touchLocalLastUpdated();
     try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+      localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
     }
-    if (user?.uid) {
-      saveWorkoutLogsBatch(user.uid, newEntries).catch(console.warn);
-    }
   };
 
-  // Delete single workout log entry
+  // Delete single workout log entry locally and bump lastUpdated
   const handleDeleteWorkoutLogEntry = (logId: string) => {
     const updated = workoutLogs.filter((l) => l.id !== logId);
     setWorkoutLogs(updated);
+    touchLocalLastUpdated();
     try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+      localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
     }
-    if (user?.uid) {
-      deleteWorkoutLogEntry(user.uid, logId).catch(console.warn);
-    }
   };
 
-  // Delete entire workout session
+  // Delete entire workout session locally and bump lastUpdated
   const handleDeleteWorkoutSession = (sessionId: string, dateStr: string) => {
-    const currentSnapshot = [...workoutLogs];
     const updated = workoutLogs.filter((l) => {
       const matchSession = l.sessionId === sessionId;
       const matchFallback =
@@ -1347,13 +1375,11 @@ export default function App() {
       return !matchSession && !matchFallback;
     });
     setWorkoutLogs(updated);
+    touchLocalLastUpdated();
     try {
-      localStorage.setItem('hyrox_workout_logs', JSON.stringify(updated));
+      localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
-    }
-    if (user?.uid) {
-      deleteWorkoutSessionLogs(user.uid, sessionId, dateStr, currentSnapshot).catch(console.warn);
     }
   };
 
@@ -1374,17 +1400,15 @@ export default function App() {
     }
   };
 
-  // Save recovery data to both localStorage and Firestore
+  // Save recovery data locally and bump lastUpdated
   const handleSaveRecovery = (data: DailyRecoveryData) => {
     const updated = [data, ...recoveryHistory.filter((x) => x.date !== data.date)];
     setRecoveryHistory(updated);
+    touchLocalLastUpdated();
     try {
-      localStorage.setItem('hyrox_recovery_history', JSON.stringify(updated));
+      localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(updated));
     } catch (e) {
       console.warn(e);
-    }
-    if (user?.uid) {
-      saveRecoveryEntry(user.uid, data).catch(console.warn);
     }
   };
 
@@ -1481,7 +1505,7 @@ export default function App() {
               />
             </div>
 
-            {/* 4. Więcej (Menu): Moduły analityczne (Strava, Tonaż, Hyrox, Progresja, Regeneracja) */}
+            {/* 4. Więcej (Menu): Moduły analityczne (Strava, Tonaż, Hyrox, Progresja, Regeneracja) & Synchronizacja */}
             <div className={activeTab === 'more' ? 'block' : 'hidden'}>
               <MoreMenuView
                 currentWeek={currentWeek}
@@ -1505,6 +1529,12 @@ export default function App() {
                 onDeleteWorkoutSession={handleDeleteWorkoutSession}
                 subView={moreSubView}
                 onSubViewChange={setMoreSubView}
+                localLastUpdated={lastUpdated}
+                cloudLastUpdated={cloudLastUpdated}
+                syncActionState={syncActionState}
+                onPullFromCloud={handleManualPullFromCloud}
+                onPushToCloud={handleManualPushToCloud}
+                onRefreshCloudTimestamp={handleRefreshCloudTimestamp}
               />
             </div>
           </main>

@@ -11,6 +11,7 @@
         "activeCycleId": { "type": "string", "maxLength": 128 },
         "theme": { "type": "string", "enum": ["dark", "light"] },
         "isMigrated": { "type": "boolean" },
+        "lastUpdated": { "type": "number" },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["userId"]
@@ -29,6 +30,7 @@
         "weeksList": { "type": "array" },
         "weeksPlansMap": { "type": "object" },
         "createdAt": { "type": "string", "maxLength": 64 },
+        "lastUpdated": { "type": "number" },
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "userId", "name"]

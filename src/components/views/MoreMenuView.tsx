@@ -18,7 +18,13 @@ import {
   Scale,
   Download,
   Check,
-  Cloud
+  Cloud,
+  HardDrive,
+  UploadCloud,
+  DownloadCloud,
+  RefreshCw,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 import { downloadWorkoutDataCSV } from '../../utils/exportUtils';
@@ -38,6 +44,13 @@ import { SummaryCalendarView } from './SummaryCalendarView';
 import { MeasurementsView } from '../measurements/MeasurementsView';
 
 export type MoreSubView = 'strava' | 'volume' | 'hyrox' | 'progression' | 'recovery' | 'measurements' | null;
+
+export interface SyncActionState {
+  isLoading: boolean;
+  action: 'pull' | 'push' | 'refresh' | null;
+  message: string | null;
+  error: string | null;
+}
 
 interface MoreMenuViewProps {
   currentWeek: number;
@@ -61,7 +74,29 @@ interface MoreMenuViewProps {
   onDeleteWorkoutSession: (sessionId: string, dateStr: string) => void;
   subView: MoreSubView;
   onSubViewChange: (view: MoreSubView) => void;
+  localLastUpdated: number | null;
+  cloudLastUpdated: number | null;
+  syncActionState: SyncActionState;
+  onPullFromCloud: () => Promise<void>;
+  onPushToCloud: () => Promise<void>;
+  onRefreshCloudTimestamp: () => Promise<void>;
 }
+
+const formatTimestampPL = (ts: number | null | undefined, emptyLabel: string): string => {
+  if (!ts || !Number.isFinite(ts) || ts <= 0) return emptyLabel;
+  try {
+    return new Date(ts).toLocaleString('pl-PL', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return emptyLabel;
+  }
+};
 
 export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
   currentWeek,
@@ -85,6 +120,12 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
   onDeleteWorkoutSession,
   subView,
   onSubViewChange,
+  localLastUpdated,
+  cloudLastUpdated,
+  syncActionState,
+  onPullFromCloud,
+  onPushToCloud,
+  onRefreshCloudTimestamp,
 }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
@@ -282,9 +323,9 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
                     {user.displayName || user.email?.split('@')[0]}
                   </span>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
                     <span className="text-[10px] text-emerald-400 font-semibold">
-                      Chmura Firestore aktywna
+                      Konto Google połączone • Ręczna synchronizacja
                     </span>
                   </div>
                 </div>
@@ -332,6 +373,161 @@ export const MoreMenuView: React.FC<MoreMenuViewProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Synchronizacja danych (Timestamp-based Manual Hard Replace) */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 shadow-xl space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black uppercase text-amber-400 tracking-wider font-heading flex items-center gap-2">
+              <Cloud className="w-4 h-4" />
+              <span>Synchronizacja danych</span>
+            </h2>
+            <p className="text-[11px] text-neutral-400 mt-0.5">
+              Bezpieczne, ręczne nadpisywanie danych oparte o znaczniki czasu (bez automatycznego scalania).
+            </p>
+          </div>
+
+          {user && (
+            <button
+              type="button"
+              onClick={onRefreshCloudTimestamp}
+              disabled={syncActionState.isLoading}
+              className="p-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-amber-400 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              title="Sprawdź datę zapisu w chmurze"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${syncActionState.action === 'refresh' && syncActionState.isLoading ? 'animate-spin' : ''}`}
+              />
+            </button>
+          )}
+        </div>
+
+        {/* Two Clear Timestamp Readouts */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-neutral-400 tracking-wide">
+              <HardDrive className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Ostatnia modyfikacja na tym urządzeniu:</span>
+            </div>
+            <p className="text-xs sm:text-sm font-bold text-white font-mono-numbers">
+              {formatTimestampPL(localLastUpdated, 'Brak zapisanych zmian lokalnych')}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-neutral-400 tracking-wide">
+              <Cloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span>Ostatni zapis w chmurze:</span>
+            </div>
+            <p className="text-xs sm:text-sm font-bold text-white font-mono-numbers">
+              {user
+                ? formatTimestampPL(cloudLastUpdated, 'Brak danych w chmurze')
+                : 'Wymagane logowanie'}
+            </p>
+          </div>
+        </div>
+
+        {/* Informational timestamp comparison pill */}
+        {user && (localLastUpdated || cloudLastUpdated) && (
+          <div className="text-[11px] px-3 py-2 rounded-xl bg-neutral-950/70 border border-neutral-800/80 flex items-center gap-2">
+            {localLastUpdated && cloudLastUpdated && localLastUpdated === cloudLastUpdated ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span className="text-emerald-300 font-semibold">
+                  To urządzenie i chmura mają identyczny znacznik czasu.
+                </span>
+              </>
+            ) : localLastUpdated && (!cloudLastUpdated || localLastUpdated > cloudLastUpdated) ? (
+              <>
+                <UploadCloud className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-amber-300 font-semibold">
+                  To urządzenie ma nowsze lokalne zmiany — wyślij do chmury, aby je zapisać.
+                </span>
+              </>
+            ) : (
+              <>
+                <DownloadCloud className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <span className="text-sky-300 font-semibold">
+                  Chmura ma nowszy zapis — możesz pobrać go na to urządzenie.
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Sync Feedback Banner */}
+        {(syncActionState.message || syncActionState.error) && (
+          <div
+            className={`p-3 rounded-2xl text-xs flex items-center gap-2 border ${
+              syncActionState.error
+                ? 'bg-red-500/10 text-red-300 border-red-500/30'
+                : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+            }`}
+          >
+            {syncActionState.error ? (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            ) : (
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{syncActionState.error || syncActionState.message}</span>
+          </div>
+        )}
+
+        {/* Decision Buttons (Hard Replace) */}
+        {user ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={onPullFromCloud}
+              disabled={syncActionState.isLoading}
+              className="w-full p-3.5 rounded-2xl bg-neutral-950 hover:bg-sky-500/10 border border-sky-500/40 hover:border-sky-400 text-left flex items-center gap-3 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
+            >
+              <div className="p-2.5 rounded-xl bg-sky-500/15 text-sky-400 shrink-0">
+                {syncActionState.action === 'pull' && syncActionState.isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <DownloadCloud className="w-4 h-4" />
+                )}
+              </div>
+              <div>
+                <span className="block text-xs font-black text-white">
+                  Pobierz z chmury (Nadpisz to urządzenie)
+                </span>
+                <span className="block text-[10px] text-neutral-400 mt-0.5">
+                  Zastępuje dane lokalne stanem z Firestore
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={onPushToCloud}
+              disabled={syncActionState.isLoading}
+              className="w-full p-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-neutral-950 text-left flex items-center gap-3 transition-all cursor-pointer shadow-md shadow-amber-400/10 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
+            >
+              <div className="p-2.5 rounded-xl bg-black/10 text-neutral-950 shrink-0">
+                {syncActionState.action === 'push' && syncActionState.isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-4 h-4" />
+                )}
+              </div>
+              <div>
+                <span className="block text-xs font-black text-neutral-950">
+                  Wyślij do chmury (Nadpisz chmurę)
+                </span>
+                <span className="block text-[10px] font-semibold text-neutral-800 mt-0.5">
+                  Wysyła stan tego urządzenia do Firestore
+                </span>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <p className="text-[11px] text-neutral-400">
+            Zaloguj się kontem Google powyżej, aby korzystać z ręcznego pobierania i wysyłania danych do chmury Firestore.
+          </p>
+        )}
       </div>
 
       {/* 5 Analytical Modules List */}

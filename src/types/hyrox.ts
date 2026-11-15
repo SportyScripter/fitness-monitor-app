@@ -234,6 +234,7 @@ export interface TrainingCycleCatalog {
   weeksPlansMap: Record<number, WorkoutDay[]>;
   namingScheme?: DayNamingScheme;
   createdAt?: string;
+  lastUpdated?: number;
 }
 
 export interface TrainingProgramFolder {
