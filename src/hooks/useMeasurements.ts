@@ -5,11 +5,23 @@ import {
   DietSettings,
   calculateJacksonPollock3Site,
 } from '../types/measurements';
+import {
+  LOCAL_STORAGE_MEASUREMENTS_KEY,
+  writeLocalLastUpdated,
+} from '../services/firestoreService';
 
 const PROFILE_STORAGE_KEY = 'training_app_body_profile';
-const MEASUREMENTS_STORAGE_KEY = 'training_app_body_measurements';
+const MEASUREMENTS_STORAGE_KEY = LOCAL_STORAGE_MEASUREMENTS_KEY;
 const DIET_STORAGE_KEY = 'training_app_body_diet';
 const WEBHOOK_STORAGE_KEY = 'training_app_sheets_webhook_url';
+
+const bumpGlobalLastUpdated = () => {
+  const ts = Date.now();
+  writeLocalLastUpdated(ts);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('hyrox-local-updated', { detail: { ts } }));
+  }
+};
 
 export const DEFAULT_PROFILE: UserProfile = {
   age: 28,
@@ -147,15 +159,38 @@ export function useMeasurements() {
   const [measurements, setMeasurements] = useState<BodyMeasurement[]>(() => {
     try {
       const saved = localStorage.getItem(MEASUREMENTS_STORAGE_KEY);
-      if (saved) {
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.warn('Failed to parse saved measurements:', e);
     }
     return INITIAL_DEMO_MEASUREMENTS;
   });
+
+  // Keep state synced when cloud pull overwrites localStorage measurements
+  useEffect(() => {
+    const handleReplaced = (event: Event) => {
+      const customEvent = event as CustomEvent<{ measurements?: BodyMeasurement[] }>;
+      if (Array.isArray(customEvent.detail?.measurements)) {
+        setMeasurements(customEvent.detail.measurements);
+        return;
+      }
+      try {
+        const saved = localStorage.getItem(MEASUREMENTS_STORAGE_KEY);
+        if (saved !== null) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) setMeasurements(parsed);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener('hyrox-measurements-replaced', handleReplaced);
+    return () => window.removeEventListener('hyrox-measurements-replaced', handleReplaced);
+  }, []);
 
   // 3. Diet Settings State
   const [dietSettings, setDietSettings] = useState<DietSettings>(() => {
@@ -268,6 +303,7 @@ export function useMeasurements() {
         }
         return updated;
       });
+      bumpGlobalLastUpdated();
       return enriched;
     },
     [enrichMeasurement]
@@ -289,6 +325,7 @@ export function useMeasurements() {
         }
         return updated;
       });
+      bumpGlobalLastUpdated();
     },
     [enrichMeasurement]
   );
@@ -304,6 +341,7 @@ export function useMeasurements() {
       }
       return updated;
     });
+    bumpGlobalLastUpdated();
   }, []);
 
   // Asynchronous sync with Google Sheets (Webhook / Apps Script)

@@ -17,6 +17,7 @@ import {
   WorkoutLogEntry,
   DailyRecoveryData
 } from '../types/hyrox';
+import { BodyMeasurement } from '../types/measurements';
 import { sanitizeAndDeduplicateLogs } from '../utils/dateUtils';
 import { DEFAULT_TRAINING_CYCLES } from '../data/defaultCycles';
 
@@ -25,6 +26,7 @@ export const LOCAL_STORAGE_CYCLES_KEY = 'hyrox_training_cycles_list';
 export const LOCAL_STORAGE_ACTIVE_CYCLE_KEY = 'hyrox_active_cycle_id';
 export const LOCAL_STORAGE_LOGS_KEY = 'hyrox_workout_logs';
 export const LOCAL_STORAGE_RECOVERY_KEY = 'hyrox_recovery_history';
+export const LOCAL_STORAGE_MEASUREMENTS_KEY = 'training_app_body_measurements';
 export const LOCAL_STORAGE_LAST_UPDATED_KEY = 'hyrox_last_updated';
 const LOCAL_STORAGE_MIGRATED_PREFIX = 'hyrox_device_migrated_';
 
@@ -33,10 +35,12 @@ export interface LocalTrainingData {
   activeCycleId: string;
   logs: WorkoutLogEntry[];
   recovery: DailyRecoveryData[];
+  measurements: BodyMeasurement[];
   lastUpdated: number | null;
   hasAnyData: boolean;
   hasLogs: boolean;
   hasCycles: boolean;
+  hasMeasurements: boolean;
 }
 
 /**
@@ -93,6 +97,7 @@ export function readLocalTrainingData(): LocalTrainingData {
   let cycles: TrainingCycleCatalog[] = [];
   let logs: WorkoutLogEntry[] = [];
   let recovery: DailyRecoveryData[] = [];
+  let measurements: BodyMeasurement[] = [];
   let activeCycleId = '';
 
   try {
@@ -136,6 +141,18 @@ export function readLocalTrainingData(): LocalTrainingData {
     }
   } catch (err) {}
 
+  try {
+    const rawMeas = localStorage.getItem(LOCAL_STORAGE_MEASUREMENTS_KEY);
+    if (rawMeas) {
+      const parsed = JSON.parse(rawMeas);
+      if (Array.isArray(parsed)) {
+        measurements = parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Błąd odczytu pomiarów z localStorage:', err);
+  }
+
   if (!activeCycleId && cycles.length > 0) {
     activeCycleId = cycles[0].id;
   }
@@ -144,17 +161,20 @@ export function readLocalTrainingData(): LocalTrainingData {
   const hasLogs = logs.length > 0;
   const hasCycles = cycles.length > 0;
   const hasRecovery = recovery.length > 0;
-  const hasAnyData = hasLogs || hasCycles || hasRecovery;
+  const hasMeasurements = measurements.length > 0;
+  const hasAnyData = hasLogs || hasCycles || hasRecovery || hasMeasurements;
 
   return {
     cycles,
     activeCycleId,
     logs,
     recovery,
+    measurements,
     lastUpdated,
     hasAnyData,
     hasLogs,
     hasCycles,
+    hasMeasurements,
   };
 }
 
@@ -189,6 +209,7 @@ export interface CloudSyncStatus {
   cloudActiveCycleId: string;
   cloudLogs: WorkoutLogEntry[];
   cloudRecovery: DailyRecoveryData[];
+  cloudMeasurements: BodyMeasurement[];
   cloudLastUpdated: number | null;
   localLastUpdated: number | null;
   isCloudMigrated: boolean;
@@ -243,7 +264,14 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
     );
 
     const userData = userDocSnap.exists() ? userDocSnap.data() : null;
-    const hasCloudData = cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0;
+    const cloudMeasurements: BodyMeasurement[] = Array.isArray(userData?.measurements)
+      ? (userData.measurements as BodyMeasurement[])
+      : [];
+    const hasCloudData =
+      cloudCycles.length > 0 ||
+      cloudLogs.length > 0 ||
+      cloudRecovery.length > 0 ||
+      cloudMeasurements.length > 0;
     const isCloudAccountInitialized =
       Boolean(userData) &&
       (userData?.isInitialized === true || userData?.isMigrated === true);
@@ -270,6 +298,7 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudActiveCycleId: activeCycleId,
       cloudLogs: sanitizeAndDeduplicateLogs(cloudLogs),
       cloudRecovery,
+      cloudMeasurements,
       cloudLastUpdated,
       localLastUpdated: localData.lastUpdated,
       isCloudMigrated,
@@ -289,6 +318,7 @@ export async function checkCloudSyncStatus(userId: string): Promise<CloudSyncSta
       cloudActiveCycleId: '',
       cloudLogs: [],
       cloudRecovery: [],
+      cloudMeasurements: [],
       cloudLastUpdated: null,
       localLastUpdated: localData.lastUpdated,
       isCloudMigrated: false,
@@ -307,6 +337,7 @@ export async function pullCloudDataAndOverwriteLocal(userId: string): Promise<{
   activeCycleId: string;
   logs: WorkoutLogEntry[];
   recovery: DailyRecoveryData[];
+  measurements: BodyMeasurement[];
   lastUpdated: number;
   hasCloudData: boolean;
 }> {
@@ -334,17 +365,25 @@ export async function pullCloudDataAndOverwriteLocal(userId: string): Promise<{
     );
 
     const userData = userDocSnap.exists() ? userDocSnap.data() : null;
+    const cloudMeasurements: BodyMeasurement[] = Array.isArray(userData?.measurements)
+      ? (userData.measurements as BodyMeasurement[])
+      : [];
     const activeCycleId = userData?.activeCycleId || cloudCycles[0]?.id || '';
     const cloudLastUpdated =
       parseTimestampMillis(userData?.lastUpdated ?? userData?.updatedAt) ?? Date.now();
     const hasCloudData =
-      cloudCycles.length > 0 || cloudLogs.length > 0 || cloudRecovery.length > 0 || Boolean(userData);
+      cloudCycles.length > 0 ||
+      cloudLogs.length > 0 ||
+      cloudRecovery.length > 0 ||
+      cloudMeasurements.length > 0 ||
+      Boolean(userData);
 
     applyCloudDataToLocalStorage({
       cycles: cloudCycles,
       activeCycleId,
       logs: cloudLogs,
       recovery: cloudRecovery,
+      measurements: cloudMeasurements,
       lastUpdated: cloudLastUpdated,
     });
     markDeviceMigrated(userId);
@@ -354,6 +393,7 @@ export async function pullCloudDataAndOverwriteLocal(userId: string): Promise<{
       activeCycleId,
       logs: cloudLogs,
       recovery: cloudRecovery,
+      measurements: cloudMeasurements,
       lastUpdated: cloudLastUpdated,
       hasCloudData,
     };
@@ -375,6 +415,7 @@ export async function replaceCloudWithLocalData(
     activeCycleId: string;
     logs: WorkoutLogEntry[];
     recovery: DailyRecoveryData[];
+    measurements?: BodyMeasurement[];
     lastUpdated: number;
   }
 ): Promise<number> {
@@ -455,7 +496,15 @@ export async function replaceCloudWithLocalData(
       await batch.commit();
     }
 
-    // 5. Update user document with matching timestamp
+    // 5. Update user document with measurements & matching timestamp
+    const rawMeasurements =
+      localData.measurements !== undefined
+        ? localData.measurements
+        : readLocalTrainingData().measurements;
+    const cleanMeasurements: BodyMeasurement[] = JSON.parse(
+      JSON.stringify(Array.isArray(rawMeasurements) ? rawMeasurements : [])
+    );
+
     await setDoc(
       userDocRef,
       {
@@ -465,13 +514,14 @@ export async function replaceCloudWithLocalData(
         isInitialized: true,
         lastUpdated: syncTimestamp,
         updatedAt: new Date(syncTimestamp).toISOString(),
+        measurements: cleanMeasurements,
       },
       { merge: true }
     );
 
     writeLocalLastUpdated(syncTimestamp);
     markDeviceMigrated(userId);
-    console.log('[Firestore] Zapisano pełny stan lokalny do chmury (Hard Replace).');
+    console.log('[Firestore] Zapisano pełny stan lokalny (w tym pomiary) do chmury.');
     return syncTimestamp;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `users/${userId}`);
@@ -489,6 +539,7 @@ export async function uploadLocalDataToCloud(
     activeCycleId: string;
     logs: WorkoutLogEntry[];
     recovery: DailyRecoveryData[];
+    measurements?: BodyMeasurement[];
     lastUpdated?: number;
   }
 ): Promise<void> {
@@ -507,6 +558,7 @@ export function applyCloudDataToLocalStorage(data: {
   activeCycleId: string;
   logs: WorkoutLogEntry[];
   recovery: DailyRecoveryData[];
+  measurements?: BodyMeasurement[];
   lastUpdated?: number | null;
 }): void {
   try {
@@ -514,6 +566,19 @@ export function applyCloudDataToLocalStorage(data: {
     localStorage.setItem(LOCAL_STORAGE_ACTIVE_CYCLE_KEY, data.activeCycleId);
     localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(data.logs));
     localStorage.setItem(LOCAL_STORAGE_RECOVERY_KEY, JSON.stringify(data.recovery));
+    if (data.measurements !== undefined) {
+      localStorage.setItem(
+        LOCAL_STORAGE_MEASUREMENTS_KEY,
+        JSON.stringify(data.measurements)
+      );
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('hyrox-measurements-replaced', {
+            detail: { measurements: data.measurements },
+          })
+        );
+      }
+    }
     if (data.lastUpdated !== undefined) {
       writeLocalLastUpdated(data.lastUpdated);
     }

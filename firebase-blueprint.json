@@ -12,7 +12,8 @@
         "theme": { "type": "string", "enum": ["dark", "light"] },
         "isMigrated": { "type": "boolean" },
         "lastUpdated": { "type": "number" },
-        "updatedAt": { "type": "string", "maxLength": 64 }
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "measurements": { "type": "array", "description": "Body measurements history entries" }
       },
       "required": ["userId"]
     },

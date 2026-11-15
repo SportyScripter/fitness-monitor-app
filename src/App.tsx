@@ -30,6 +30,7 @@ import {
   applyCloudDataToLocalStorage,
   fetchCloudLastUpdated,
   readLocalLastUpdated,
+  readLocalTrainingData,
   writeLocalLastUpdated,
   markDeviceMigrated,
   LOCAL_STORAGE_CYCLES_KEY,
@@ -328,6 +329,17 @@ export default function App() {
     return ts;
   };
 
+  // Sync lastUpdated React state when measurements or other modules update localStorage
+  useEffect(() => {
+    const handleLocalUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ ts?: number }>;
+      const ts = customEvent.detail?.ts ?? readLocalLastUpdated();
+      if (ts) setLastUpdated(ts);
+    };
+    window.addEventListener('hyrox-local-updated', handleLocalUpdated);
+    return () => window.removeEventListener('hyrox-local-updated', handleLocalUpdated);
+  }, []);
+
   // Sync Conflict & Initialization State
   const [hasDataConflict, setHasDataConflict] = useState<boolean>(false);
   const [isSyncInitialized, setIsSyncInitialized] = useState<boolean>(false);
@@ -387,6 +399,7 @@ export default function App() {
               activeCycleId: status.cloudActiveCycleId,
               logs: status.cloudLogs,
               recovery: status.cloudRecovery,
+              measurements: status.cloudMeasurements,
               lastUpdated: syncedTs,
             });
             markDeviceMigrated(user.uid);
@@ -537,11 +550,13 @@ export default function App() {
     setSyncActionState({ isLoading: true, action: 'push', message: null, error: null });
     try {
       const syncTs = lastUpdated ?? touchLocalLastUpdated();
+      const localMeasurements = readLocalTrainingData().measurements;
       const savedTs = await replaceCloudWithLocalData(user.uid, {
         cycles: cyclesList,
         activeCycleId,
         logs: workoutLogs,
         recovery: recoveryHistory,
+        measurements: localMeasurements,
         lastUpdated: syncTs,
       });
       setLastUpdated(savedTs);
@@ -580,6 +595,7 @@ export default function App() {
         activeCycleId: activeIdToUpload,
         logs: logsToUpload,
         recovery: recoveryToUpload,
+        measurements: localData.measurements,
         lastUpdated: syncTs,
       });
 
@@ -613,6 +629,7 @@ export default function App() {
         activeCycleId: status.cloudActiveCycleId,
         logs: status.cloudLogs,
         recovery: status.cloudRecovery,
+        measurements: status.cloudMeasurements,
         lastUpdated: cloudTs,
       });
       markDeviceMigrated(user.uid);

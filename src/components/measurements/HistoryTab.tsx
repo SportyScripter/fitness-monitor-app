@@ -26,6 +26,7 @@ import {
 } from 'recharts';
 import { BodyMeasurement } from '../../types/measurements';
 import { SyncStatus } from '../../hooks/useMeasurements';
+import { getLocalDateString } from '../../utils/dateUtils';
 
 interface HistoryTabProps {
   measurements: BodyMeasurement[];
@@ -36,6 +37,7 @@ interface HistoryTabProps {
   onUpdateWebhookUrl: (url: string) => void;
 }
 
+type DateRangePreset = '1M' | '3M' | '1Y' | 'ALL' | 'CUSTOM';
 type DragZone = 'y-left' | 'y-right' | 'x' | 'pan';
 
 interface DragSnapshot {
@@ -62,6 +64,41 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   webhookUrl,
   onUpdateWebhookUrl,
 }) => {
+  // Date range picker state (default: 'ALL' = "Wszystko")
+  const [datePreset, setDatePreset] = useState<DateRangePreset>('ALL');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+
+  const handleSelectPreset = useCallback((preset: Exclude<DateRangePreset, 'CUSTOM'>) => {
+    setDatePreset(preset);
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+      return;
+    }
+    const end = new Date();
+    const start = new Date(end);
+    if (preset === '1M') {
+      start.setMonth(start.getMonth() - 1);
+    } else if (preset === '3M') {
+      start.setMonth(start.getMonth() - 3);
+    } else if (preset === '1Y') {
+      start.setFullYear(start.getFullYear() - 1);
+    }
+    setStartDate(getLocalDateString(start));
+    setEndDate(getLocalDateString(end));
+  }, []);
+
+  const filteredMeasurements = useMemo(() => {
+    return measurements.filter((m) => {
+      const d = (m.date || '').slice(0, 10);
+      if (!d) return false;
+      if (startDate && d < startDate) return false;
+      if (endDate && d > endDate) return false;
+      return true;
+    });
+  }, [measurements, startDate, endDate]);
+
   // Line visibility toggles
   const [showWeight, setShowWeight] = useState<boolean>(true);
   const [showBf, setShowBf] = useState<boolean>(true);
@@ -75,9 +112,9 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   const [isWebhookOpen, setIsWebhookOpen] = useState<boolean>(false);
   const [tempWebhookUrl, setTempWebhookUrl] = useState<string>(webhookUrl);
 
-  // Sort chronological for chart (oldest first) with numeric index for smooth TradingView X scaling/panning
+  // Sort chronological for chart (oldest first) using filteredMeasurements
   const chartData = useMemo(() => {
-    return [...measurements]
+    return [...filteredMeasurements]
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .map((m, idx) => ({
         idx,
@@ -93,7 +130,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
         leanMass: m.leanMassKg,
         fatMass: m.fatMassKg,
       }));
-  }, [measurements]);
+  }, [filteredMeasurements]);
 
   // TradingView-style independent Axis Scaling & Pan state
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -195,6 +232,13 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
     setLeftYDomain(null);
     setRightYDomain(null);
   }, []);
+
+  // Re-fit chart domains whenever the filtered date window changes
+  useEffect(() => {
+    setXDomain(null);
+    setLeftYDomain(null);
+    setRightYDomain(null);
+  }, [startDate, endDate]);
 
   const detectZone = useCallback(
     (relX: number, relY: number, width: number, height: number): DragZone => {
@@ -461,12 +505,15 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
       ? 'cursor-grabbing'
       : 'cursor-grab';
 
-  // Statistics Summary Cards
+  // Statistics Summary Cards — computed dynamically ONLY from filteredMeasurements
   const stats = useMemo(() => {
-    if (measurements.length === 0) {
+    if (filteredMeasurements.length === 0) {
       return {
+        hasData: false,
         lowestWeight: 0,
         lowestWeightDate: '',
+        lowestBf: 0,
+        lowestBfDate: '',
         highestBf: 0,
         highestBfDate: '',
         avgWeeklyRate: 0,
@@ -475,64 +522,158 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
       };
     }
 
-    // Lowest weight
-    let minW = measurements[0].weightKg;
-    let minWDate = measurements[0].date;
+    let minW = filteredMeasurements[0].weightKg;
+    let minWDate = filteredMeasurements[0].date;
     let maxBf = 0;
     let maxBfDate = '';
+    let minBf = Infinity;
+    let minBfDate = '';
 
-    measurements.forEach((m) => {
+    filteredMeasurements.forEach((m) => {
       if (m.weightKg < minW) {
         minW = m.weightKg;
         minWDate = m.date;
       }
-      if (m.bodyFatPct && m.bodyFatPct > maxBf) {
-        maxBf = m.bodyFatPct;
-        maxBfDate = m.date;
+      if (typeof m.bodyFatPct === 'number' && Number.isFinite(m.bodyFatPct) && m.bodyFatPct > 0) {
+        if (m.bodyFatPct > maxBf) {
+          maxBf = m.bodyFatPct;
+          maxBfDate = m.date;
+        }
+        if (m.bodyFatPct < minBf) {
+          minBf = m.bodyFatPct;
+          minBfDate = m.date;
+        }
       }
     });
 
-    // Chronological order for delta
-    const chrono = [...measurements].sort(
+    const chrono = [...filteredMeasurements].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
-    const first = chrono[0];
-    const last = chrono[chrono.length - 1];
-    const totalDeltaKg = Math.round((last.weightKg - first.weightKg) * 10) / 10;
+    let totalDeltaKg = 0;
+    let daysSpan = 0;
+    let avgWeeklyRate = 0;
 
-    const msDiff = new Date(last.date).getTime() - new Date(first.date).getTime();
-    const daysSpan = Math.max(1, Math.round(msDiff / (1000 * 60 * 60 * 24)));
-    const weeksSpan = daysSpan / 7;
-
-    const avgWeeklyRate =
-      weeksSpan >= 0.5 ? Math.round((totalDeltaKg / weeksSpan) * 10) / 10 : totalDeltaKg;
+    if (chrono.length >= 2) {
+      const first = chrono[0];
+      const last = chrono[chrono.length - 1];
+      totalDeltaKg = Math.round((last.weightKg - first.weightKg) * 10) / 10;
+      const msDiff = new Date(last.date).getTime() - new Date(first.date).getTime();
+      daysSpan = Math.max(1, Math.round(msDiff / (1000 * 60 * 60 * 24)));
+      const weeksSpan = daysSpan / 7;
+      avgWeeklyRate =
+        weeksSpan >= 0.5 ? Math.round((totalDeltaKg / weeksSpan) * 10) / 10 : totalDeltaKg;
+    }
 
     return {
+      hasData: true,
       lowestWeight: minW,
       lowestWeightDate: minWDate,
+      lowestBf: minBf === Infinity ? 0 : minBf,
+      lowestBfDate: minBfDate,
       highestBf: maxBf,
       highestBfDate: maxBfDate,
       avgWeeklyRate,
       totalDeltaKg,
       daysSpan,
     };
-  }, [measurements]);
+  }, [filteredMeasurements]);
+
+  const presetButtons: { id: Exclude<DateRangePreset, 'CUSTOM'>; label: string }[] = [
+    { id: '1M', label: 'Ostatni miesiąc' },
+    { id: '3M', label: 'Ostatnie 3 miesiące' },
+    { id: '1Y', label: 'Ostatni rok' },
+    { id: 'ALL', label: 'Wszystko' },
+  ];
 
   return (
     <div className="space-y-6 max-w-xl mx-auto pb-12">
-      {/* 4 Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-        {/* Lowest weight card */}
-        <div className="p-4 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading">
-              Najniższa Waga
+      {/* Date Range Picker & Quick Presets */}
+      <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="text-xs font-black uppercase text-white tracking-wider font-heading">
+              Zakres Dat
             </span>
-            <Scale className="w-3.5 h-3.5 text-amber-400" />
+          </div>
+          <span className="text-[11px] font-bold text-neutral-400 font-mono-numbers">
+            {filteredMeasurements.length} z {measurements.length} pomiarów
+          </span>
+        </div>
+
+        {/* Preset Quick Filter Buttons */}
+        <div className="flex flex-wrap gap-1.5">
+          {presetButtons.map((btn) => {
+            const isActive = datePreset === btn.id;
+            return (
+              <button
+                key={btn.id}
+                type="button"
+                onClick={() => handleSelectPreset(btn.id)}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-amber-400 text-black border-amber-300 shadow-sm shadow-amber-400/20'
+                    : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
+                }`}
+              >
+                {btn.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Start & End Date Inputs */}
+        <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">
+              Od
+            </label>
+            <input
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(e) => {
+                const val = e.target.value;
+                setStartDate(val);
+                setDatePreset(!val && !endDate ? 'ALL' : 'CUSTOM');
+              }}
+              style={{ colorScheme: 'dark' }}
+              className="w-full bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-xl px-2.5 py-2 text-xs font-bold text-white outline-none font-mono-numbers"
+            />
           </div>
           <div>
-            <span className="text-xl font-black text-amber-400 font-heading">
-              {stats.lowestWeight} kg
+            <label className="block text-[10px] font-bold uppercase text-neutral-400 mb-1">
+              Do
+            </label>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(e) => {
+                const val = e.target.value;
+                setEndDate(val);
+                setDatePreset(!startDate && !val ? 'ALL' : 'CUSTOM');
+              }}
+              style={{ colorScheme: 'dark' }}
+              className="w-full bg-neutral-950 border border-neutral-800 focus:border-amber-400 rounded-xl px-2.5 py-2 text-xs font-bold text-white outline-none font-mono-numbers"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 4 Dynamic Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        {/* Lowest weight card */}
+        <div className="p-3.5 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 gap-1">
+            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading leading-tight">
+              Najniższa Waga
+            </span>
+            <Scale className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          </div>
+          <div>
+            <span className="text-lg sm:text-xl font-black text-amber-400 font-heading">
+              {stats.hasData ? `${stats.lowestWeight} kg` : '---'}
             </span>
           </div>
           <span className="text-[10px] text-neutral-500 mt-1 truncate">
@@ -540,16 +681,34 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
           </span>
         </div>
 
-        {/* Highest BF% card */}
-        <div className="p-4 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading">
-              Najwyższy BF%
+        {/* Lowest BF% card (NEW) */}
+        <div className="p-3.5 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 gap-1">
+            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading leading-tight">
+              Najniższy BF%
             </span>
-            <Percent className="w-3.5 h-3.5 text-purple-400" />
+            <Percent className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           </div>
           <div>
-            <span className="text-xl font-black text-purple-400 font-heading">
+            <span className="text-lg sm:text-xl font-black text-emerald-400 font-heading">
+              {stats.lowestBf ? `${stats.lowestBf}%` : '---'}
+            </span>
+          </div>
+          <span className="text-[10px] text-neutral-500 mt-1 truncate">
+            {stats.lowestBfDate || 'Fałdomierz'}
+          </span>
+        </div>
+
+        {/* Highest BF% card */}
+        <div className="p-3.5 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 gap-1">
+            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading leading-tight">
+              Najwyższy BF%
+            </span>
+            <Percent className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+          </div>
+          <div>
+            <span className="text-lg sm:text-xl font-black text-purple-400 font-heading">
               {stats.highestBf ? `${stats.highestBf}%` : '---'}
             </span>
           </div>
@@ -559,20 +718,20 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
         </div>
 
         {/* Average Weekly Rate */}
-        <div className="p-4 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading">
+        <div className="p-3.5 rounded-3xl bg-neutral-900 border border-neutral-800 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-1.5 gap-1">
+            <span className="text-[10px] font-black uppercase text-neutral-400 font-heading leading-tight">
               Średnie Tempo
             </span>
             {stats.avgWeeklyRate < 0 ? (
-              <TrendingDown className="w-3.5 h-3.5 text-amber-400" />
+              <TrendingDown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             ) : (
-              <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-purple-400 shrink-0" />
             )}
           </div>
           <div>
             <span
-              className={`text-xl font-black font-heading ${
+              className={`text-lg sm:text-xl font-black font-heading ${
                 stats.avgWeeklyRate < 0 ? 'text-amber-400' : 'text-purple-400'
               }`}
             >
@@ -580,7 +739,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
             </span>
             <span className="text-[10px] text-neutral-400 ml-1">/ tydz</span>
           </div>
-          <span className="text-[10px] text-neutral-500 mt-1">
+          <span className="text-[10px] text-neutral-500 mt-1 truncate">
             Łącznie: {stats.totalDeltaKg > 0 ? `+${stats.totalDeltaKg}` : stats.totalDeltaKg} kg ({stats.daysSpan} dni)
           </span>
         </div>
@@ -1010,18 +1169,32 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black uppercase text-amber-400 tracking-wider font-heading flex items-center gap-2">
             <Calendar className="w-4 h-4" />
-            Dziennik Pomiarów ({measurements.length})
+            Dziennik Pomiarów ({filteredMeasurements.length}
+            {filteredMeasurements.length !== measurements.length ? ` z ${measurements.length}` : ''})
           </h3>
           <span className="text-[10px] text-neutral-500">Od najnowszych</span>
         </div>
 
-        {measurements.length === 0 ? (
-          <div className="text-center py-8 text-neutral-500 text-xs">
-            Brak zarejestrowanych pomiarów. Przejdź do zakładki &quot;POMIARY&quot;, aby dodać pierwszy wpis.
+        {filteredMeasurements.length === 0 ? (
+          <div className="text-center py-8 text-neutral-500 text-xs space-y-3">
+            {measurements.length === 0 ? (
+              <p>Brak zarejestrowanych pomiarów. Przejdź do zakładki &quot;POMIARY&quot;, aby dodać pierwszy wpis.</p>
+            ) : (
+              <>
+                <p>Brak pomiarów w wybranym zakresie dat.</p>
+                <button
+                  type="button"
+                  onClick={() => handleSelectPreset('ALL')}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border border-amber-400/30 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Pokaż wszystkie pomiary
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {measurements.map((m) => {
+            {filteredMeasurements.map((m) => {
               const c = m.circumferences;
               const s = m.skinfolds;
               return (
