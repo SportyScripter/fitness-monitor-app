@@ -1,6 +1,0 @@
-{
-  "summary": "Zaktualizowany plan wdrożenia uwzględniający: bezpieczne czyszczenie localStorage po migracji, strategię 'Cloud First' przy wykryciu istniejących danych w Firebase oraz pełną konfigurację środowiskową Vercel (.env.example).",
-  "updatedAt": "2026-11-02T19:02:30.145040794Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

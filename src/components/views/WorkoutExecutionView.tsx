@@ -420,7 +420,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     // 1. Completed sets from workoutLogs for selectedDay
     const dayLogs = workoutLogs.filter((l) =>
       (l.dayId && l.dayId === selectedDay.id) ||
-      (l.dayTitle === selectedDay.title && (l.dayId?.startsWith(`w${currentWeek}-`) || !l.dayId))
+      (l.dayTitle === selectedDay.title && l.dayId && l.dayId.startsWith(`w${currentWeek}-`))
     );
     dayLogs.forEach((log) => {
       const exKey = (log.exerciseName || log.exerciseId || 'ex').trim().toLowerCase();
@@ -1790,20 +1790,6 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       </SortableExerciseCardWrapper>
                     ))}
 
-                    {/* Dodaj nowe ćwiczenie do treningu */}
-                    {!isReorderMode && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExerciseToEdit(null);
-                          setIsExerciseEditModalOpen(true);
-                        }}
-                        className="w-full py-3.5 px-4 rounded-2xl border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-900/50 hover:bg-neutral-900 text-neutral-400 hover:text-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[48px] shadow-sm"
-                      >
-                        <Plus className="w-4 h-4 text-amber-400" />
-                        <span>+ Dodaj ćwiczenie do treningu</span>
-                      </button>
-                    )}
                   </div>
                 </SortableContext>
 
@@ -1862,6 +1848,21 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                   ) : null}
                 </DragOverlay>
               </DndContext>
+            )}
+
+            {/* Przycisk dodawania ćwiczenia widoczny ZAWSZE (również gdy lista ćwiczeń jest pusta) */}
+            {!isReorderMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExerciseToEdit(null);
+                  setIsExerciseEditModalOpen(true);
+                }}
+                className="w-full py-3.5 px-4 rounded-2xl border-2 border-dashed border-neutral-700 hover:border-amber-400 bg-neutral-900/50 hover:bg-neutral-900 text-neutral-400 hover:text-amber-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation min-h-[48px] shadow-sm"
+              >
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>+ Dodaj ćwiczenie do treningu</span>
+              </button>
             )}
           </div>
         </div>

@@ -92,176 +92,179 @@ export const AddWeekModal: React.FC<AddWeekModalProps> = ({
         ? parsedDelta
         : 0;
 
-      // Kopiowanie głębokie (deep copy) dni i ćwiczeń ze ścisłą kolejnością działań:
-      generatedDays = safeDays.map((d) => ({
-        ...d,
-        id: `w${weekNumber}-${d.dayNumber ?? 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        dayNumber: d.dayNumber ?? 1,
-        dayNamePolish: d.dayNamePolish || 'Dzień 1',
-        title: d.title || 'Trening',
-        subtitle: d.subtitle || '',
-        type: d.type || 'FBW',
-        durationMinutes: d.durationMinutes || 60,
-        summary: d.summary || '',
-        targetRpeRange: d.targetRpeRange || `${targetRPE}`,
-        targetRirRange: d.targetRirRange || `${targetRIR}`,
-        isCompleted: false,
-        completed: false,
-        loggedSets: [],
-        completedSets: [],
-        exercises: Array.isArray(d.exercises)
-          ? d.exercises.filter(Boolean).map((ex) => {
-              const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
-              const isStrength = !isCardio;
-              const shouldApplyProgression = isStrength && deltaWeight > 0;
+      // Głębokie klonowanie (structuredClone) struktury całego obecnego tygodnia
+      const clonedSourceDays: WorkoutDay[] =
+        typeof structuredClone === 'function'
+          ? structuredClone(safeDays)
+          : JSON.parse(JSON.stringify(safeDays));
 
-              // Pobranie źródłowej tablicy serii z ćwiczenia
-              const rawSets: any[] =
-                Array.isArray(ex.plannedSetsDetails) && ex.plannedSetsDetails.length > 0
-                  ? ex.plannedSetsDetails
-                  : Array.isArray((ex as any).sets) && (ex as any).sets.length > 0
-                  ? (ex as any).sets
-                  : [];
+      const cloneTimestamp = Date.now();
 
-              const baseExerciseWeight = parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? 0).replace(',', '.')) || 0;
-              const defaultReps = parseInt(String(ex.targetRepsRange || '8').split('-')[0], 10) || 8;
+      generatedDays = clonedSourceDays.map((d, dIdx) => {
+        const dayCopy: any = { ...d };
+        delete dayCopy.sets;
 
-              // Przygotowanie tablicy istniejących serii (oldSets)
-              let oldSets: ExercisePlannedSet[] = [];
-              if (rawSets.length > 0) {
-                oldSets = rawSets.map((s: any, idx: number) => {
-                  const rawW = s.weightKg !== undefined ? s.weightKg : (s.weight !== undefined ? s.weight : baseExerciseWeight);
-                  const parsedW = parseFloat(String(rawW).replace(',', '.')) || 0;
-                  const rawReps = s.reps !== undefined ? s.reps : defaultReps;
-                  const parsedReps = typeof rawReps === 'number' ? rawReps : (parseInt(String(rawReps), 10) || defaultReps);
+        return {
+          ...dayCopy,
+          id: `w${weekNumber}-day-${d.dayNumber ?? dIdx + 1}-${dIdx}-${cloneTimestamp}-${Math.random().toString(36).substr(2, 4)}`,
+          dayNumber: d.dayNumber ?? dIdx + 1,
+          dayNamePolish: d.dayNamePolish || `Dzień ${dIdx + 1}`,
+          title: d.title || `Trening ${dIdx + 1}`,
+          subtitle: d.subtitle || '',
+          type: d.type || 'FBW',
+          durationMinutes: d.durationMinutes || 60,
+          summary: d.summary || '',
+          targetRpeRange: d.targetRpeRange || `${targetRPE}`,
+          targetRirRange: d.targetRirRange || `${targetRIR}`,
+          isCompleted: false,
+          completed: false,
+          loggedSets: [],
+          completedSets: [],
+          exercises: Array.isArray(d.exercises)
+            ? d.exercises.filter(Boolean).map((ex, exIdx) => {
+                const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
+                const isStrength = !isCardio;
+                const shouldApplyProgression = isStrength && deltaWeight > 0;
+
+                // Pobranie źródłowej tablicy serii z ćwiczenia
+                const rawSets: any[] =
+                  Array.isArray(ex.plannedSetsDetails) && ex.plannedSetsDetails.length > 0
+                    ? ex.plannedSetsDetails
+                    : Array.isArray((ex as any).sets) && (ex as any).sets.length > 0
+                    ? (ex as any).sets
+                    : [];
+
+                const baseExerciseWeight = parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? (ex as any).weightKg ?? 0).replace(',', '.')) || 0;
+                const defaultReps = parseInt(String(ex.targetRepsRange || '8').split('-')[0], 10) || 8;
+
+                // Przygotowanie tablicy istniejących serii (oldSets) z zachowaniem ciężaru i powtórzeń
+                let oldSets: ExercisePlannedSet[] = [];
+                if (rawSets.length > 0) {
+                  oldSets = rawSets.map((s: any, idx: number) => {
+                    const rawW = s.weightKg !== undefined ? s.weightKg : (s.weight !== undefined ? s.weight : baseExerciseWeight);
+                    const parsedW = parseFloat(String(rawW).replace(',', '.')) || 0;
+                    const rawReps = s.reps !== undefined && s.reps !== null && String(s.reps).trim() !== ''
+                      ? s.reps
+                      : defaultReps;
+
+                    return {
+                      ...s,
+                      setNumber: Number(s.setNumber) || idx + 1,
+                      reps: rawReps,
+                      weightKg: parsedW,
+                      weight: parsedW,
+                      rir: typeof s.rir === 'number' ? s.rir : (!isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2)),
+                      rpe: typeof s.rpe === 'number' ? s.rpe : (!isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0)),
+                      completed: false,
+                      isCompleted: false,
+                      distance: s.distance ?? ex.targetDistance,
+                      distanceUnit: s.distanceUnit || ex.distanceUnit,
+                      pace: s.pace || ex.targetPace,
+                      targetHr: s.targetHr || s.targetHR || ex.targetHR,
+                      targetHR: s.targetHR || s.targetHr || ex.targetHR,
+                    };
+                  });
+                } else {
+                  const count = Math.max(Number(ex.plannedSets) || 3, 1);
+                  oldSets = Array.from({ length: count }, (_, i) => ({
+                    setNumber: i + 1,
+                    reps: defaultReps,
+                    weightKg: baseExerciseWeight,
+                    weight: baseExerciseWeight,
+                    rir: !isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2),
+                    rpe: !isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0),
+                    completed: false,
+                    isCompleted: false,
+                    distance: ex.targetDistance,
+                    distanceUnit: ex.distanceUnit,
+                    pace: ex.targetPace,
+                    targetHr: ex.targetHR,
+                    targetHR: ex.targetHR,
+                  }));
+                }
+
+                // KROK 1: Aplikacja progresji ciężaru (jeśli włączona)
+                const updatedSetsWithProgression: ExercisePlannedSet[] = oldSets.map((s, idx) => {
+                  const currentW = parseFloat(String(s.weightKg ?? s.weight ?? baseExerciseWeight).replace(',', '.')) || 0;
+                  const newW = shouldApplyProgression
+                    ? Number((currentW + deltaWeight).toFixed(2))
+                    : currentW;
 
                   return {
-                    setNumber: Number(s.setNumber) || idx + 1,
-                    reps: parsedReps,
-                    weightKg: parsedW,
-                    weight: parsedW,
-                    rir: typeof s.rir === 'number' ? s.rir : (!isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2)),
-                    rpe: typeof s.rpe === 'number' ? s.rpe : (!isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0)),
+                    ...s,
+                    setNumber: idx + 1,
+                    weightKg: newW,
+                    weight: newW,
                     completed: false,
                     isCompleted: false,
-                    distance: s.distance ?? ex.targetDistance,
-                    distanceUnit: s.distanceUnit || ex.distanceUnit,
-                    pace: s.pace || ex.targetPace,
-                    targetHr: s.targetHr || s.targetHR || ex.targetHR,
-                    targetHR: s.targetHR || s.targetHr || ex.targetHR,
                   };
                 });
-              } else {
-                const count = Math.max(Number(ex.plannedSets) || 3, 1);
-                oldSets = Array.from({ length: count }, (_, i) => ({
-                  setNumber: i + 1,
-                  reps: defaultReps,
-                  weightKg: baseExerciseWeight,
-                  weight: baseExerciseWeight,
-                  rir: !isNaN(parsedRIR) ? parsedRIR : (ex.targetRIR ?? 2),
-                  rpe: !isNaN(parsedRPE) ? parsedRPE : (ex.targetRPE ?? 8.0),
-                  completed: false,
-                  isCompleted: false,
-                  distance: ex.targetDistance,
-                  distanceUnit: ex.distanceUnit,
-                  pace: ex.targetPace,
-                  targetHr: ex.targetHR,
-                  targetHR: ex.targetHR,
-                }));
-              }
 
-              // =========================================================================
-              // KROK 1: Aplikacja progresji ciężaru na obecnych seriach
-              // Przeiteruj przez tablicę sets ze starego tygodnia. Jeśli ćwiczenie jest
-              // siłowe (category !== 'cardio') i podano wartość progresji (np. 2.5),
-              // bezwarunkowo dodaj tę wartość do pola weight w KAŻDEJ istniejącej serii.
-              // =========================================================================
-              const updatedSetsWithProgression: ExercisePlannedSet[] = oldSets.map((s, idx) => {
-                const currentW = parseFloat(String(s.weightKg ?? s.weight ?? baseExerciseWeight).replace(',', '.')) || 0;
-                const newW = shouldApplyProgression
-                  ? Number((currentW + deltaWeight).toFixed(2))
-                  : currentW;
+                // KROK 2: Kalkulacja mnożnika objętości (po dodaniu ciężaru)
+                const targetSetsCount = Math.max(1, Math.round(updatedSetsWithProgression.length * multiplier));
+                let finalSets: ExercisePlannedSet[] = [...updatedSetsWithProgression];
 
-                return {
+                if (targetSetsCount > updatedSetsWithProgression.length) {
+                  const lastSetWithProgression = updatedSetsWithProgression[updatedSetsWithProgression.length - 1];
+                  const setsToAdd = targetSetsCount - updatedSetsWithProgression.length;
+                  for (let i = 0; i < setsToAdd; i++) {
+                    finalSets.push({
+                      ...lastSetWithProgression,
+                      setNumber: finalSets.length + 1,
+                      completed: false,
+                      isCompleted: false,
+                    });
+                  }
+                } else if (targetSetsCount < updatedSetsWithProgression.length) {
+                  finalSets = finalSets.slice(0, targetSetsCount);
+                }
+
+                // Ujednolicenie numerów serii 1..N oraz bezwzględne wyzerowanie statusów wykonania
+                finalSets = finalSets.map((s, idx) => ({
                   ...s,
                   setNumber: idx + 1,
-                  weightKg: newW,
-                  weight: newW,
                   completed: false,
                   isCompleted: false,
+                }));
+
+                const newDefaultWeight = shouldApplyProgression
+                  ? Number((baseExerciseWeight + deltaWeight).toFixed(2))
+                  : baseExerciseWeight;
+
+                const primarySetWeight = finalSets.length > 0 && (finalSets[0].weightKg !== undefined || finalSets[0].weight !== undefined)
+                  ? (finalSets[0].weightKg ?? finalSets[0].weight ?? newDefaultWeight)
+                  : newDefaultWeight;
+
+                const exCopy: any = { ...ex };
+                delete exCopy.sets;
+
+                return {
+                  ...exCopy,
+                  id: `ex-w${weekNumber}-${dIdx}-${exIdx}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
+                  name: ex.name || `Ćwiczenie ${exIdx + 1}`,
+                  muscleGroup: ex.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
+                  plannedSets: finalSets.length,
+                  plannedSetsDetails: finalSets,
+                  targetRepsRange: ex.targetRepsRange || '8-10',
+                  defaultWeightKg: primarySetWeight,
+                  weight: primarySetWeight,
+                  weightKg: primarySetWeight,
+                  targetWeight: primarySetWeight,
+                  isCompleted: false,
+                  completed: false,
+                  loggedSets: [],
+                  completedSets: [],
+                  targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
+                  targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
+                  restSeconds: Number(ex.restSeconds) || 90,
+                  hyroxRelevance: ex.hyroxRelevance || '',
+                  techniqueNotes: ex.techniqueNotes || '',
                 };
-              });
-
-              // =========================================================================
-              // KROK 2: Kalkulacja mnożnika objętości (po dodaniu ciężaru)
-              // Dopiero na zaktualizowanej (cięższej) tablicy serii zastosuj mnożnik
-              // objętości (np. stare serie.length * 1.3).
-              // Jeśli nowa liczba serii jest większa, dodaj brakujące serie, kopiując
-              // parametry z OSTATNIEJ serii (która już ma wliczoną progresję ciężaru).
-              // Jeśli jest mniejsza, przytnij tablicę.
-              // =========================================================================
-              const targetSetsCount = Math.max(1, Math.round(updatedSetsWithProgression.length * multiplier));
-              let finalSets: ExercisePlannedSet[] = [...updatedSetsWithProgression];
-
-              if (targetSetsCount > updatedSetsWithProgression.length) {
-                const lastSetWithProgression = updatedSetsWithProgression[updatedSetsWithProgression.length - 1];
-                const setsToAdd = targetSetsCount - updatedSetsWithProgression.length;
-                for (let i = 0; i < setsToAdd; i++) {
-                  finalSets.push({
-                    ...lastSetWithProgression,
-                    setNumber: finalSets.length + 1,
-                    completed: false,
-                    isCompleted: false,
-                  });
-                }
-              } else if (targetSetsCount < updatedSetsWithProgression.length) {
-                finalSets = finalSets.slice(0, targetSetsCount);
-              }
-
-              // Ujednolicenie numerów serii 1..N oraz reset statusu ukończenia serii
-              finalSets = finalSets.map((s, idx) => ({
-                ...s,
-                setNumber: idx + 1,
-                completed: false,
-                isCompleted: false,
-              }));
-
-              // Obliczenie zaktualizowanego ciężaru
-              const newDefaultWeight = shouldApplyProgression
-                ? Number((baseExerciseWeight + deltaWeight).toFixed(2))
-                : baseExerciseWeight;
-
-              // Ujednolicenie nadrzędnego ciężaru na poziomie obiektu ćwiczenia
-              const primarySetWeight = finalSets.length > 0 && (finalSets[0].weightKg !== undefined || finalSets[0].weight !== undefined)
-                ? (finalSets[0].weightKg ?? finalSets[0].weight ?? newDefaultWeight)
-                : newDefaultWeight;
-
-              return {
-                ...ex,
-                id: `ex-w${weekNumber}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
-                name: ex.name || 'Ćwiczenie',
-                muscleGroup: normalizeMuscleGroup(ex.muscleGroup),
-                plannedSets: finalSets.length,
-                plannedSetsDetails: finalSets,
-                targetRepsRange: ex.targetRepsRange || '8-10',
-                defaultWeightKg: primarySetWeight,
-                weight: primarySetWeight,
-                weightKg: primarySetWeight,
-                targetWeight: primarySetWeight,
-                isCompleted: false,
-                completed: false,
-                loggedSets: [],
-                completedSets: [],
-                targetRIR: typeof ex.targetRIR === 'number' ? ex.targetRIR : (!isNaN(parsedRIR) ? parsedRIR : 2),
-                targetRPE: typeof ex.targetRPE === 'number' ? ex.targetRPE : (!isNaN(parsedRPE) ? parsedRPE : 8.0),
-                restSeconds: Number(ex.restSeconds) || 90,
-                hyroxRelevance: ex.hyroxRelevance || '',
-                techniqueNotes: ex.techniqueNotes || '',
-              };
-            })
-          : [],
-        runningSession: d.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
-      }));
+              })
+            : [],
+          runningSession: d.runningSession ? d.runningSession : undefined,
+        };
+      });
     } else if (initStrategy === 'hyrox_default') {
       generatedDays = MASTER_HYROX_WEEK_PLAN.map((d) => ({
         ...d,

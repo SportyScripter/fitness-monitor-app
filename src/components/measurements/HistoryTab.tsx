@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   TrendingDown,
   TrendingUp,
@@ -9,10 +9,8 @@ import {
   CloudUpload,
   RefreshCw,
   SlidersHorizontal,
-  Info,
   Check,
   AlertCircle,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
   RotateCcw,
@@ -25,7 +23,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Brush,
 } from 'recharts';
 import { BodyMeasurement } from '../../types/measurements';
 import { SyncStatus } from '../../hooks/useMeasurements';
@@ -38,6 +35,24 @@ interface HistoryTabProps {
   webhookUrl: string;
   onUpdateWebhookUrl: (url: string) => void;
 }
+
+type DragZone = 'y-left' | 'y-right' | 'x' | 'pan';
+
+interface DragSnapshot {
+  zone: DragZone;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  plotWidth: number;
+  plotHeight: number;
+  initXDomain: [number, number];
+  initLeftYDomain: [number, number];
+  initRightYDomain: [number, number];
+}
+
+const LEFT_AXIS_HIT_WIDTH = 48;
+const RIGHT_AXIS_HIT_WIDTH = 48;
+const X_AXIS_HIT_HEIGHT = 36;
 
 export const HistoryTab: React.FC<HistoryTabProps> = ({
   measurements,
@@ -60,14 +75,12 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
   const [isWebhookOpen, setIsWebhookOpen] = useState<boolean>(false);
   const [tempWebhookUrl, setTempWebhookUrl] = useState<string>(webhookUrl);
 
-  // Confirmation before deleting
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  // Sort chronological for chart (oldest first)
+  // Sort chronological for chart (oldest first) with numeric index for smooth TradingView X scaling/panning
   const chartData = useMemo(() => {
     return [...measurements]
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .map((m) => ({
+      .map((m, idx) => ({
+        idx,
         date: m.date.slice(5), // MM-DD
         fullDate: m.date,
         weight: m.weightKg,
@@ -82,19 +95,371 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
       }));
   }, [measurements]);
 
-  // Zoom & Pan state via Brush
-  const [resetKey, setResetKey] = useState<number>(0);
-  const [brushIndices, setBrushIndices] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  // TradingView-style independent Axis Scaling & Pan state
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<DragSnapshot | null>(null);
+  const [activeDragZone, setActiveDragZone] = useState<DragZone | null>(null);
+  const [hoverZone, setHoverZone] = useState<DragZone | null>(null);
 
-  const isZoomed = useMemo(() => {
-    if (!brushIndices || chartData.length <= 1) return false;
-    return brushIndices.startIndex > 0 || brushIndices.endIndex < chartData.length - 1;
-  }, [brushIndices, chartData.length]);
+  const [xDomain, setXDomain] = useState<[number, number] | null>(null);
+  const [leftYDomain, setLeftYDomain] = useState<[number, number] | null>(null);
+  const [rightYDomain, setRightYDomain] = useState<[number, number] | null>(null);
 
-  const handleResetZoom = () => {
-    setBrushIndices(null);
-    setResetKey((prev) => prev + 1);
+  const defaultXDomain = useMemo<[number, number]>(() => {
+    const n = chartData.length;
+    if (n <= 1) return [-0.5, 0.5];
+    return [-0.25, n - 1 + 0.25];
+  }, [chartData.length]);
+
+  const effectiveXDomain = xDomain ?? defaultXDomain;
+
+  // Dynamic Y domains based on currently visible X slice
+  const autoLeftYDomain = useMemo<[number, number]>(() => {
+    const n = chartData.length;
+    if (n === 0) return [0, 100];
+    const startIdx = Math.max(0, Math.floor(effectiveXDomain[0]) - 1);
+    const endIdx = Math.min(n - 1, Math.ceil(effectiveXDomain[1]) + 1);
+    const slice = chartData.slice(startIdx, endIdx + 1);
+    const pool = slice.length > 0 ? slice : chartData;
+
+    const vals: number[] = [];
+    pool.forEach((d) => {
+      if (showWeight && typeof d.weight === 'number' && Number.isFinite(d.weight)) vals.push(d.weight);
+      if (showWaist && typeof d.waist === 'number' && Number.isFinite(d.waist)) vals.push(d.waist);
+      if (showAbdomen && typeof d.abdomen === 'number' && Number.isFinite(d.abdomen)) vals.push(d.abdomen);
+      if (showChest && typeof d.chest === 'number' && Number.isFinite(d.chest)) vals.push(d.chest);
+      if (showBiceps && typeof d.biceps === 'number' && Number.isFinite(d.biceps)) vals.push(d.biceps);
+      if (showThigh && typeof d.thigh === 'number' && Number.isFinite(d.thigh)) vals.push(d.thigh);
+    });
+
+    if (vals.length === 0) return [0, 120];
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min;
+    const pad = span > 0 ? Math.max(1.5, span * 0.16) : 3;
+    return [Math.max(0, Number((min - pad).toFixed(1))), Number((max + pad).toFixed(1))];
+  }, [
+    chartData,
+    effectiveXDomain,
+    showWeight,
+    showWaist,
+    showAbdomen,
+    showChest,
+    showBiceps,
+    showThigh,
+  ]);
+
+  const autoRightYDomain = useMemo<[number, number]>(() => {
+    const n = chartData.length;
+    if (n === 0) return [5, 35];
+    const startIdx = Math.max(0, Math.floor(effectiveXDomain[0]) - 1);
+    const endIdx = Math.min(n - 1, Math.ceil(effectiveXDomain[1]) + 1);
+    const slice = chartData.slice(startIdx, endIdx + 1);
+    const pool = slice.length > 0 ? slice : chartData;
+
+    const vals: number[] = [];
+    pool.forEach((d) => {
+      if (typeof d.bf === 'number' && Number.isFinite(d.bf)) vals.push(d.bf);
+    });
+
+    if (vals.length === 0) return [5, 35];
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const span = max - min;
+    const pad = span > 0 ? Math.max(1, span * 0.18) : 2.5;
+    return [Math.max(0, Number((min - pad).toFixed(1))), Math.min(100, Number((max + pad).toFixed(1)))];
+  }, [chartData, effectiveXDomain]);
+
+  const effectiveLeftYDomain = leftYDomain ?? autoLeftYDomain;
+  const effectiveRightYDomain = rightYDomain ?? autoRightYDomain;
+
+  const xTicks = useMemo(() => {
+    const n = chartData.length;
+    if (n === 0) return [];
+    const minIdx = Math.max(0, Math.ceil(effectiveXDomain[0]));
+    const maxIdx = Math.min(n - 1, Math.floor(effectiveXDomain[1]));
+    if (minIdx > maxIdx) return [];
+    const count = maxIdx - minIdx + 1;
+    const step = Math.max(1, Math.ceil(count / 7));
+    const ticks: number[] = [];
+    for (let i = minIdx; i <= maxIdx; i += step) {
+      ticks.push(i);
+    }
+    return ticks;
+  }, [chartData.length, effectiveXDomain]);
+
+  const isChartAdjusted = Boolean(xDomain || leftYDomain || rightYDomain);
+
+  const handleResetZoom = useCallback(() => {
+    setXDomain(null);
+    setLeftYDomain(null);
+    setRightYDomain(null);
+  }, []);
+
+  const detectZone = useCallback(
+    (relX: number, relY: number, width: number, height: number): DragZone => {
+      if (relX <= LEFT_AXIS_HIT_WIDTH) return 'y-left';
+      if (showBf && relX >= width - RIGHT_AXIS_HIT_WIDTH) return 'y-right';
+      if (relY >= height - X_AXIS_HIT_HEIGHT) return 'x';
+      return 'pan';
+    },
+    [showBf]
+  );
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (chartData.length === 0) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const el = chartContainerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    const zone = detectZone(relX, relY, rect.width, rect.height);
+
+    const plotWidth = Math.max(
+      40,
+      rect.width - LEFT_AXIS_HIT_WIDTH - (showBf ? RIGHT_AXIS_HIT_WIDTH : 14)
+    );
+    const plotHeight = Math.max(40, rect.height - X_AXIS_HIT_HEIGHT - 10);
+
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignore if pointer capture is unavailable
+    }
+
+    dragRef.current = {
+      zone,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      plotWidth,
+      plotHeight,
+      initXDomain: [...effectiveXDomain] as [number, number],
+      initLeftYDomain: [...effectiveLeftYDomain] as [number, number],
+      initRightYDomain: [...effectiveRightYDomain] as [number, number],
+    };
+    setActiveDragZone(zone);
   };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = chartContainerRef.current;
+    if (!el || chartData.length === 0) return;
+
+    const snap = dragRef.current;
+    if (!snap) {
+      if (e.pointerType === 'mouse') {
+        const rect = el.getBoundingClientRect();
+        const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+        setHoverZone(zone);
+      }
+      return;
+    }
+
+    const dx = e.clientX - snap.startX;
+    const dy = e.clientY - snap.startY;
+    const n = chartData.length;
+
+    if (snap.zone === 'y-left') {
+      const [initMin, initMax] = snap.initLeftYDomain;
+      const initSpan = Math.max(0.5, initMax - initMin);
+      const center = (initMin + initMax) / 2;
+      // TradingView: drag UP (dy < 0) stretches axis (zoom in / smaller range), drag DOWN (dy > 0) compresses (zoom out)
+      const factor = Math.exp(dy * 0.0085);
+      const newSpan = Math.min(400, Math.max(0.5, initSpan * factor));
+      let nextMin = center - newSpan / 2;
+      let nextMax = center + newSpan / 2;
+      if (nextMin < 0) {
+        nextMin = 0;
+        nextMax = newSpan;
+      }
+      setLeftYDomain([Number(nextMin.toFixed(2)), Number(nextMax.toFixed(2))]);
+    } else if (snap.zone === 'y-right') {
+      const [initMin, initMax] = snap.initRightYDomain;
+      const initSpan = Math.max(0.5, initMax - initMin);
+      const center = (initMin + initMax) / 2;
+      const factor = Math.exp(dy * 0.0085);
+      const newSpan = Math.min(100, Math.max(0.5, initSpan * factor));
+      let nextMin = center - newSpan / 2;
+      let nextMax = center + newSpan / 2;
+      if (nextMin < 0) {
+        nextMin = 0;
+        nextMax = Math.min(100, newSpan);
+      }
+      if (nextMax > 100) {
+        nextMax = 100;
+        nextMin = Math.max(0, 100 - newSpan);
+      }
+      setRightYDomain([Number(nextMin.toFixed(2)), Number(nextMax.toFixed(2))]);
+    } else if (snap.zone === 'x') {
+      const [initMin, initMax] = snap.initXDomain;
+      const initSpan = Math.max(0.4, initMax - initMin);
+      const center = (initMin + initMax) / 2;
+      // TradingView: drag RIGHT (dx > 0) zooms IN on time axis, drag LEFT (dx < 0) zooms OUT
+      const factor = Math.exp(-dx * 0.0085);
+      const minSpan = n <= 1 ? 0.4 : 0.65;
+      const maxSpan = Math.max(n + 2, 6);
+      const newSpan = Math.min(maxSpan, Math.max(minSpan, initSpan * factor));
+      let nextMin = center - newSpan / 2;
+      let nextMax = center + newSpan / 2;
+      const minBound = -newSpan * 0.5;
+      const maxBound = Math.max(0, n - 1) + newSpan * 0.5;
+      if (nextMin < minBound) {
+        nextMin = minBound;
+        nextMax = nextMin + newSpan;
+      }
+      if (nextMax > maxBound) {
+        nextMax = maxBound;
+        nextMin = nextMax - newSpan;
+      }
+      setXDomain([nextMin, nextMax]);
+    } else {
+      // Pan grid without changing current X or Y scale
+      const [initXMin, initXMax] = snap.initXDomain;
+      const xSpan = Math.max(0.4, initXMax - initXMin);
+      const shiftX = -(dx / snap.plotWidth) * xSpan;
+      let nextXMin = initXMin + shiftX;
+      let nextXMax = initXMax + shiftX;
+      const minAllowedX = -xSpan * 0.65;
+      const maxAllowedX = Math.max(0, n - 1) + xSpan * 0.65;
+      if (nextXMin < minAllowedX) {
+        nextXMin = minAllowedX;
+        nextXMax = nextXMin + xSpan;
+      }
+      if (nextXMax > maxAllowedX) {
+        nextXMax = maxAllowedX;
+        nextXMin = nextXMax - xSpan;
+      }
+      setXDomain([nextXMin, nextXMax]);
+
+      const [initLMin, initLMax] = snap.initLeftYDomain;
+      const lSpan = Math.max(0.5, initLMax - initLMin);
+      const shiftLeftY = (dy / snap.plotHeight) * lSpan;
+      let nextLMin = initLMin + shiftLeftY;
+      let nextLMax = initLMax + shiftLeftY;
+      if (nextLMin < 0) {
+        nextLMin = 0;
+        nextLMax = lSpan;
+      }
+      setLeftYDomain([Number(nextLMin.toFixed(2)), Number(nextLMax.toFixed(2))]);
+
+      if (showBf) {
+        const [initRMin, initRMax] = snap.initRightYDomain;
+        const rSpan = Math.max(0.5, initRMax - initRMin);
+        const shiftRightY = (dy / snap.plotHeight) * rSpan;
+        let nextRMin = initRMin + shiftRightY;
+        let nextRMax = initRMax + shiftRightY;
+        if (nextRMin < 0) {
+          nextRMin = 0;
+          nextRMax = Math.min(100, rSpan);
+        }
+        if (nextRMax > 100) {
+          nextRMax = 100;
+          nextRMin = Math.max(0, 100 - rSpan);
+        }
+        setRightYDomain([Number(nextRMin.toFixed(2)), Number(nextRMax.toFixed(2))]);
+      }
+    }
+  };
+
+  const endDrag = (e?: React.PointerEvent<HTMLDivElement>) => {
+    if (e && chartContainerRef.current && dragRef.current) {
+      try {
+        if (chartContainerRef.current.hasPointerCapture(e.pointerId)) {
+          chartContainerRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    dragRef.current = null;
+    setActiveDragZone(null);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = chartContainerRef.current;
+    if (!el || chartData.length === 0) return;
+    const rect = el.getBoundingClientRect();
+    const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+    if (zone === 'y-left') {
+      setLeftYDomain(null);
+    } else if (zone === 'y-right') {
+      setRightYDomain(null);
+    } else if (zone === 'x') {
+      setXDomain(null);
+    } else {
+      handleResetZoom();
+    }
+  };
+
+  // Smooth wheel zoom on X-axis (or over Y-axes when hovering an axis) without scrolling the page
+  useEffect(() => {
+    const el = chartContainerRef.current;
+    if (!el || chartData.length === 0) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const zone = detectZone(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+      const factor = Math.exp(e.deltaY * 0.0018);
+
+      if (zone === 'y-left') {
+        const [min, max] = effectiveLeftYDomain;
+        const span = Math.max(0.5, max - min);
+        const center = (min + max) / 2;
+        const nextSpan = Math.min(400, Math.max(0.5, span * factor));
+        const nextMin = Math.max(0, center - nextSpan / 2);
+        setLeftYDomain([Number(nextMin.toFixed(2)), Number((nextMin + nextSpan).toFixed(2))]);
+      } else if (zone === 'y-right') {
+        const [min, max] = effectiveRightYDomain;
+        const span = Math.max(0.5, max - min);
+        const center = (min + max) / 2;
+        const nextSpan = Math.min(100, Math.max(0.5, span * factor));
+        const nextMin = Math.max(0, center - nextSpan / 2);
+        const nextMax = Math.min(100, nextMin + nextSpan);
+        setRightYDomain([Number(nextMin.toFixed(2)), Number(nextMax.toFixed(2))]);
+      } else {
+        const n = chartData.length;
+        const [min, max] = effectiveXDomain;
+        const span = Math.max(0.4, max - min);
+        const plotW = Math.max(
+          40,
+          rect.width - LEFT_AXIS_HIT_WIDTH - (showBf ? RIGHT_AXIS_HIT_WIDTH : 14)
+        );
+        const anchorRatio = Math.min(
+          1,
+          Math.max(0, (e.clientX - rect.left - LEFT_AXIS_HIT_WIDTH) / plotW)
+        );
+        const anchorVal = min + anchorRatio * span;
+        const minSpan = n <= 1 ? 0.4 : 0.65;
+        const maxSpan = Math.max(n + 2, 6);
+        const nextSpan = Math.min(maxSpan, Math.max(minSpan, span * factor));
+        const nextMin = anchorVal - anchorRatio * nextSpan;
+        setXDomain([nextMin, nextMin + nextSpan]);
+      }
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [
+    chartData.length,
+    detectZone,
+    effectiveLeftYDomain,
+    effectiveRightYDomain,
+    effectiveXDomain,
+    showBf,
+  ]);
+
+  const currentZone = activeDragZone ?? hoverZone;
+  const chartCursorClass =
+    currentZone === 'y-left' || currentZone === 'y-right'
+      ? 'cursor-ns-resize'
+      : currentZone === 'x'
+      ? 'cursor-ew-resize'
+      : activeDragZone === 'pan'
+      ? 'cursor-grabbing'
+      : 'cursor-grab';
 
   // Statistics Summary Cards
   const stats = useMemo(() => {
@@ -233,16 +598,15 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
             </p>
           </div>
 
-          {/* Dyskretny przycisk resetowania powiększenia */}
-          {isZoomed && (
+          {isChartAdjusted && (
             <button
               type="button"
               onClick={handleResetZoom}
               className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border border-amber-400/30 text-xs font-bold transition-all cursor-pointer animate-in fade-in"
-              title="Resetuj powiększenie do pełnego zakresu dat"
+              title="Resetuj powiększenie i przesunięcie osi"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Resetuj powiększenie</span>
+              <span>Resetuj skalę</span>
             </button>
           )}
         </div>
@@ -328,44 +692,91 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
           </button>
         </div>
 
-        {/* Recharts Container with Dual Y-Axis and Interactive Brush Zoom */}
-        <div className="h-72 sm:h-80 w-full pt-2">
+        {/* Recharts Container with TradingView-style Click & Drag Axis Scaling + Grid Pan */}
+        <div
+          ref={chartContainerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onPointerLeave={() => {
+            if (!dragRef.current) setHoverZone(null);
+          }}
+          onDoubleClick={handleDoubleClick}
+          style={{ touchAction: 'none' }}
+          className={`relative h-72 sm:h-80 w-full pt-2 select-none ${chartCursorClass}`}
+        >
+          {/* Subtle visual affordances on hovered/active axis strips (pointer-events-none so tooltips remain active) */}
+          {chartData.length > 0 && (
+            <>
+              <div
+                className={`pointer-events-none absolute top-2 bottom-[36px] left-0 w-[48px] rounded-l-xl transition-colors ${
+                  currentZone === 'y-left' ? 'bg-amber-400/10 border-r border-amber-400/30' : ''
+                }`}
+              />
+              {showBf && (
+                <div
+                  className={`pointer-events-none absolute top-2 bottom-[36px] right-0 w-[48px] rounded-r-xl transition-colors ${
+                    currentZone === 'y-right' ? 'bg-purple-400/10 border-l border-purple-400/30' : ''
+                  }`}
+                />
+              )}
+              <div
+                className={`pointer-events-none absolute bottom-0 left-[48px] ${
+                  showBf ? 'right-[48px]' : 'right-3'
+                } h-[36px] rounded-b-xl transition-colors ${
+                  currentZone === 'x' ? 'bg-amber-400/10 border-t border-amber-400/30' : ''
+                }`}
+              />
+            </>
+          )}
+
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={chartData}
-                margin={{ top: 10, right: showBf ? 10 : 15, left: -10, bottom: 5 }}
+                margin={{ top: 10, right: showBf ? 4 : 14, left: 4, bottom: 4 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                <XAxis dataKey="date" stroke="#737373" tick={{ fontSize: 11 }} />
+                <XAxis
+                  type="number"
+                  dataKey="idx"
+                  domain={effectiveXDomain}
+                  ticks={xTicks}
+                  allowDataOverflow
+                  stroke="#737373"
+                  tick={{ fontSize: 11, fill: '#a3a3a3' }}
+                  tickFormatter={(val) => chartData[Math.round(Number(val))]?.date || ''}
+                  height={32}
+                />
 
-                {/* Lewa oś Y: Waga i obwody (kg / cm) z dynamicznym zakresem */}
+                {/* Lewa oś Y: Waga i obwody (kg / cm) z niezależnym skalowaniem */}
                 <YAxis
                   yAxisId="left"
                   orientation="left"
                   stroke="#737373"
                   tick={{ fontSize: 10, fill: '#a3a3a3' }}
-                  domain={[
-                    (dataMin: number) => (Number.isFinite(dataMin) ? Math.max(0, Math.floor(dataMin - 3)) : 'auto'),
-                    (dataMax: number) => (Number.isFinite(dataMax) ? Math.ceil(dataMax + 3) : 'auto'),
-                  ]}
-                  tickFormatter={(val) => `${Math.round(val)}`}
-                  width={38}
+                  domain={effectiveLeftYDomain}
+                  allowDataOverflow
+                  tickFormatter={(val) =>
+                    Number.isFinite(val) ? `${Math.round(Number(val) * 10) / 10}` : ''
+                  }
+                  width={44}
                 />
 
-                {/* Prawa oś Y: Procent tkanki tłuszczowej BF (%) z dedykowaną skalą */}
+                {/* Prawa oś Y: Procent tkanki tłuszczowej BF (%) z niezależnym skalowaniem */}
                 <YAxis
                   yAxisId="right"
                   orientation="right"
                   stroke="#a855f7"
                   tick={{ fontSize: 10, fill: '#c084fc' }}
-                  domain={[
-                    (dataMin: number) => (Number.isFinite(dataMin) ? Math.max(0, Math.floor(dataMin - 2)) : 5),
-                    (dataMax: number) => (Number.isFinite(dataMax) ? Math.min(100, Math.ceil(dataMax + 2)) : 35),
-                  ]}
-                  tickFormatter={(val) => `${val}%`}
+                  domain={effectiveRightYDomain}
+                  allowDataOverflow
+                  tickFormatter={(val) =>
+                    Number.isFinite(val) ? `${Math.round(Number(val) * 10) / 10}%` : ''
+                  }
                   hide={!showBf}
-                  width={38}
+                  width={44}
                 />
 
                 <Tooltip
@@ -378,7 +789,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                   }}
                   labelFormatter={(lbl, items) => {
                     const row = items?.[0]?.payload;
-                    return row ? `Data: ${row.fullDate}` : lbl;
+                    return row ? `Data: ${row.fullDate}` : String(lbl);
                   }}
                   formatter={(value: any, name: any) => {
                     if (value === undefined || value === null) return ['--', name];
@@ -402,6 +813,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     strokeWidth={3}
                     dot={{ fill: '#f59e0b', r: 3.5 }}
                     activeDot={{ r: 5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showBf && (
@@ -414,6 +826,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     strokeWidth={2.5}
                     dot={{ fill: '#a855f7', r: 3 }}
                     activeDot={{ r: 5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showWaist && (
@@ -425,6 +838,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     stroke="#10b981"
                     strokeWidth={2}
                     dot={{ fill: '#10b981', r: 2.5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showAbdomen && (
@@ -436,6 +850,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     stroke="#f97316"
                     strokeWidth={2}
                     dot={{ fill: '#f97316', r: 2.5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showChest && (
@@ -447,6 +862,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     stroke="#0284c7"
                     strokeWidth={2}
                     dot={{ fill: '#0284c7', r: 2.5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showBiceps && (
@@ -458,6 +874,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     stroke="#eab308"
                     strokeWidth={2}
                     dot={{ fill: '#eab308', r: 2.5 }}
+                    isAnimationActive={false}
                   />
                 )}
                 {showThigh && (
@@ -469,29 +886,7 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
                     stroke="#84cc16"
                     strokeWidth={2}
                     dot={{ fill: '#84cc16', r: 2.5 }}
-                  />
-                )}
-
-                {/* Interaktywny Brush do Zoom & Pan */}
-                {chartData.length > 1 && (
-                  <Brush
-                    key={`brush-${resetKey}`}
-                    dataKey="date"
-                    height={30}
-                    stroke="#f59e0b"
-                    fill="#171717"
-                    travellerWidth={10}
-                    startIndex={brushIndices ? brushIndices.startIndex : undefined}
-                    endIndex={brushIndices ? brushIndices.endIndex : undefined}
-                    onChange={(range) => {
-                      if (typeof range?.startIndex === 'number' && typeof range?.endIndex === 'number') {
-                        setBrushIndices({
-                          startIndex: range.startIndex,
-                          endIndex: range.endIndex,
-                        });
-                      }
-                    }}
-                    tickFormatter={(lbl) => lbl}
+                    isAnimationActive={false}
                   />
                 )}
               </LineChart>
@@ -502,6 +897,12 @@ export const HistoryTab: React.FC<HistoryTabProps> = ({
             </div>
           )}
         </div>
+
+        {chartData.length > 0 && (
+          <p className="text-[10px] text-neutral-500 text-center">
+            Przeciągnij oś Y / X aby skalować • Przeciągnij siatkę aby przesuwać • Dwuklik resetuje
+          </p>
+        )}
       </div>
 
       {/* Google Sheets Sync Card */}

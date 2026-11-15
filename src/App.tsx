@@ -970,7 +970,12 @@ export default function App() {
       updatedWeeksList.sort((a, b) => a.week - b.week);
     }
 
-    const sourceDays = activeCycle.weeksPlansMap?.[sourceWeek] || currentWeekDays;
+    const rawSourceDays = activeCycle.weeksPlansMap?.[sourceWeek] || currentWeekDays;
+    const sourceDays: WorkoutDay[] =
+      typeof structuredClone === 'function'
+        ? structuredClone(rawSourceDays)
+        : JSON.parse(JSON.stringify(rawSourceDays));
+
     const clonedDays: WorkoutDay[] = sourceDays.map((d, dIdx) => ({
       ...d,
       id: `w${targetWeek}-day-${d.dayNumber || dIdx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -979,6 +984,7 @@ export default function App() {
       loggedSets: [],
       completedSets: [],
       exercises: (d.exercises || []).map((ex) => {
+        const { sets: _legacySets, ...cleanEx } = ex as any;
         const isCardio = ex.category === 'cardio' || ex.exerciseType === 'RUNNING';
         const hasDelta = progressionDeltaKg > 0 && !isCardio;
         const currentW = parseFloat(String(ex.defaultWeightKg ?? (ex as any).weight ?? 0).replace(',', '.')) || 0;
@@ -1007,8 +1013,9 @@ export default function App() {
           : newWeight;
 
         return {
-          ...ex,
+          ...cleanEx,
           id: `ex-w${targetWeek}-${(ex.name || 'ex').replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 4)}`,
+          muscleGroup: ex.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
           defaultWeightKg: primaryW,
           weight: primaryW,
           weightKg: primaryW,
@@ -1029,7 +1036,7 @@ export default function App() {
       weeksList: updatedWeeksList,
       weeksPlansMap: {
         ...(activeCycle.weeksPlansMap || {}),
-        [sourceWeek]: currentWeekDays,
+        [sourceWeek]: activeCycle.weeksPlansMap?.[sourceWeek] || rawSourceDays,
         [targetWeek]: clonedDays,
       },
     };
@@ -1100,67 +1107,73 @@ export default function App() {
   const handleAddWeek = (newPhase: MesocyclePhase, initialDays: WorkoutDay[]) => {
     const updatedWeeksList = [...weeksList, newPhase].sort((a, b) => a.week - b.week);
 
-    // Sanitize initialDays to ensure well-formed WorkoutDay objects and prevent runtime crashes
-    const sanitizedDays: WorkoutDay[] = Array.isArray(initialDays)
-      ? initialDays.map((d, idx) => ({
-          ...d,
-          id: d?.id || `w${newPhase.week}-day-${idx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          dayNumber: d?.dayNumber ?? (idx + 1),
-          dayNamePolish: d?.dayNamePolish || `Dzień ${idx + 1}`,
-          title: d?.title || `Trening ${idx + 1}`,
-          subtitle: d?.subtitle || 'Dzień treningowy',
-          type: d?.type || 'FBW',
-          durationMinutes: d?.durationMinutes ?? 60,
-          summary: d?.summary || '',
-          targetRpeRange: d?.targetRpeRange || `${newPhase.targetRPE || 8.0}`,
-          targetRirRange: d?.targetRirRange || `${newPhase.targetRIR ?? 2}`,
-          isCompleted: false,
-          completed: false,
-          loggedSets: [],
-          completedSets: [],
-          exercises: Array.isArray(d?.exercises)
-            ? d.exercises.map((ex, exIdx) => {
-                const sets = Array.isArray(ex?.plannedSetsDetails)
-                  ? ex.plannedSetsDetails.map((s, sIdx) => ({
-                      ...s,
-                      setNumber: s.setNumber || sIdx + 1,
-                      completed: false,
-                      isCompleted: false,
-                    }))
-                  : undefined;
-                const primaryW = (sets && sets.length > 0 && (sets[0].weightKg !== undefined || sets[0].weight !== undefined))
-                  ? (sets[0].weightKg ?? sets[0].weight ?? ex?.defaultWeightKg ?? 20)
-                  : ((ex?.defaultWeightKg !== undefined) ? ex.defaultWeightKg : (ex?.weight ?? 20));
-
-                return {
-                  ...ex,
-                  id: ex?.id || `ex-w${newPhase.week}-${exIdx + 1}-${Date.now()}`,
-                  name: ex?.name || `Ćwiczenie ${exIdx + 1}`,
-                  muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
-                  plannedSets: sets ? sets.length : (ex?.plannedSets ?? 3),
-                  targetRepsRange: ex?.targetRepsRange || '8-10',
-                  defaultWeightKg: primaryW,
-                  weight: primaryW,
-                  weightKg: primaryW,
-                  targetWeight: primaryW,
-                  isCompleted: false,
-                  completed: false,
-                  loggedSets: [],
-                  completedSets: [],
-                  targetRIR: ex?.targetRIR ?? (newPhase.targetRIR ?? 2),
-                  targetRPE: ex?.targetRPE ?? (newPhase.targetRPE ?? 8),
-                  restSeconds: ex?.restSeconds ?? 90,
-                  hyroxRelevance: ex?.hyroxRelevance || '',
-                  techniqueNotes: ex?.techniqueNotes || '',
-                  plannedSetsDetails: sets,
-                };
-              })
-            : [],
-          runningSession: d?.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
-          recoveryProtocols: Array.isArray(d?.recoveryProtocols) ? d.recoveryProtocols : [],
-          sessionNotes: d?.sessionNotes || '',
-        }))
+    // Deep-clone initialDays so no exercise/set references are shared with source weeks
+    const clonedInitialDays: WorkoutDay[] = Array.isArray(initialDays)
+      ? (typeof structuredClone === 'function'
+          ? structuredClone(initialDays)
+          : JSON.parse(JSON.stringify(initialDays)))
       : [];
+
+    // Sanitize clonedInitialDays to ensure well-formed WorkoutDay objects and reset all completion flags
+    const sanitizedDays: WorkoutDay[] = clonedInitialDays.map((d, idx) => ({
+      ...d,
+      id: d?.id || `w${newPhase.week}-day-${idx + 1}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      dayNumber: d?.dayNumber ?? (idx + 1),
+      dayNamePolish: d?.dayNamePolish || `Dzień ${idx + 1}`,
+      title: d?.title || `Trening ${idx + 1}`,
+      subtitle: d?.subtitle || 'Dzień treningowy',
+      type: d?.type || 'FBW',
+      durationMinutes: d?.durationMinutes ?? 60,
+      summary: d?.summary || '',
+      targetRpeRange: d?.targetRpeRange || `${newPhase.targetRPE || 8.0}`,
+      targetRirRange: d?.targetRirRange || `${newPhase.targetRIR ?? 2}`,
+      isCompleted: false,
+      completed: false,
+      loggedSets: [],
+      completedSets: [],
+      exercises: Array.isArray(d?.exercises)
+        ? d.exercises.map((ex, exIdx) => {
+            const { sets: _legacySets, ...cleanEx } = (ex || {}) as any;
+            const sets = Array.isArray(ex?.plannedSetsDetails)
+              ? ex.plannedSetsDetails.map((s, sIdx) => ({
+                  ...s,
+                  setNumber: s.setNumber || sIdx + 1,
+                  completed: false,
+                  isCompleted: false,
+                }))
+              : undefined;
+            const primaryW = (sets && sets.length > 0 && (sets[0].weightKg !== undefined || sets[0].weight !== undefined))
+              ? (sets[0].weightKg ?? sets[0].weight ?? ex?.defaultWeightKg ?? 20)
+              : ((ex?.defaultWeightKg !== undefined) ? ex.defaultWeightKg : (ex?.weight ?? 20));
+
+            return {
+              ...cleanEx,
+              id: ex?.id || `ex-w${newPhase.week}-${exIdx + 1}-${Date.now()}`,
+              name: ex?.name || `Ćwiczenie ${exIdx + 1}`,
+              muscleGroup: ex?.muscleGroup ? normalizeMuscleGroup(ex.muscleGroup) : undefined,
+              plannedSets: sets ? sets.length : (ex?.plannedSets ?? 3),
+              targetRepsRange: ex?.targetRepsRange || '8-10',
+              defaultWeightKg: primaryW,
+              weight: primaryW,
+              weightKg: primaryW,
+              targetWeight: primaryW,
+              isCompleted: false,
+              completed: false,
+              loggedSets: [],
+              completedSets: [],
+              targetRIR: ex?.targetRIR ?? (newPhase.targetRIR ?? 2),
+              targetRPE: ex?.targetRPE ?? (newPhase.targetRPE ?? 8),
+              restSeconds: ex?.restSeconds ?? 90,
+              hyroxRelevance: ex?.hyroxRelevance || '',
+              techniqueNotes: ex?.techniqueNotes || '',
+              plannedSetsDetails: sets,
+            };
+          })
+        : [],
+      runningSession: d?.runningSession ? JSON.parse(JSON.stringify(d.runningSession)) : undefined,
+      recoveryProtocols: Array.isArray(d?.recoveryProtocols) ? d.recoveryProtocols : [],
+      sessionNotes: d?.sessionNotes || '',
+    }));
 
     const existingPlans = activeCycle.weeksPlansMap || {};
     const newPlansMap: Record<number, WorkoutDay[]> = {
