@@ -30,7 +30,8 @@ import {
   BellRing,
   Gauge,
   HeartPulse,
-  Award
+  Award,
+  Minimize2
 } from 'lucide-react';
 import {
   WorkoutDay,
@@ -67,6 +68,7 @@ interface WorkoutLoggerModalProps {
   onMoveDay?: (fromWeek: number, fromDayNumber: number, toWeek: number, toDayNumber: number) => void;
   isMinimized?: boolean;
   onToggleMinimize?: (minimized: boolean) => void;
+  onTrainingActiveChange?: (active: boolean) => void;
 }
 
 interface ActiveExerciseState {
@@ -93,6 +95,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
   onMoveDay,
   isMinimized,
   onToggleMinimize,
+  onTrainingActiveChange,
 }) => {
   const currentPhase = weeksList.find((w) => w.week === currentWeek) || MESOCYCLE_WEEKS[0];
 
@@ -323,6 +326,21 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, [isWorkoutFinished, hasWorkoutStarted]);
+
+  const isTrainingActive = isOpen && hasWorkoutStarted && !isWorkoutFinished;
+
+  useEffect(() => {
+    onTrainingActiveChange?.(isTrainingActive);
+  }, [isTrainingActive, onTrainingActiveChange]);
+
+  const handleCancelOrClose = () => {
+    if (hasWorkoutStarted && !isWorkoutFinished && sessionSeconds > 0) {
+      const confirmed = window.confirm('Przerwać trwający trening bez zapisywania?');
+      if (!confirmed) return;
+    }
+    onTrainingActiveChange?.(false);
+    onClose();
+  };
 
   const formatSessionTime = (sec: number) => {
     const mins = Math.floor(sec / 60);
@@ -781,6 +799,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         'Nie zaznaczono żadnej ukończonej serii (zielony ptaszek). Czy mimo to chcesz zamknąć okno bez zapisu?'
       );
       if (confirmSaveEmpty) {
+        onTrainingActiveChange?.(false);
         onClose();
       }
       return;
@@ -801,11 +820,13 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
           weightKg: s.weightKg,
           rir: exItem.exerciseRir ?? 2,
           rpe: exItem.exerciseRpe ?? 8,
+          completed: Boolean(s.completed),
         })),
       }));
       onUpdateDayExercises(updatedExercises);
     }
 
+    onTrainingActiveChange?.(false);
     onClose();
   };
 
@@ -891,8 +912,8 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
 
   return (
     <>
-      {/* 1. Global Sticky Mini-Player (When workout runs in background) */}
-      {isMin && (
+      {/* 1. Global Sticky Mini-Player (Only when workout is actively running in background) */}
+      {isMin && isTrainingActive && (
         <div
           onClick={() => handleMinimize(false)}
           className="fixed top-[92px] sm:top-[96px] left-0 right-0 z-40 px-3 max-w-xl mx-auto cursor-pointer animate-in slide-in-from-top-2 duration-200"
@@ -925,7 +946,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               </div>
             </div>
 
-            {/* Right: Digital Timer & Compact Action Button */}
+            {/* Right: Digital Timer & Compact Action Buttons */}
             <div className="flex items-center gap-2 shrink-0">
               <div className="text-right">
                 <span
@@ -957,6 +978,19 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
               >
                 <Check className="w-5 h-5 stroke-[3]" />
               </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancelOrClose();
+                }}
+                className="w-8 h-8 rounded-xl bg-neutral-800 hover:bg-red-500/20 text-neutral-400 hover:text-red-400 border border-neutral-700 flex items-center justify-center transition-colors cursor-pointer touch-manipulation"
+                title="Przerwij trening bez zapisu"
+                aria-label="Przerwij trening"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
@@ -965,7 +999,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
       {/* 2. Full Active Workout Modal Container (Hidden when minimized, preserving all timers & state) */}
       <div
         className={
-          isMin
+          isMin && isTrainingActive
             ? 'hidden'
             : 'fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-hidden'
         }
@@ -973,7 +1007,7 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
         <div className="bg-neutral-900 border border-neutral-700 rounded-2xl sm:rounded-3xl w-full max-w-5xl h-[95dvh] max-h-[95dvh] flex flex-col shadow-2xl relative mx-auto overflow-hidden animate-in fade-in zoom-in-95 text-left">
           {/* Top Sticky Header */}
           <div className="p-3.5 sm:p-5 border-b border-neutral-800 bg-neutral-950/95 shrink-0 space-y-2.5">
-            {/* Row 1: Title & Close 'X' Button in Top Right */}
+            {/* Row 1: Title & Minimize / Close 'X' Buttons in Top Right */}
             <div className="flex items-start justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-10 h-10 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-black shadow-lg shadow-amber-400/20 shrink-0">
@@ -994,16 +1028,30 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                 </div>
               </div>
 
-              {/* Close "X" Button in the Top Right Corner - hides to background without terminating session */}
-              <button
-                type="button"
-                onClick={() => handleMinimize(true)}
-                className="p-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer shrink-0 touch-manipulation"
-                title="Ukryj do tła (trening trwa dalej)"
-                aria-label="Ukryj do tła"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isTrainingActive && (
+                  <button
+                    type="button"
+                    onClick={() => handleMinimize(true)}
+                    className="p-2.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40 transition-colors cursor-pointer shrink-0 touch-manipulation"
+                    title="Zwiń do tła (trening trwa dalej)"
+                    aria-label="Zwiń do tła"
+                  >
+                    <Minimize2 className="w-5 h-5" />
+                  </button>
+                )}
+
+                {/* Close "X" Button in the Top Right Corner - closes/aborts without keeping a ghost active banner */}
+                <button
+                  type="button"
+                  onClick={handleCancelOrClose}
+                  className="p-2.5 rounded-xl bg-neutral-900 hover:bg-red-500/20 text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-500/40 transition-colors cursor-pointer shrink-0 touch-manipulation"
+                  title="Zamknij / Anuluj trening bez zapisu"
+                  aria-label="Zamknij trening"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Row 2: "Sesja: MM:SS", History, and "Dane & Czasy" in a single compact row */}
@@ -1322,6 +1370,14 @@ export const WorkoutLoggerModal: React.FC<WorkoutLoggerModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleCancelOrClose}
+                    className="px-3 py-2.5 rounded-xl bg-neutral-900 hover:bg-red-500/15 text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-500/30 text-[11px] font-bold transition-colors cursor-pointer"
+                  >
+                    Anuluj
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setIsStatsModalOpen(true)}

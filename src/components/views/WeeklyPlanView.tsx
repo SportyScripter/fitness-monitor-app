@@ -126,6 +126,12 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
       completed: boolean;
       unit: string;
       notes?: string;
+      rir?: number;
+      rpe?: number;
+      distance?: number;
+      distanceUnit?: 'm' | 'km';
+      pace?: string;
+      targetHr?: number;
     }[],
     exerciseNotes?: string,
     targetDate?: string,
@@ -151,8 +157,8 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
         weightKg: Number(s.weightKg) || 0,
         reps: Number(s.reps) || 0,
         tonnageKg: (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
-        rpe: typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8),
-        rir: typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2),
+        rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+        rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
         notes: s.notes || exerciseNotes || undefined,
         sessionId,
         sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
@@ -167,6 +173,25 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
     if (newEntries.length > 0 && onSaveLogs) {
       onSaveLogs(newEntries);
     }
+
+    handleUpdateExerciseInPlan({
+      ...activeDetailExercise,
+      plannedSets: sets.length,
+      defaultWeightKg: sets[0]?.weightKg ?? activeDetailExercise.defaultWeightKg,
+      plannedSetsDetails: sets.map((s, idx) => ({
+        setNumber: s.setNumber || idx + 1,
+        reps: s.reps,
+        weightKg: Number(s.weightKg) || 0,
+        weight: Number(s.weightKg) || 0,
+        rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
+        rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+        completed: Boolean(s.completed),
+        distance: s.distance,
+        distanceUnit: s.distanceUnit,
+        pace: s.pace,
+        targetHr: s.targetHr,
+      })),
+    });
   };
 
   const currentPhase = activeCycle.weeksList?.find((w) => w.week === currentWeek) || {

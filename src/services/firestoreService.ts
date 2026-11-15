@@ -392,11 +392,22 @@ export async function replaceCloudWithLocalData(
       getDocsFromServer(recoveryColRef).catch(() => getDocs(recoveryColRef)),
     ]);
 
-    const keepCycleIds = new Set((localData.cycles || []).map((c) => c.id));
+    const sanitizeDocId = (rawId: unknown, fallbackPrefix: string, idx: number): string => {
+      const cleaned = String(rawId || `${fallbackPrefix}-${idx}`).replace(/\//g, '_').trim();
+      return cleaned || `${fallbackPrefix}-${idx}`;
+    };
+
+    const keepCycleIds = new Set(
+      (localData.cycles || []).map((c, idx) => sanitizeDocId(c.id, 'cycle', idx))
+    );
     const deduplicatedLogs = sanitizeAndDeduplicateLogs(localData.logs || []);
-    const keepLogIds = new Set(deduplicatedLogs.map((l) => l.id));
+    const keepLogIds = new Set(
+      deduplicatedLogs.map((l, idx) => sanitizeDocId(l.id, 'log', idx))
+    );
     const recoveryList = localData.recovery || [];
-    const keepRecoveryIds = new Set(recoveryList.map((r) => r.date));
+    const keepRecoveryIds = new Set(
+      recoveryList.map((r, idx) => sanitizeDocId(r.date, 'rec', idx))
+    );
 
     const deleteRefs = [
       ...existingCyclesSnap.docs.filter((d) => !keepCycleIds.has(d.id)).map((d) => d.ref),
@@ -412,18 +423,22 @@ export async function replaceCloudWithLocalData(
     }
 
     // 2. Hard-write current cycles (full document overwrite, no merge)
-    for (const cycle of localData.cycles || []) {
-      const cleanCycle = JSON.parse(JSON.stringify({ ...cycle, lastUpdated: syncTimestamp }));
-      await setDoc(doc(db, 'users', userId, 'cycles', cycle.id), cleanCycle);
+    const cyclesListToWrite = localData.cycles || [];
+    for (let idx = 0; idx < cyclesListToWrite.length; idx++) {
+      const cycle = cyclesListToWrite[idx];
+      const safeCycleId = sanitizeDocId(cycle.id, 'cycle', idx);
+      const cleanCycle = JSON.parse(JSON.stringify({ ...cycle, id: safeCycleId, lastUpdated: syncTimestamp }));
+      await setDoc(doc(db, 'users', userId, 'cycles', safeCycleId), cleanCycle);
     }
 
     // 3. Hard-write current workout logs in chunks
     for (let i = 0; i < deduplicatedLogs.length; i += chunkSize) {
       const batch = writeBatch(db);
       const chunk = deduplicatedLogs.slice(i, i + chunkSize);
-      chunk.forEach((log: WorkoutLogEntry) => {
-        const logRef = doc(db, 'users', userId, 'workout_logs', log.id);
-        batch.set(logRef, JSON.parse(JSON.stringify(log)));
+      chunk.forEach((log: WorkoutLogEntry, idx: number) => {
+        const safeLogId = sanitizeDocId(log.id, 'log', i + idx);
+        const logRef = doc(db, 'users', userId, 'workout_logs', safeLogId);
+        batch.set(logRef, JSON.parse(JSON.stringify({ ...log, id: safeLogId })));
       });
       await batch.commit();
     }
@@ -432,8 +447,9 @@ export async function replaceCloudWithLocalData(
     for (let i = 0; i < recoveryList.length; i += chunkSize) {
       const batch = writeBatch(db);
       const chunk = recoveryList.slice(i, i + chunkSize);
-      chunk.forEach((rec: DailyRecoveryData) => {
-        const recRef = doc(db, 'users', userId, 'recovery', rec.date);
+      chunk.forEach((rec: DailyRecoveryData, idx: number) => {
+        const safeRecId = sanitizeDocId(rec.date, 'rec', i + idx);
+        const recRef = doc(db, 'users', userId, 'recovery', safeRecId);
         batch.set(recRef, JSON.parse(JSON.stringify(rec)));
       });
       await batch.commit();

@@ -629,6 +629,7 @@ export default function App() {
   // Modals & Drawers
   const [activeWorkoutDay, setActiveWorkoutDay] = useState<WorkoutDay | null>(null);
   const [isWorkoutMinimized, setIsWorkoutMinimized] = useState<boolean>(false);
+  const [isTrainingActive, setIsTrainingActive] = useState<boolean>(false);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [timerInitialSeconds, setTimerInitialSeconds] = useState(90);
@@ -1352,6 +1353,30 @@ export default function App() {
     }
   };
 
+  // Replace logs for a specific exercise, dayId, and dateStr (supports unchecking/deleting sets cleanly)
+  const handleReplaceExerciseDateLogs = (
+    dayId: string,
+    dateStr: string,
+    exerciseName: string,
+    newEntries: WorkoutLogEntry[]
+  ) => {
+    const normalizedEx = exerciseName.trim().toLowerCase();
+    const filtered = workoutLogs.filter((l) => {
+      const logDate = extractLogDate(l);
+      const logEx = (l.exerciseName || '').trim().toLowerCase();
+      return !(l.dayId === dayId && logDate === dateStr && logEx === normalizedEx);
+    });
+    const combined = newEntries.length > 0 ? [...filtered, ...newEntries] : filtered;
+    const updated = deduplicateWorkoutLogs(combined);
+    setWorkoutLogs(updated);
+    touchLocalLastUpdated();
+    try {
+      localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
   // Delete single workout log entry locally and bump lastUpdated
   const handleDeleteWorkoutLogEntry = (logId: string) => {
     const updated = workoutLogs.filter((l) => l.id !== logId);
@@ -1460,12 +1485,23 @@ export default function App() {
                 selectedDayId={selectedDayId}
                 onSelectDayId={setSelectedDayId}
                 onStartWorkout={(day) => {
-                  setActiveWorkoutDay(day);
-                  setIsWorkoutMinimized(false);
+                  if (activeWorkoutDay?.id === day.id && isTrainingActive) {
+                    setIsWorkoutMinimized(false);
+                  } else {
+                    setIsTrainingActive(false);
+                    setActiveWorkoutDay(day);
+                    setIsWorkoutMinimized(false);
+                  }
                 }}
                 activeOngoingWorkoutDay={activeWorkoutDay}
                 isWorkoutMinimized={isWorkoutMinimized}
+                isTrainingActive={isTrainingActive}
                 onMaximizeWorkout={() => setIsWorkoutMinimized(false)}
+                onCancelWorkout={() => {
+                  setIsTrainingActive(false);
+                  setActiveWorkoutDay(null);
+                  setIsWorkoutMinimized(false);
+                }}
                 onOpenSimulator={() => {
                   setActiveTab('more');
                   setMoreSubView('hyrox');
@@ -1477,6 +1513,7 @@ export default function App() {
                 onUpdateDay={handleUpdateDay}
                 workoutLogs={workoutLogs}
                 onSaveLogs={handleSaveLogs}
+                onReplaceExerciseDateLogs={handleReplaceExerciseDateLogs}
                 onWeekChange={handleWeekChange}
                 onOpenAddWeekModal={() => setIsAddWeekModalOpen(true)}
                 onDeleteWeek={handleDeleteWeek}
@@ -1576,11 +1613,13 @@ export default function App() {
               currentWeek={currentWeek}
               isOpen={!!activeWorkoutDay}
               onClose={() => {
+                setIsTrainingActive(false);
                 setActiveWorkoutDay(null);
                 setIsWorkoutMinimized(false);
               }}
               isMinimized={isWorkoutMinimized}
               onToggleMinimize={(min) => setIsWorkoutMinimized(min)}
+              onTrainingActiveChange={setIsTrainingActive}
               onSaveLogs={handleSaveLogs}
               onStartRestTimer={handleStartRestTimer}
               isSheetsConnected={!!spreadsheetId}

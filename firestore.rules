@@ -3,12 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny catch-all
+    // Domyślna blokada wszystkich innych ścieżek
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // Funkcje pomocnicze
     function isSignedIn() {
       return request.auth != null;
     }
@@ -17,32 +17,17 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    // Test connection document for initial boot verification
+    // Dokument testowy połączenia
     match /test/connection {
       allow read: if true;
     }
 
-    // User profile and subcollections
+    // Dokument użytkownika oraz wszystkie jego podkolekcje (cycles, workout_logs, recovery)
     match /users/{userId} {
-      allow get, write: if isOwner(userId) && isValidId(userId);
+      allow read, write: if isOwner(userId);
 
-      // Training Cycles subcollection
-      match /cycles/{cycleId} {
-        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(cycleId);
-      }
-
-      // Workout Logs subcollection
-      match /workout_logs/{logId} {
-        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(logId);
-      }
-
-      // Recovery entries subcollection
-      match /recovery/{recoveryId} {
-        allow read, write: if isOwner(userId) && isValidId(userId) && isValidId(recoveryId);
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
       }
     }
   }

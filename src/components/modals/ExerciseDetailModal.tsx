@@ -145,9 +145,75 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   // Helper to construct sets for selectedLogDate
   const buildInitialSets = (targetDate: string): ExerciseDetailSetItem[] => {
     const existing = getThisDayLogs(targetDate);
+    const existingBySetNum = new Map<number, WorkoutLogEntry>();
+    existing.forEach((l) => {
+      existingBySetNum.set(l.setNumber || 1, l);
+    });
+
+    // If plannedSetsDetails exists, always preserve every planned set (checked AND unchecked)
+    // and overlay any logged performance for targetDate by setNumber
+    if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
+      const mergedFromPlan: ExerciseDetailSetItem[] = exercise.plannedSetsDetails.map((s, idx) => {
+        const setNum = s.setNumber || idx + 1;
+        const logged = existingBySetNum.get(setNum);
+        if (logged) {
+          return {
+            setNumber: setNum,
+            weightKg: logged.weightKg,
+            reps: logged.reps,
+            rir: logged.rir !== undefined ? logged.rir : (s.rir ?? exercise.targetRIR ?? 2),
+            rpe: logged.rpe !== undefined ? logged.rpe : (s.rpe ?? exercise.targetRPE ?? 8),
+            completed: true,
+            unit: (logged.unit as ExerciseUnit) || exUnit,
+            notes: logged.notes || '',
+            distance: logged.targetDistance ?? s.distance ?? exercise.targetDistance ?? 800,
+            distanceUnit: (logged.distanceUnit || s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+            pace: logged.actualPace || logged.targetPace || s.pace || exercise.targetPace || '4:20',
+            targetHr: logged.actualHR || logged.targetHR || s.targetHr || s.targetHR || exercise.targetHR || 165,
+          };
+        }
+
+        const rawW = s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0;
+        const parsedW = typeof rawW === 'number' ? rawW : parseFloat(String(rawW).replace(',', '.')) || 0;
+        return {
+          setNumber: setNum,
+          weightKg: parsedW,
+          reps: typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps), 10) || 8,
+          rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+          rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+          completed: Boolean(s.completed || s.isCompleted),
+          unit: exUnit,
+          notes: '',
+          distance: s.distance ?? exercise.targetDistance ?? 800,
+          distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+          pace: s.pace || exercise.targetPace || '4:20',
+          targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
+        };
+      });
+
+      const planSetNumbers = new Set(mergedFromPlan.map((m) => m.setNumber));
+      const extraExisting = existing
+        .filter((l) => !planSetNumbers.has(l.setNumber))
+        .map((l) => ({
+          setNumber: l.setNumber,
+          weightKg: l.weightKg,
+          reps: l.reps,
+          rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
+          rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
+          completed: true,
+          unit: (l.unit as ExerciseUnit) || exUnit,
+          notes: l.notes || '',
+          distance: l.targetDistance ?? exercise.targetDistance ?? 800,
+          distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+          pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
+          targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
+        }));
+
+      return [...mergedFromPlan, ...extraExisting].sort((a, b) => a.setNumber - b.setNumber);
+    }
+
     if (existing.length > 0) {
-      // If this specific day was already logged on that date, load completed sets
-      return existing.map((l) => ({
+      const loggedItems: ExerciseDetailSetItem[] = existing.map((l) => ({
         setNumber: l.setNumber,
         weightKg: l.weightKg,
         reps: l.reps,
@@ -161,24 +227,26 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
         targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
       }));
-    }
 
-    // Load from plannedSetsDetails if defined
-    if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
-      return exercise.plannedSetsDetails.map((s, idx) => ({
-        setNumber: s.setNumber || idx + 1,
-        weightKg: Number(s.weightKg) || 0,
-        reps: typeof s.reps === 'number' ? s.reps : parseInt(String(s.reps), 10) || 8,
-        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
-        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
-        completed: false,
-        unit: exUnit,
-        notes: '',
-        distance: s.distance ?? exercise.targetDistance ?? 800,
-        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-        pace: s.pace || exercise.targetPace || '4:20',
-        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
-      }));
+      const plannedTotal = Math.max(exercise.plannedSets || 1, loggedItems.length);
+      const defaultReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+      for (let i = loggedItems.length + 1; i <= plannedTotal; i++) {
+        loggedItems.push({
+          setNumber: i,
+          weightKg: baseWeight,
+          reps: defaultReps,
+          rir: exercise.targetRIR ?? 2,
+          rpe: exercise.targetRPE || 8,
+          completed: false,
+          unit: exUnit,
+          notes: '',
+          distance: exercise.targetDistance ?? 800,
+          distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
+          pace: exercise.targetPace || '4:20',
+          targetHr: exercise.targetHR || 165,
+        });
+      }
+      return loggedItems;
     }
 
     // Fresh session: compute target weights with progression applied
@@ -324,7 +392,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
   const handleSavePerformance = (e: React.FormEvent) => {
     e.preventDefault();
-    const sanitizedSets = setsToLog.map((s) => {
+    const sanitizedSets = setsToLog.map((s, idx) => {
       const parsedWeight = typeof s.weightKg === 'string'
         ? parseFloat(s.weightKg.replace(',', '.'))
         : Number(s.weightKg);
@@ -346,17 +414,20 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
       return {
         ...s,
+        setNumber: idx + 1,
         weightKg: isNaN(parsedWeight) ? 0 : parsedWeight,
         reps: isNaN(parsedReps) || parsedReps < 1 ? 1 : parsedReps,
         rir: isNaN(parsedRir) ? 2 : parsedRir,
         rpe: isNaN(parsedRpe) ? 8 : parsedRpe,
+        completed: Boolean(s.completed),
         distance: isNaN(parsedDist) ? undefined : parsedDist,
         targetHr: isNaN(parsedHr) ? undefined : parsedHr,
       };
     });
 
+    setSetsToLog(sanitizedSets);
     onSaveExercisePerformance(sanitizedSets, exerciseNotes, selectedLogDate, exerciseRpe, exerciseRir);
-    setSaveSuccessMsg(`Zapisano wykonanie serii dla daty ${selectedLogDate}!`);
+    setSaveSuccessMsg(`Zapisano wszystkie serie (${sanitizedSets.length}) dla daty ${selectedLogDate}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
   };
 

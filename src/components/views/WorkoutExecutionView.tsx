@@ -23,7 +23,8 @@ import {
   Plus,
   ArrowUp,
   ArrowDown,
-  GripVertical
+  GripVertical,
+  X
 } from 'lucide-react';
 import {
   DndContext,
@@ -308,10 +309,18 @@ interface WorkoutExecutionViewProps {
   onReorderDays?: (reorderedDays: WorkoutDay[]) => void;
   workoutLogs: WorkoutLogEntry[];
   onSaveLogs?: (newEntries: WorkoutLogEntry[]) => void;
+  onReplaceExerciseDateLogs?: (
+    dayId: string,
+    dateStr: string,
+    exerciseName: string,
+    newEntries: WorkoutLogEntry[]
+  ) => void;
   onWeekChange: (week: number) => void;
   activeOngoingWorkoutDay?: WorkoutDay | null;
   isWorkoutMinimized?: boolean;
+  isTrainingActive?: boolean;
   onMaximizeWorkout?: () => void;
+  onCancelWorkout?: () => void;
   onOpenAddWeekModal?: () => void;
   onDeleteWeek?: (weekNumber: number) => void;
   onUpdatePhase?: (updatedPhase: MesocyclePhase) => void;
@@ -344,10 +353,13 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
   onReorderDays,
   workoutLogs = [],
   onSaveLogs,
+  onReplaceExerciseDateLogs,
   onWeekChange,
   activeOngoingWorkoutDay,
   isWorkoutMinimized,
+  isTrainingActive = false,
   onMaximizeWorkout,
+  onCancelWorkout,
   onOpenAddWeekModal,
   onDeleteWeek,
   onUpdatePhase,
@@ -615,25 +627,36 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         actualHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
       }));
 
-    if (newEntries.length > 0 && onSaveLogs) {
+    if (onReplaceExerciseDateLogs) {
+      onReplaceExerciseDateLogs(selectedDay.id, dateStr, activeDetailExercise.name, newEntries);
+    } else if (newEntries.length > 0 && onSaveLogs) {
       onSaveLogs(newEntries);
     }
 
-    // Also sync the updated sets into the exercise state for this day
-    const updatedPlannedDetails: ExercisePlannedSet[] = sets.map((s) => ({
-      setNumber: s.setNumber,
+    // Always preserve ALL sets visible in the modal (both checked and unchecked)
+    const updatedPlannedDetails: ExercisePlannedSet[] = sets.map((s, idx) => ({
+      setNumber: s.setNumber || idx + 1,
       reps: s.reps,
       weightKg: Number(s.weightKg) || 0,
+      weight: Number(s.weightKg) || 0,
       rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
       rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
+      completed: Boolean(s.completed),
       distance: s.distance,
       distanceUnit: s.distanceUnit,
       pace: s.pace,
       targetHr: s.targetHr,
     }));
+
+    const nextDefaultWeight =
+      sets.length > 0 && !isNaN(Number(sets[0].weightKg))
+        ? Number(sets[0].weightKg)
+        : activeDetailExercise.defaultWeightKg;
+
     handleUpdateExerciseInPlan({
       ...activeDetailExercise,
       plannedSets: sets.length,
+      defaultWeightKg: nextDefaultWeight,
       plannedSetsDetails: updatedPlannedDetails,
     });
   };
@@ -1123,17 +1146,34 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
 
             {/* PRIMARY ACTION BUTTON (Large touch target for gym usage) */}
             <div className="pt-2">
-              {activeOngoingWorkoutDay && isWorkoutMinimized ? (
-                <button
-                  onClick={() => {
-                    if (onMaximizeWorkout) onMaximizeWorkout();
-                  }}
-                  className="w-full py-4 px-6 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-amber-400/30 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98] ring-2 ring-amber-300 animate-pulse"
-                  aria-label="Wznów trwający trening"
-                >
-                  <Play className="w-5 h-5 fill-current stroke-[2.5]" />
-                  <span>Wznów Trening w Toku ({activeOngoingWorkoutDay.dayNamePolish || activeOngoingWorkoutDay.title})</span>
-                </button>
+              {activeOngoingWorkoutDay && isWorkoutMinimized && isTrainingActive ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (onMaximizeWorkout) onMaximizeWorkout();
+                    }}
+                    className="flex-1 py-4 px-6 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-base uppercase tracking-wider transition-all shadow-xl shadow-amber-400/30 flex items-center justify-center gap-3 cursor-pointer touch-manipulation min-h-[58px] active:scale-[0.98] ring-2 ring-amber-300 animate-pulse"
+                    aria-label="Wznów trwający trening"
+                  >
+                    <Play className="w-5 h-5 fill-current stroke-[2.5]" />
+                    <span>Wznów Trening w Toku ({activeOngoingWorkoutDay.dayNamePolish || activeOngoingWorkoutDay.title})</span>
+                  </button>
+                  {onCancelWorkout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Przerwać trwający trening bez zapisywania?')) {
+                          onCancelWorkout();
+                        }
+                      }}
+                      className="h-[58px] px-4 rounded-2xl bg-neutral-900 hover:bg-red-500/20 text-neutral-400 hover:text-red-400 border border-neutral-800 hover:border-red-500/40 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                      title="Przerwij trening bez zapisu"
+                      aria-label="Przerwij trening"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <>
                   {(selectedDay.type === 'FBW' || selectedDay.type === 'CUSTOM') && (
@@ -1261,73 +1301,81 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
                       targetHr?: number;
                     }[] = [];
 
-                    if (currentSessionLogs.length > 0) {
-                      detailedSets = currentSessionLogs.map((l) => ({
-                        setNumber: l.setNumber,
-                        reps: l.reps,
-                        weightKg: l.weightKg,
-                        rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
-                        rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
-                        completed: true,
-                        distance: l.targetDistance ?? exercise.targetDistance ?? 800,
-                        distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                        pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
-                        targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
-                      }));
+                    const sessionLogsBySet = new Map<number, WorkoutLogEntry>();
+                    currentSessionLogs.forEach((l) => {
+                      sessionLogsBySet.set(l.setNumber || 1, l);
+                    });
 
+                    if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0 && isTrainingActive) {
+                      detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => {
+                        const setNum = s.setNumber || idx + 1;
+                        const logged = sessionLogsBySet.get(setNum);
+                        return {
+                          setNumber: setNum,
+                          reps: logged ? logged.reps : (s.reps ?? 8),
+                          weightKg: logged ? logged.weightKg : (s.weightKg ?? 0),
+                          rir: logged?.rir ?? (s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2)),
+                          rpe: logged?.rpe ?? (s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8)),
+                          distance: logged?.targetDistance ?? s.distance ?? exercise.targetDistance ?? 800,
+                          distanceUnit: (logged?.distanceUnit || s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                          pace: logged?.actualPace || logged?.targetPace || s.pace || exercise.targetPace || '4:20',
+                          targetHr: logged?.actualHR || logged?.targetHR || s.targetHr || s.targetHR || exercise.targetHR || 165,
+                          completed: Boolean(logged || s.completed || s.isCompleted),
+                        };
+                      });
+                    } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
+                      detailedSets = exercise.plannedSetsDetails.map((s, idx) => {
+                        const setNum = s.setNumber || idx + 1;
+                        const logged = sessionLogsBySet.get(setNum);
+                        return {
+                          setNumber: setNum,
+                          reps: logged ? logged.reps : (s.reps ?? 8),
+                          weightKg: logged ? logged.weightKg : (parseFloat(String(s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0)) || 0),
+                          rir: logged?.rir ?? (s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2)),
+                          rpe: logged?.rpe ?? (s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8)),
+                          distance: logged?.targetDistance ?? s.distance ?? exercise.targetDistance ?? 800,
+                          distanceUnit: (logged?.distanceUnit || s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                          pace: logged?.actualPace || logged?.targetPace || s.pace || exercise.targetPace || '4:20',
+                          targetHr: logged?.actualHR || logged?.targetHR || s.targetHr || s.targetHR || exercise.targetHR || 165,
+                          completed: Boolean(logged || s.completed || s.isCompleted),
+                        };
+                      });
+                    } else if (currentSessionLogs.length > 0) {
                       const plannedTotal = Math.max(
                         exercise.plannedSets || 0,
-                        exercise.plannedSetsDetails?.length || 0,
-                        activeOngoingEx?.plannedSets || 0,
-                        activeOngoingEx?.plannedSetsDetails?.length || 0
+                        currentSessionLogs.reduce((max, l) => Math.max(max, l.setNumber || 1), 0)
                       );
-                      for (let i = detailedSets.length + 1; i <= plannedTotal; i++) {
-                        const plannedItem =
-                          exercise.plannedSetsDetails?.find((p) => p.setNumber === i) ||
-                          activeOngoingEx?.plannedSetsDetails?.find((p) => p.setNumber === i);
-                        const baseReps = (plannedItem && plannedItem.reps !== undefined)
-                          ? plannedItem.reps
-                          : parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
-                        const baseW = (plannedItem && plannedItem.weightKg !== undefined) ? plannedItem.weightKg : exercise.defaultWeightKg || 0;
-                        detailedSets.push({
-                          setNumber: i,
-                          reps: baseReps,
-                          weightKg: baseW,
-                          rir: plannedItem?.rir ?? exercise.targetRIR ?? 2,
-                          rpe: plannedItem?.rpe ?? exercise.targetRPE ?? 8,
-                          distance: plannedItem?.distance ?? exercise.targetDistance ?? 800,
-                          distanceUnit: (plannedItem?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                          pace: plannedItem?.pace || exercise.targetPace || '4:20',
-                          targetHr: plannedItem?.targetHr || plannedItem?.targetHR || exercise.targetHR || 165,
-                          completed: false,
-                        });
+                      for (let i = 1; i <= plannedTotal; i++) {
+                        const logged = sessionLogsBySet.get(i);
+                        if (logged) {
+                          detailedSets.push({
+                            setNumber: i,
+                            reps: logged.reps,
+                            weightKg: logged.weightKg,
+                            rir: logged.rir !== undefined ? logged.rir : (exercise.targetRIR ?? 2),
+                            rpe: logged.rpe !== undefined ? logged.rpe : (exercise.targetRPE || 8),
+                            completed: true,
+                            distance: logged.targetDistance ?? exercise.targetDistance ?? 800,
+                            distanceUnit: (logged.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+                            pace: logged.actualPace || logged.targetPace || exercise.targetPace || '4:20',
+                            targetHr: logged.actualHR || logged.targetHR || exercise.targetHR || 165,
+                          });
+                        } else {
+                          const baseReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+                          detailedSets.push({
+                            setNumber: i,
+                            reps: baseReps,
+                            weightKg: exercise.defaultWeightKg || 0,
+                            rir: exercise.targetRIR ?? 2,
+                            rpe: exercise.targetRPE ?? 8,
+                            distance: exercise.targetDistance ?? 800,
+                            distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
+                            pace: exercise.targetPace || '4:20',
+                            targetHr: exercise.targetHR || 165,
+                            completed: false,
+                          });
+                        }
                       }
-                    } else if (activeOngoingEx?.plannedSetsDetails && activeOngoingEx.plannedSetsDetails.length > 0) {
-                      detailedSets = activeOngoingEx.plannedSetsDetails.map((s, idx) => ({
-                        setNumber: s.setNumber || idx + 1,
-                        reps: s.reps ?? 8,
-                        weightKg: s.weightKg ?? 0,
-                        rir: s.rir !== undefined ? s.rir : (activeOngoingEx.targetRIR ?? 2),
-                        rpe: s.rpe !== undefined ? s.rpe : (activeOngoingEx.targetRPE || 8),
-                        distance: s.distance ?? exercise.targetDistance ?? 800,
-                        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                        pace: s.pace || exercise.targetPace || '4:20',
-                        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
-                        completed: false,
-                      }));
-                    } else if (exercise.plannedSetsDetails && exercise.plannedSetsDetails.length > 0) {
-                      detailedSets = exercise.plannedSetsDetails.map((s, idx) => ({
-                        setNumber: s.setNumber || idx + 1,
-                        reps: s.reps ?? 8,
-                        weightKg: parseFloat(String(s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0)) || 0,
-                        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
-                        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
-                        distance: s.distance ?? exercise.targetDistance ?? 800,
-                        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-                        pace: s.pace || exercise.targetPace || '4:20',
-                        targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
-                        completed: false,
-                      }));
                     } else {
                       const count = Math.max(exercise.plannedSets || 1, activeOngoingEx?.plannedSets || 1);
                       detailedSets = Array.from({ length: count }, (_, i) => {
