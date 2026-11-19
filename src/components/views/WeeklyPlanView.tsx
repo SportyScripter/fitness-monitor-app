@@ -131,6 +131,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
       distance?: number;
       distanceUnit?: 'm' | 'km';
       pace?: string;
+      speed?: number;
       targetHr?: number;
     }[],
     exerciseNotes?: string,
@@ -141,6 +142,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
     if (!selectedDay || !activeDetailExercise) return;
     const dateStr = targetDate || new Date().toISOString().split('T')[0];
     const sessionId = `manual-session-${dateStr}-${selectedDay.id}`;
+    const isExCardio = activeDetailExercise.category === 'cardio' || activeDetailExercise.exerciseType === 'RUNNING';
 
     const newEntries: WorkoutLogEntry[] = sets
       .filter((s) => s.completed)
@@ -156,18 +158,21 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
         setNumber: s.setNumber,
         weightKg: Number(s.weightKg) || 0,
         reps: Number(s.reps) || 0,
-        tonnageKg: (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
+        tonnageKg: isExCardio ? 0 : (Number(s.weightKg) || 0) * (Number(s.reps) || 0),
         rpe: typeof s.rpe === 'number' ? s.rpe : (typeof rpe === 'number' ? rpe : (activeDetailExercise.targetRPE || 8)),
         rir: typeof s.rir === 'number' ? s.rir : (typeof rir === 'number' ? rir : (activeDetailExercise.targetRIR ?? 2)),
         notes: s.notes || exerciseNotes || undefined,
         sessionId,
         sessionTitle: `${selectedDay.dayNamePolish ? selectedDay.dayNamePolish + ': ' : ''}${selectedDay.title}`,
-        activityType: 'STRENGTH',
-        unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || 'kg',
-        targetDistance: activeDetailExercise.targetDistance,
-        distanceUnit: activeDetailExercise.distanceUnit,
-        targetPace: activeDetailExercise.targetPace,
-        targetHR: activeDetailExercise.targetHR,
+        activityType: isExCardio ? 'RUNNING' : 'STRENGTH',
+        unit: (s.unit as ExerciseUnit) || activeDetailExercise.unit || (isExCardio ? 'm' : 'kg'),
+        targetDistance: isExCardio ? (s.distance || activeDetailExercise.targetDistance) : undefined,
+        distanceUnit: isExCardio ? (s.distanceUnit || activeDetailExercise.distanceUnit || 'm') : undefined,
+        targetPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
+        actualPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
+        speed: isExCardio ? s.speed : undefined,
+        targetHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
+        actualHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
       }));
 
     if (newEntries.length > 0 && onSaveLogs) {
@@ -189,6 +194,7 @@ export const WeeklyPlanView: React.FC<WeeklyPlanViewProps> = ({
         distance: s.distance,
         distanceUnit: s.distanceUnit,
         pace: s.pace,
+        speed: s.speed,
         targetHr: s.targetHr,
       })),
     });

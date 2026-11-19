@@ -93,6 +93,24 @@ export const getSetDistanceInMeters = (set: WorkoutLogEntry): number => {
   return 0;
 };
 
+// Helper to extract speed in km/h from log entry, falling back to pace if speed is absent
+export const getSetSpeedKmh = (set: WorkoutLogEntry): number => {
+  if (typeof set.speed === 'number' && Number.isFinite(set.speed) && set.speed > 0) {
+    return set.speed;
+  }
+  const rawSpeed = (set as any).speed;
+  if (rawSpeed !== undefined && rawSpeed !== null && String(rawSpeed).trim() !== '') {
+    const parsed = parseFloat(String(rawSpeed).replace(',', '.'));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  const rawPace = set.actualPace || set.targetPace || (set as any).pace;
+  const paceSec = parsePaceToSeconds(rawPace);
+  if (paceSec > 0) {
+    return 3600 / paceSec;
+  }
+  return 0;
+};
+
 export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
   exerciseName,
   workoutLogs,
@@ -102,7 +120,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
   exercise,
 }) => {
   const [strengthMetric, setStrengthMetric] = useState<'weight' | 'estimated1rm' | 'tonnage'>('weight');
-  const [cardioMetric, setCardioMetric] = useState<'distance' | 'pace' | 'hr'>('distance');
+  const [cardioMetric, setCardioMetric] = useState<'distance' | 'pace' | 'hr' | 'load'>('distance');
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
 
@@ -154,6 +172,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
     bestPaceSeconds: number;
     bestPaceFormatted: string;
     avgHr: number;
+    loadIndex: number;
   }
 
   const sessionHistory = useMemo(() => {
@@ -173,6 +192,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
           bestPaceSeconds: Infinity,
           bestPaceFormatted: '-',
           avgHr: 0,
+          loadIndex: 0,
         };
       }
       const session = sessionsMap[key];
@@ -189,7 +209,13 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
       }
 
       const distMeters = getSetDistanceInMeters(l);
-      session.totalDistanceKm += distMeters / 1000;
+      const distKm = distMeters / 1000;
+      session.totalDistanceKm += distKm;
+
+      const speedKmh = getSetSpeedKmh(l);
+      if (distKm > 0 && speedKmh > 0) {
+        session.loadIndex += distKm * speedKmh;
+      }
 
       const rawPace = l.actualPace || l.targetPace || (l as any).pace;
       const paceSec = parsePaceToSeconds(rawPace);
@@ -211,6 +237,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
           ...s,
           bestPaceSeconds: s.bestPaceSeconds === Infinity ? 0 : s.bestPaceSeconds,
           avgHr,
+          loadIndex: Math.round(s.loadIndex * 10) / 10,
         };
       })
       .sort((a, b) => new Date(a.dateStr).getTime() - new Date(b.dateStr).getTime());
@@ -257,8 +284,10 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
           value = Number(s.totalDistanceKm.toFixed(2));
         } else if (cardioMetric === 'pace') {
           value = s.bestPaceSeconds > 0 ? s.bestPaceSeconds : null;
-        } else {
+        } else if (cardioMetric === 'hr') {
           value = s.avgHr > 0 ? s.avgHr : null;
+        } else {
+          value = s.loadIndex > 0 ? s.loadIndex : null;
         }
       } else {
         if (strengthMetric === 'tonnage') value = Math.round(s.totalTonnage);
@@ -278,6 +307,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
         totalDistanceKm: Number(s.totalDistanceKm.toFixed(2)),
         bestPaceFormatted: s.bestPaceFormatted,
         avgHr: s.avgHr,
+        loadIndex: s.loadIndex,
       };
     });
   }, [sessionHistory, isCardio, cardioMetric, strengthMetric]);
@@ -289,7 +319,8 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
     if (isCardio) {
       if (cardioMetric === 'distance') return `${Number(latest).toFixed(1)} km`;
       if (cardioMetric === 'pace') return latest > 0 ? `${formatSecondsToPace(Number(latest))} min/km` : '-';
-      return latest > 0 ? `${Math.round(Number(latest))} bpm` : '-';
+      if (cardioMetric === 'hr') return latest > 0 ? `${Math.round(Number(latest))} bpm` : '-';
+      return latest > 0 ? `${Number(latest).toFixed(1)} pkt` : '-';
     }
     return `${Number(latest).toLocaleString()} kg`;
   }, [chartData, isCardio, cardioMetric]);
@@ -762,13 +793,17 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
           </div>
 
           {/* 2. CHART TOGGLES (PRZEŁĄCZNIKI WYKRESU) */}
-          <div className="flex items-center justify-between gap-2 shrink-0 bg-neutral-100 dark:bg-neutral-950 p-1 rounded-xl border border-neutral-200 dark:border-neutral-800">
+          <div
+            className={`shrink-0 bg-neutral-100 dark:bg-neutral-950 p-1 rounded-xl border border-neutral-200 dark:border-neutral-800 ${
+              isCardio ? 'grid grid-cols-2 sm:grid-cols-4 gap-1' : 'flex items-center justify-between gap-2'
+            }`}
+          >
             {isCardio ? (
               <>
                 <button
                   type="button"
                   onClick={() => setCardioMetric('distance')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     cardioMetric === 'distance'
                       ? 'bg-amber-400 text-black shadow font-black'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
@@ -779,7 +814,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCardioMetric('pace')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     cardioMetric === 'pace'
                       ? 'bg-amber-400 text-black shadow font-black'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
@@ -790,13 +825,24 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCardioMetric('hr')}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                     cardioMetric === 'hr'
                       ? 'bg-amber-400 text-black shadow font-black'
                       : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
                   }`}
                 >
                   Średnie HR (bpm)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCardioMetric('load')}
+                  className={`py-1.5 px-2 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
+                    cardioMetric === 'load'
+                      ? 'bg-amber-400 text-black shadow font-black'
+                      : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+                  }`}
+                >
+                  Obciążenie (Indeks)
                 </button>
               </>
             ) : (
@@ -973,7 +1019,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                           tickFormatter={(val) => {
                             if (!Number.isFinite(val)) return '';
                             if (isPaceMetric) return formatSecondsToPace(Math.round(Number(val)));
-                            if (isCardio && cardioMetric === 'distance') {
+                            if (isCardio && (cardioMetric === 'distance' || cardioMetric === 'load')) {
                               return `${Math.round(Number(val) * 10) / 10}`;
                             }
                             return `${Math.round(Number(val))}`;
@@ -999,11 +1045,16 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                                   d.value !== null && d.value > 0
                                     ? `Najlepsze Tempo: ${formatSecondsToPace(Number(d.value))} min/km`
                                     : 'Tempo: -';
-                              } else {
+                              } else if (cardioMetric === 'hr') {
                                 metricLabel =
                                   d.value !== null && d.value > 0
                                     ? `Średnie HR: ${Math.round(Number(d.value))} bpm`
                                     : 'Tętno: -';
+                              } else {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Obciążenie: ${Number(d.value).toFixed(1)} pkt`
+                                    : 'Obciążenie: -';
                               }
                             } else {
                               if (strengthMetric === 'tonnage') {
@@ -1064,7 +1115,7 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                           tickFormatter={(val) => {
                             if (!Number.isFinite(val)) return '';
                             if (isPaceMetric) return formatSecondsToPace(Math.round(Number(val)));
-                            if (isCardio && cardioMetric === 'distance') {
+                            if (isCardio && (cardioMetric === 'distance' || cardioMetric === 'load')) {
                               return `${Math.round(Number(val) * 10) / 10}`;
                             }
                             return `${Math.round(Number(val))}`;
@@ -1091,11 +1142,16 @@ export const ExerciseChartModal: React.FC<ExerciseChartModalProps> = ({
                                   d.value !== null && d.value > 0
                                     ? `Najlepsze Tempo: ${formatSecondsToPace(Number(d.value))} min/km`
                                     : 'Tempo: -';
-                              } else {
+                              } else if (cardioMetric === 'hr') {
                                 metricLabel =
                                   d.value !== null && d.value > 0
                                     ? `Średnie HR: ${Math.round(Number(d.value))} bpm`
                                     : 'Tętno: -';
+                              } else {
+                                metricLabel =
+                                  d.value !== null && d.value > 0
+                                    ? `Obciążenie: ${Number(d.value).toFixed(1)} pkt`
+                                    : 'Obciążenie: -';
                               }
                             } else {
                               if (strengthMetric === 'tonnage') {

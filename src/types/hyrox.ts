@@ -71,6 +71,7 @@ export interface ExerciseSet {
   targetPace?: string;
   pace?: string;
   actualPace?: string;
+  speed?: number;
   targetHR?: number;
   targetHr?: number;
   actualHR?: number;
@@ -90,6 +91,7 @@ export interface ExercisePlannedSet {
   distance?: number;
   distanceUnit?: 'km' | 'm';
   pace?: string;
+  speed?: number;
   targetHr?: number;
   targetHR?: number;
 }
@@ -285,6 +287,7 @@ export interface WorkoutLogEntry {
   distanceUnit?: 'km' | 'm';
   targetPace?: string;
   actualPace?: string;
+  speed?: number;
   targetHR?: number;
   actualHR?: number;
   totalWorkoutDurationSec?: number;

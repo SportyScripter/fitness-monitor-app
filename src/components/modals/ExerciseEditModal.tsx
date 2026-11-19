@@ -25,6 +25,7 @@ import {
   normalizeMuscleGroup
 } from '../../types/hyrox';
 import { EXERCISE_CATALOG, CatalogExerciseItem } from '../../data/exerciseCatalog';
+import { formatSpeedForInput, paceToSpeed, speedToPace } from '../../utils/runningUtils';
 
 interface ExerciseEditModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export interface FormPlannedSet {
   distance: string;
   distanceUnit: 'm' | 'km';
   pace: string;
+  speed: string;
   targetHr: string;
 }
 
@@ -76,6 +78,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       distance: '800',
       distanceUnit: 'm',
       pace: '4:20',
+      speed: formatSpeedForInput(undefined, '4:20'),
       targetHr: '165',
     },
   ]);
@@ -123,21 +126,26 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       // Populate sets from plannedSetsDetails or fallback to plannedSets
       if (exerciseToEdit.plannedSetsDetails && exerciseToEdit.plannedSetsDetails.length > 0) {
         setSets(
-          exerciseToEdit.plannedSetsDetails.map((s, idx) => ({
-            setNumber: idx + 1,
-            reps: String(s.reps ?? '8'),
-            weightKg: String(s.weightKg ?? '0'),
-            rir: String(s.rir ?? '2'),
-            rpe: String(s.rpe ?? '8'),
-            distance: String(s.distance ?? exerciseToEdit.targetDistance ?? '800'),
-            distanceUnit: (s.distanceUnit || exerciseToEdit.distanceUnit || 'm') as 'm' | 'km',
-            pace: String(s.pace ?? exerciseToEdit.targetPace ?? '4:20'),
-            targetHr: String(s.targetHr ?? s.targetHR ?? exerciseToEdit.targetHR ?? '165'),
-          }))
+          exerciseToEdit.plannedSetsDetails.map((s, idx) => {
+            const paceVal = String(s.pace ?? exerciseToEdit.targetPace ?? '4:20');
+            return {
+              setNumber: idx + 1,
+              reps: String(s.reps ?? '8'),
+              weightKg: String(s.weightKg ?? '0'),
+              rir: String(s.rir ?? '2'),
+              rpe: String(s.rpe ?? '8'),
+              distance: String(s.distance ?? exerciseToEdit.targetDistance ?? '800'),
+              distanceUnit: (s.distanceUnit || exerciseToEdit.distanceUnit || 'm') as 'm' | 'km',
+              pace: paceVal,
+              speed: formatSpeedForInput(s.speed, paceVal),
+              targetHr: String(s.targetHr ?? s.targetHR ?? exerciseToEdit.targetHR ?? '165'),
+            };
+          })
         );
       } else {
         const count = exerciseToEdit.plannedSets || 1;
         const defaultReps = parseInt(String(exerciseToEdit.targetRepsRange).split('-')[0]) || 8;
+        const defaultPace = exerciseToEdit.targetPace || '4:20';
         const initialSets: FormPlannedSet[] = Array.from({ length: count }, (_, i) => ({
           setNumber: i + 1,
           reps: String(defaultReps),
@@ -146,7 +154,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
           rpe: String(exerciseToEdit.targetRPE || 8),
           distance: String(exerciseToEdit.targetDistance || '800'),
           distanceUnit: (exerciseToEdit.distanceUnit || 'm') as 'm' | 'km',
-          pace: exerciseToEdit.targetPace || '4:20',
+          pace: defaultPace,
+          speed: formatSpeedForInput(undefined, defaultPace),
           targetHr: String(exerciseToEdit.targetHR || '165'),
         }));
         setSets(initialSets);
@@ -186,6 +195,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
           distance: '800',
           distanceUnit: 'm',
           pace: '4:20',
+          speed: formatSpeedForInput(undefined, '4:20'),
           targetHr: '165',
         },
       ]);
@@ -213,14 +223,18 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         setName(runningType);
       }
       setSets((prev) =>
-        prev.map((s, idx) => ({
-          ...s,
-          setNumber: idx + 1,
-          distance: s.distance || '800',
-          distanceUnit: s.distanceUnit || 'm',
-          pace: s.pace || '4:20',
-          targetHr: s.targetHr || '165',
-        }))
+        prev.map((s, idx) => {
+          const paceVal = s.pace || '4:20';
+          return {
+            ...s,
+            setNumber: idx + 1,
+            distance: s.distance || '800',
+            distanceUnit: s.distanceUnit || 'm',
+            pace: paceVal,
+            speed: formatSpeedForInput(s.speed, paceVal),
+            targetHr: s.targetHr || '165',
+          };
+        })
       );
     } else {
       setExerciseType('STRENGTH');
@@ -277,6 +291,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     setTempo(catItem.techniqueNotes.includes('tempo') ? '3-0-1-0' : '');
 
     const initialReps = parseInt(String(catItem.defaultReps).split('-')[0]) || 8;
+    const catPace = catItem.pace || '4:20';
     const newSets: FormPlannedSet[] = [
       {
         setNumber: 1,
@@ -286,7 +301,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         rpe: String(catItem.defaultRPE || 8),
         distance: String(catItem.distance || 800),
         distanceUnit: catItem.distanceUnit || 'm',
-        pace: catItem.pace || '4:20',
+        pace: catPace,
+        speed: formatSpeedForInput(undefined, catPace),
         targetHr: String(catItem.targetHr || 165),
       },
     ];
@@ -300,6 +316,7 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   const handleAddSet = () => {
     setSets((prev) => {
       const last = prev[prev.length - 1];
+      const nextPace = last ? last.pace : '4:20';
       const newSet: FormPlannedSet = {
         setNumber: prev.length + 1,
         reps: last ? last.reps : '8',
@@ -308,7 +325,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
         rpe: last ? last.rpe : '8',
         distance: last ? last.distance : '800',
         distanceUnit: last ? last.distanceUnit : 'm',
-        pace: last ? last.pace : '4:20',
+        pace: nextPace,
+        speed: last ? last.speed : formatSpeedForInput(undefined, nextPace),
         targetHr: last ? last.targetHr : '165',
       };
       return [...prev, newSet];
@@ -324,10 +342,24 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
   };
 
   const handleUpdateSet = (index: number, field: keyof FormPlannedSet, val: string) => {
-    if (field === 'pace' || field === 'distanceUnit') {
+    if (field === 'pace') {
       setSets((prev) => {
         const next = [...prev];
-        next[index] = { ...next[index], [field]: val };
+        const computedSpeed = paceToSpeed(val);
+        next[index] = {
+          ...next[index],
+          pace: val,
+          ...(computedSpeed !== null ? { speed: String(computedSpeed) } : {}),
+        };
+        return next;
+      });
+      return;
+    }
+
+    if (field === 'distanceUnit') {
+      setSets((prev) => {
+        const next = [...prev];
+        next[index] = { ...next[index], distanceUnit: val as 'm' | 'km' };
         return next;
       });
       return;
@@ -337,7 +369,16 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
     if (normalized === '' || /^[0-9]*\.?[0-9]*$/.test(normalized)) {
       setSets((prev) => {
         const next = [...prev];
-        next[index] = { ...next[index], [field]: normalized };
+        if (field === 'speed') {
+          const computedPace = speedToPace(normalized);
+          next[index] = {
+            ...next[index],
+            speed: normalized,
+            ...(computedPace !== null ? { pace: computedPace } : {}),
+          };
+        } else {
+          next[index] = { ...next[index], [field]: normalized };
+        }
         return next;
       });
     }
@@ -357,6 +398,13 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
       const plannedSetsDetails: ExercisePlannedSet[] = sets.map((s, idx) => {
         const parsedDist = parseFloat(s.distance.replace(',', '.'));
         const parsedHR = parseInt(s.targetHr, 10);
+        const parsedSpeed = parseFloat(s.speed.replace(',', '.'));
+        const finalPace = s.pace.trim() || '4:20';
+        const derivedSpeed = paceToSpeed(finalPace, true);
+        const finalSpeed =
+          !isNaN(parsedSpeed) && parsedSpeed > 0
+            ? Math.round(parsedSpeed * 10) / 10
+            : derivedSpeed ?? undefined;
         return {
           setNumber: idx + 1,
           reps: 1,
@@ -365,7 +413,8 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
           rpe: 8,
           distance: !isNaN(parsedDist) ? parsedDist : 800,
           distanceUnit: s.distanceUnit || 'm',
-          pace: s.pace.trim() || '4:20',
+          pace: finalPace,
+          speed: finalSpeed,
           targetHr: !isNaN(parsedHR) ? parsedHR : undefined,
           targetHR: !isNaN(parsedHR) ? parsedHR : undefined,
         };
@@ -813,95 +862,116 @@ export const ExerciseEditModal: React.FC<ExerciseEditModalProps> = ({
               </div>
             </div>
           ) : (
-            /* CARDIO / BIEG: Kolumny Dystans (input + select m/km), Tempo docelowe (input tekstowy), Docelowe HR (input bpm) */
+            /* CARDIO / BIEG: Kolumny Dystans (input + select m/km), Tempo docelowe, Prędkość (km/h), Docelowe HR (bpm) */
             <div className="p-3.5 sm:p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-900">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-900 flex-wrap gap-1">
                 <span className="text-xs font-black uppercase text-amber-400 tracking-wider font-heading">
                   Zaplanowane Odcinki / Serie Biegowe ({sets.length})
                 </span>
                 <span className="text-[11px] text-neutral-400">
-                  Dystans, tempo docelowe i HR dla każdego odcinka
+                  Dystans, tempo, prędkość (km/h) i HR
                 </span>
               </div>
 
-              <div className="space-y-2">
-                {/* Header row */}
-                <div className="grid grid-cols-12 gap-1.5 text-[10px] uppercase font-bold text-neutral-400 px-1">
-                  <div className="col-span-2">Seria</div>
-                  <div className="col-span-4">Dystans</div>
-                  <div className="col-span-3">Tempo docelowe</div>
-                  <div className="col-span-2">Docelowe HR</div>
-                  <div className="col-span-1 text-right"></div>
-                </div>
-
-                {sets.map((set, idx) => (
-                  <div
-                    key={idx}
-                    className="grid grid-cols-12 gap-1.5 items-center p-1.5 rounded-xl bg-neutral-900 border border-neutral-800"
-                  >
-                    <div className="col-span-2 font-black text-amber-400 text-xs px-1">
-                      #{set.setNumber}
-                    </div>
-
-                    {/* Dystans: numeric input + select m/km */}
-                    <div className="col-span-4 flex items-center gap-1">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*[.,]?[0-9]*"
-                        value={set.distance}
-                        onChange={(e) => handleUpdateSet(idx, 'distance', e.target.value)}
-                        className="w-24 min-w-[80px] bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        placeholder="np. 800"
-                      />
-                      <select
-                        value={set.distanceUnit}
-                        onChange={(e) => handleUpdateSet(idx, 'distanceUnit', e.target.value)}
-                        className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 shrink-0"
-                      >
-                        <option value="m">m</option>
-                        <option value="km">km</option>
-                      </select>
-                    </div>
-
-                    {/* Tempo docelowe: text input (np. 4:20) */}
-                    <div className="col-span-3">
-                      <input
-                        type="text"
-                        value={set.pace}
-                        onChange={(e) => handleUpdateSet(idx, 'pace', e.target.value)}
-                        placeholder="np. 4:20"
-                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                      />
-                    </div>
-
-                    {/* Docelowe HR: numeric input */}
-                    <div className="col-span-2">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        pattern="[0-9]*"
-                        value={set.targetHr}
-                        onChange={(e) => handleUpdateSet(idx, 'targetHr', e.target.value)}
-                        placeholder="bpm"
-                        className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
-                      />
-                    </div>
-
-                    {/* Delete row */}
-                    <div className="col-span-1 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSet(idx)}
-                        disabled={sets.length <= 1}
-                        className="p-1 rounded text-neutral-500 hover:text-red-400 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                        title="Usuń odcinek"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mx-auto" />
-                      </button>
-                    </div>
+              <div className="w-full overflow-x-auto">
+                <div className="space-y-2 min-w-[540px]">
+                  {/* Header row */}
+                  <div className="grid grid-cols-12 gap-1.5 text-[10px] uppercase font-bold text-neutral-400 px-1">
+                    <div className="col-span-1">Seria</div>
+                    <div className="col-span-4">Dystans</div>
+                    <div className="col-span-2 text-center">Tempo docelowe</div>
+                    <div className="col-span-2 text-center">Prędkość (km/h)</div>
+                    <div className="col-span-2 text-center">Docelowe HR</div>
+                    <div className="col-span-1 text-right"></div>
                   </div>
-                ))}
+
+                  {sets.map((set, idx) => (
+                    <div
+                      key={idx}
+                      className="grid grid-cols-12 gap-1.5 items-center p-1.5 rounded-xl bg-neutral-900 border border-neutral-800"
+                    >
+                      <div className="col-span-1 font-black text-amber-400 text-xs px-1">
+                        #{set.setNumber}
+                      </div>
+
+                      {/* Dystans: numeric input + select m/km */}
+                      <div className="col-span-4 flex items-center gap-1">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*[.,]?[0-9]*"
+                          value={set.distance}
+                          onChange={(e) => handleUpdateSet(idx, 'distance', e.target.value)}
+                          className="w-24 min-w-[80px] bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          placeholder="np. 800"
+                        />
+                        <select
+                          value={set.distanceUnit}
+                          onChange={(e) => handleUpdateSet(idx, 'distanceUnit', e.target.value)}
+                          className="bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 shrink-0"
+                        >
+                          <option value="m">m</option>
+                          <option value="km">km</option>
+                        </select>
+                      </div>
+
+                      {/* Tempo docelowe: text input (np. 4:20) */}
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          value={set.pace}
+                          onChange={(e) => handleUpdateSet(idx, 'pace', e.target.value)}
+                          placeholder="np. 4:20"
+                          className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                        />
+                      </div>
+
+                      {/* Prędkość (km/h): numeric input with bidirectional sync */}
+                      <div className="col-span-2">
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            pattern="[0-9]*[.,]?[0-9]*"
+                            value={set.speed}
+                            onChange={(e) => handleUpdateSet(idx, 'speed', e.target.value)}
+                            placeholder="13.8"
+                            className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg pl-1.5 pr-8 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <span className="pointer-events-none absolute right-1 text-[8px] font-sans font-bold text-neutral-400">
+                            km/h
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Docelowe HR: numeric input */}
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*"
+                          value={set.targetHr}
+                          onChange={(e) => handleUpdateSet(idx, 'targetHr', e.target.value)}
+                          placeholder="bpm"
+                          className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-1.5 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
+                        />
+                      </div>
+
+                      {/* Delete row */}
+                      <div className="col-span-1 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSet(idx)}
+                          disabled={sets.length <= 1}
+                          className="p-1 rounded text-neutral-500 hover:text-red-400 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                          title="Usuń odcinek"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mx-auto" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* "+ Dodaj odcinek / serię" Button */}

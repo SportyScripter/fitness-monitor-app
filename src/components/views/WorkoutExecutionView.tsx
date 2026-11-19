@@ -649,6 +649,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
       distance?: number;
       distanceUnit?: 'm' | 'km';
       pace?: string;
+      speed?: number;
       targetHr?: number;
     }[],
     exerciseNotes?: string,
@@ -687,6 +688,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         distanceUnit: isExCardio ? (s.distanceUnit || activeDetailExercise.distanceUnit || 'm') : undefined,
         targetPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
         actualPace: isExCardio ? (s.pace || activeDetailExercise.targetPace) : undefined,
+        speed: isExCardio ? s.speed : undefined,
         targetHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
         actualHR: isExCardio ? (s.targetHr || activeDetailExercise.targetHR) : undefined,
       }));
@@ -709,6 +711,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
       distance: s.distance,
       distanceUnit: s.distanceUnit,
       pace: s.pace,
+      speed: s.speed,
       targetHr: s.targetHr,
     }));
 

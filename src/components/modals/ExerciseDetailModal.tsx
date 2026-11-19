@@ -22,6 +22,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Exercise, WorkoutDay, WorkoutLogEntry, ExerciseSet, ExerciseUnit } from '../../types/hyrox';
+import { formatSpeedForInput, paceToSpeed, speedToPace } from '../../utils/runningUtils';
 
 interface ExerciseDetailModalProps {
   exercise: Exercise;
@@ -44,6 +45,7 @@ interface ExerciseDetailModalProps {
       distance?: number;
       distanceUnit?: 'm' | 'km';
       pace?: string;
+      speed?: number;
       targetHr?: number;
     }[],
     exerciseNotes?: string,
@@ -66,6 +68,7 @@ export interface ExerciseDetailSetItem {
   distance?: number | string;
   distanceUnit?: 'm' | 'km';
   pace?: string;
+  speed?: number | string;
   targetHr?: number | string;
 }
 
@@ -157,6 +160,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         const setNum = s.setNumber || idx + 1;
         const logged = existingBySetNum.get(setNum);
         if (logged) {
+          const paceVal = logged.actualPace || logged.targetPace || s.pace || exercise.targetPace || '4:20';
           return {
             setNumber: setNum,
             weightKg: logged.weightKg,
@@ -168,13 +172,15 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
             notes: logged.notes || '',
             distance: logged.targetDistance ?? s.distance ?? exercise.targetDistance ?? 800,
             distanceUnit: (logged.distanceUnit || s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-            pace: logged.actualPace || logged.targetPace || s.pace || exercise.targetPace || '4:20',
+            pace: paceVal,
+            speed: formatSpeedForInput(logged.speed ?? s.speed, paceVal),
             targetHr: logged.actualHR || logged.targetHR || s.targetHr || s.targetHR || exercise.targetHR || 165,
           };
         }
 
         const rawW = s.weightKg ?? s.weight ?? exercise.defaultWeightKg ?? 0;
         const parsedW = typeof rawW === 'number' ? rawW : parseFloat(String(rawW).replace(',', '.')) || 0;
+        const planPace = s.pace || exercise.targetPace || '4:20';
         return {
           setNumber: setNum,
           weightKg: parsedW,
@@ -186,7 +192,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           notes: '',
           distance: s.distance ?? exercise.targetDistance ?? 800,
           distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-          pace: s.pace || exercise.targetPace || '4:20',
+          pace: planPace,
+          speed: formatSpeedForInput(s.speed, planPace),
           targetHr: s.targetHr || s.targetHR || exercise.targetHR || 165,
         };
       });
@@ -194,7 +201,32 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       const planSetNumbers = new Set(mergedFromPlan.map((m) => m.setNumber));
       const extraExisting = existing
         .filter((l) => !planSetNumbers.has(l.setNumber))
-        .map((l) => ({
+        .map((l) => {
+          const paceVal = l.actualPace || l.targetPace || exercise.targetPace || '4:20';
+          return {
+            setNumber: l.setNumber,
+            weightKg: l.weightKg,
+            reps: l.reps,
+            rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
+            rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
+            completed: true,
+            unit: (l.unit as ExerciseUnit) || exUnit,
+            notes: l.notes || '',
+            distance: l.targetDistance ?? exercise.targetDistance ?? 800,
+            distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+            pace: paceVal,
+            speed: formatSpeedForInput(l.speed, paceVal),
+            targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
+          };
+        });
+
+      return [...mergedFromPlan, ...extraExisting].sort((a, b) => a.setNumber - b.setNumber);
+    }
+
+    if (existing.length > 0) {
+      const loggedItems: ExerciseDetailSetItem[] = existing.map((l) => {
+        const paceVal = l.actualPace || l.targetPace || exercise.targetPace || '4:20';
+        return {
           setNumber: l.setNumber,
           weightKg: l.weightKg,
           reps: l.reps,
@@ -205,31 +237,15 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           notes: l.notes || '',
           distance: l.targetDistance ?? exercise.targetDistance ?? 800,
           distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-          pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
+          pace: paceVal,
+          speed: formatSpeedForInput(l.speed, paceVal),
           targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
-        }));
-
-      return [...mergedFromPlan, ...extraExisting].sort((a, b) => a.setNumber - b.setNumber);
-    }
-
-    if (existing.length > 0) {
-      const loggedItems: ExerciseDetailSetItem[] = existing.map((l) => ({
-        setNumber: l.setNumber,
-        weightKg: l.weightKg,
-        reps: l.reps,
-        rir: l.rir !== undefined ? l.rir : (exercise.targetRIR ?? 2),
-        rpe: l.rpe !== undefined ? l.rpe : (exercise.targetRPE || 8),
-        completed: true,
-        unit: (l.unit as ExerciseUnit) || exUnit,
-        notes: l.notes || '',
-        distance: l.targetDistance ?? exercise.targetDistance ?? 800,
-        distanceUnit: (l.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-        pace: l.actualPace || l.targetPace || exercise.targetPace || '4:20',
-        targetHr: l.actualHR || l.targetHR || exercise.targetHR || 165,
-      }));
+        };
+      });
 
       const plannedTotal = Math.max(exercise.plannedSets || 1, loggedItems.length);
       const defaultReps = parseInt(String(exercise.targetRepsRange || '8').split('-')[0]) || 8;
+      const defaultPace = exercise.targetPace || '4:20';
       for (let i = loggedItems.length + 1; i <= plannedTotal; i++) {
         loggedItems.push({
           setNumber: i,
@@ -242,7 +258,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           notes: '',
           distance: exercise.targetDistance ?? 800,
           distanceUnit: (exercise.distanceUnit || 'm') as 'm' | 'km',
-          pace: exercise.targetPace || '4:20',
+          pace: defaultPace,
+          speed: formatSpeedForInput(undefined, defaultPace),
           targetHr: exercise.targetHR || 165,
         });
       }
@@ -267,6 +284,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       const setReps = prevSet?.reps || defaultReps;
       const setRir = prevSet?.rir !== undefined ? prevSet.rir : (exercise.targetRIR ?? 2);
       const setRpe = prevSet?.rpe !== undefined ? prevSet.rpe : (exercise.targetRPE || 8);
+      const paceVal = prevSet?.actualPace || prevSet?.targetPace || exercise.targetPace || '4:20';
 
       return {
         setNumber: i + 1,
@@ -279,7 +297,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         notes: '',
         distance: prevSet?.targetDistance ?? exercise.targetDistance ?? 800,
         distanceUnit: (prevSet?.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-        pace: prevSet?.actualPace || prevSet?.targetPace || exercise.targetPace || '4:20',
+        pace: paceVal,
+        speed: formatSpeedForInput(prevSet?.speed, paceVal),
         targetHr: prevSet?.actualHR || prevSet?.targetHR || exercise.targetHR || 165,
       };
     });
@@ -322,7 +341,21 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const updateSetField = (index: number, field: keyof ExerciseDetailSetItem, val: any) => {
     setSetsToLog((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], [field]: val };
+      const current = { ...next[index], [field]: val };
+
+      if (field === 'pace') {
+        const computedSpeed = paceToSpeed(String(val));
+        if (computedSpeed !== null) {
+          current.speed = String(computedSpeed);
+        }
+      } else if (field === 'speed') {
+        const computedPace = speedToPace(val);
+        if (computedPace !== null) {
+          current.pace = computedPace;
+        }
+      }
+
+      next[index] = current;
       return next;
     });
   };
@@ -338,6 +371,7 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const addSet = () => {
     setSetsToLog((prev) => {
       const last = prev[prev.length - 1];
+      const nextPace = last?.pace ?? exercise.targetPace ?? '4:20';
       return [
         ...prev,
         {
@@ -351,7 +385,8 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
           notes: '',
           distance: last?.distance ?? exercise.targetDistance ?? 800,
           distanceUnit: (last?.distanceUnit ?? exercise.distanceUnit ?? 'm') as 'm' | 'km',
-          pace: last?.pace ?? exercise.targetPace ?? '4:20',
+          pace: nextPace,
+          speed: formatSpeedForInput(last?.speed, nextPace),
           targetHr: last?.targetHr ?? exercise.targetHR ?? 165,
         },
       ];
@@ -370,20 +405,24 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
   const handleCopyPastSetsToCurrent = (pastSets: WorkoutLogEntry[]) => {
     if (!pastSets || pastSets.length === 0) return;
     setSetsToLog(
-      pastSets.map((s, idx) => ({
-        setNumber: idx + 1,
-        weightKg: s.weightKg,
-        reps: s.reps,
-        rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
-        rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
-        completed: true,
-        unit: s.unit || exUnit,
-        notes: s.notes,
-        distance: s.targetDistance ?? exercise.targetDistance ?? 800,
-        distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
-        pace: s.actualPace || s.targetPace || exercise.targetPace || '4:20',
-        targetHr: s.actualHR || s.targetHR || exercise.targetHR || 165,
-      }))
+      pastSets.map((s, idx) => {
+        const paceVal = s.actualPace || s.targetPace || exercise.targetPace || '4:20';
+        return {
+          setNumber: idx + 1,
+          weightKg: s.weightKg,
+          reps: s.reps,
+          rir: s.rir !== undefined ? s.rir : (exercise.targetRIR ?? 2),
+          rpe: s.rpe !== undefined ? s.rpe : (exercise.targetRPE || 8),
+          completed: true,
+          unit: s.unit || exUnit,
+          notes: s.notes,
+          distance: s.targetDistance ?? exercise.targetDistance ?? 800,
+          distanceUnit: (s.distanceUnit || exercise.distanceUnit || 'm') as 'm' | 'km',
+          pace: paceVal,
+          speed: formatSpeedForInput(s.speed, paceVal),
+          targetHr: s.actualHR || s.targetHR || exercise.targetHR || 165,
+        };
+      })
     );
     setActiveTab('log');
     setSaveSuccessMsg(`Skopiowano ${pastSets.length} serii z poprzedniego treningu!`);
@@ -411,6 +450,15 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
       const parsedHr = typeof s.targetHr === 'string'
         ? parseInt(s.targetHr, 10)
         : Number(s.targetHr);
+      const rawSpeed =
+        s.speed !== undefined && s.speed !== null && String(s.speed).trim() !== ''
+          ? parseFloat(String(s.speed).replace(',', '.'))
+          : NaN;
+      const derivedSpeed = paceToSpeed(s.pace, true);
+      const finalSpeed =
+        !isNaN(rawSpeed) && rawSpeed > 0
+          ? Math.round(rawSpeed * 10) / 10
+          : derivedSpeed ?? undefined;
 
       return {
         ...s,
@@ -421,11 +469,17 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
         rpe: isNaN(parsedRpe) ? 8 : parsedRpe,
         completed: Boolean(s.completed),
         distance: isNaN(parsedDist) ? undefined : parsedDist,
+        speed: finalSpeed,
         targetHr: isNaN(parsedHr) ? undefined : parsedHr,
       };
     });
 
-    setSetsToLog(sanitizedSets);
+    setSetsToLog(
+      sanitizedSets.map((s) => ({
+        ...s,
+        speed: s.speed !== undefined ? String(s.speed) : '',
+      }))
+    );
     onSaveExercisePerformance(sanitizedSets, exerciseNotes, selectedLogDate, exerciseRpe, exerciseRir);
     setSaveSuccessMsg(`Zapisano wszystkie serie (${sanitizedSets.length}) dla daty ${selectedLogDate}!`);
     setTimeout(() => setSaveSuccessMsg(null), 3000);
@@ -631,14 +685,15 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
 
                   <div className="w-full overflow-x-auto">
                     {isCardio ? (
-                      /* CARDIO / BIEG: Dystans, Tempo, HR, Status, Delete (bez RPE) */
-                      <table className="w-full text-left text-xs min-w-[500px]">
+                      /* CARDIO / BIEG: Dystans, Tempo docelowe, Prędkość (km/h), HR, Status, Delete */
+                      <table className="w-full text-left text-xs min-w-[580px]">
                         <thead>
                           <tr className="text-neutral-400 font-semibold text-[10px] border-b border-neutral-900 pb-2">
                             <th className="w-10 pb-1.5">Seria</th>
                             <th className="pb-1.5 px-1 min-w-[130px]">Dystans</th>
-                            <th className="pb-1.5 px-1 min-w-[100px]">Tempo docelowe</th>
-                            <th className="w-24 pb-1.5 px-1 text-center">HR (bpm)</th>
+                            <th className="pb-1.5 px-1 min-w-[92px]">Tempo docelowe</th>
+                            <th className="pb-1.5 px-1 min-w-[100px] text-center">Prędkość (km/h)</th>
+                            <th className="w-20 pb-1.5 px-1 text-center">HR (bpm)</th>
                             <th className="w-12 pb-1.5 text-center">Status</th>
                             <th className="w-8 pb-1.5"></th>
                           </tr>
@@ -688,11 +743,34 @@ export const ExerciseDetailModal: React.FC<ExerciseDetailModalProps> = ({
                               <td className="py-2 px-1">
                                 <input
                                   type="text"
-                                  value={set.pace || '4:20'}
+                                  value={set.pace ?? ''}
                                   onChange={(e) => updateSetField(idx, 'pace', e.target.value)}
                                   placeholder="np. 4:20"
                                   className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg px-2 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500"
                                 />
+                              </td>
+
+                              {/* Prędkość (km/h) */}
+                              <td className="py-2 px-1">
+                                <div className="relative flex items-center">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="[0-9.,]*"
+                                    placeholder="13.8"
+                                    value={set.speed !== undefined && set.speed !== null ? String(set.speed) : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === '' || /^[0-9]*[.,]?[0-9]*$/.test(val)) {
+                                        updateSetField(idx, 'speed', val);
+                                      }
+                                    }}
+                                    className="w-full bg-white text-gray-900 border border-gray-300 dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700 rounded-lg pl-2 pr-9 py-1.5 text-center font-bold text-xs font-mono-numbers focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500 dark:focus:border-amber-400 dark:focus:ring-amber-400 placeholder:text-gray-400 dark:placeholder:text-neutral-500 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                  />
+                                  <span className="pointer-events-none absolute right-1.5 text-[9px] font-sans font-bold text-neutral-400">
+                                    km/h
+                                  </span>
+                                </div>
                               </td>
 
                               {/* HR */}
