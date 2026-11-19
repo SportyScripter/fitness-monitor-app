@@ -427,51 +427,55 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
     );
   }
 
+  const hasWeeks = Array.isArray(weeksList) && weeksList.length > 0;
   const selectedDay =
-    currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
+    hasWeeks && Array.isArray(currentWeekDays) && currentWeekDays.length > 0
+      ? (currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null)
+      : null;
 
   const selectedDayIndex = selectedDay ? currentWeekDays.findIndex((d) => d && d.id === selectedDay.id) : -1;
   const selectedDayDynamicNumber = selectedDayIndex !== -1 ? selectedDayIndex + 1 : selectedDay?.dayNumber || 1;
 
-  const currentPhase = weeksList.find((w) => w.week === currentWeek) || {
-    week: currentWeek,
-    name: `Tydzień ${currentWeek}: Plan Indywidualny`,
-    volumeMultiplier: 1.0,
-    targetRIR: 2,
-    targetRPE: 8.0,
-    progressionNote: 'Dostosuj obciążenie, tempo i ćwiczenia pod swoje cele.',
-    isDeload: false,
-  };
+  const currentPhase: MesocyclePhase | null = hasWeeks
+    ? (weeksList.find((w) => w && w.week === currentWeek) || weeksList[0] || null)
+    : null;
 
   // Week editing state with decimal string support and validation
   const [isEditingWeekParams, setIsEditingWeekParams] = useState(false);
-  const [editPhaseName, setEditPhaseName] = useState(currentPhase.name);
-  const [editMultiplier, setEditMultiplier] = useState(String(currentPhase.volumeMultiplier || 1.0));
-  const [editRpe, setEditRpe] = useState(String(currentPhase.targetRPE || 8.0));
-  const [editRir, setEditRir] = useState(String(currentPhase.targetRIR ?? 2));
-  const [editProgressionNote, setEditProgressionNote] = useState(currentPhase.progressionNote || '');
+  const [editPhaseName, setEditPhaseName] = useState(currentPhase?.name || '');
+  const [editMultiplier, setEditMultiplier] = useState(String(currentPhase?.volumeMultiplier || 1.0));
+  const [editRpe, setEditRpe] = useState(String(currentPhase?.targetRPE || 8.0));
+  const [editRir, setEditRir] = useState(String(currentPhase?.targetRIR ?? 2));
+  const [editProgressionNote, setEditProgressionNote] = useState(currentPhase?.progressionNote || '');
 
   useEffect(() => {
-    setEditPhaseName(currentPhase.name);
-    setEditMultiplier(String(currentPhase.volumeMultiplier || 1.0));
-    setEditRpe(String(currentPhase.targetRPE || 8.0));
-    setEditRir(String(currentPhase.targetRIR ?? 2));
-    setEditProgressionNote(currentPhase.progressionNote || '');
+    setEditPhaseName(currentPhase?.name || '');
+    setEditMultiplier(String(currentPhase?.volumeMultiplier || 1.0));
+    setEditRpe(String(currentPhase?.targetRPE || 8.0));
+    setEditRir(String(currentPhase?.targetRIR ?? 2));
+    setEditProgressionNote(currentPhase?.progressionNote || '');
     setIsEditingWeekParams(false);
-  }, [currentWeek, currentPhase.name, currentPhase.volumeMultiplier, currentPhase.targetRPE, currentPhase.targetRIR, currentPhase.progressionNote]);
+  }, [
+    currentWeek,
+    currentPhase?.name,
+    currentPhase?.volumeMultiplier,
+    currentPhase?.targetRPE,
+    currentPhase?.targetRIR,
+    currentPhase?.progressionNote,
+  ]);
 
   const numMultiplier = parseFloat(editMultiplier.replace(',', '.'));
-  const isMultiplierValid = currentPhase.isDeload || (!isNaN(numMultiplier) && numMultiplier >= 1.0 && numMultiplier <= 1.5);
+  const isMultiplierValid = Boolean(currentPhase?.isDeload) || (!isNaN(numMultiplier) && numMultiplier >= 1.0 && numMultiplier <= 1.5);
 
   const handleSaveWeekParams = () => {
-    if (!isMultiplierValid || !onUpdatePhase) return;
+    if (!currentPhase || !isMultiplierValid || !onUpdatePhase) return;
     const parsedVol = parseFloat(editMultiplier.replace(',', '.'));
     const parsedRpe = parseFloat(editRpe.replace(',', '.'));
     const parsedRir = parseFloat(editRir.replace(',', '.'));
 
     onUpdatePhase({
       ...currentPhase,
-      name: editPhaseName.trim() || `Tydzień ${currentWeek}`,
+      name: editPhaseName.trim() || `Tydzień ${currentPhase.week}`,
       volumeMultiplier: currentPhase.isDeload ? 0.6 : (!isNaN(parsedVol) ? parsedVol : 1.0),
       targetRPE: !isNaN(parsedRpe) ? parsedRpe : 8.0,
       targetRIR: !isNaN(parsedRir) ? parsedRir : 2,
@@ -664,6 +668,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
         </div>
 
         {/* Current Week Parameters Accordion */}
+        {currentPhase && (
         <div className="mt-3 bg-neutral-950/70 border border-neutral-800/80 rounded-2xl p-3">
           <button
             onClick={() => setIsParamsExpanded(!isParamsExpanded)}
@@ -671,7 +676,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
           >
             <div className="flex items-center gap-2 truncate">
               <span className="text-amber-400 font-extrabold font-heading">
-                Tydzień {currentWeek}:
+                Tydzień {currentPhase.week}:
               </span>
               <span className="truncate">{currentPhase.name.replace(/^Tydzień\s*\d+:\s*/i, '')}</span>
             </div>
@@ -870,14 +875,39 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
 
-      {/* Days in Current Week Selector */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-black uppercase text-neutral-400 font-heading tracking-wider">
-            Treningi w Tygodniu {currentWeek} ({currentWeekDays.length})
-          </span>
+      {!hasWeeks || !currentPhase ? (
+        <div className="bg-gradient-to-b from-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-8 sm:p-10 text-center shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-3xl bg-amber-400/10 border border-amber-400/30 text-amber-400 flex items-center justify-center mx-auto">
+            <Calendar className="w-8 h-8" />
+          </div>
+          <div className="space-y-2 max-w-md mx-auto">
+            <h2 className="text-lg sm:text-xl font-black text-white font-heading">
+              Brak zaplanowanych aktywności
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
+              Ten cykl jest jeszcze pusty. Dodaj pierwszy tydzień, aby rozpocząć planowanie treningów.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenAddWeekModal}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-amber-400/20 cursor-pointer min-h-[48px]"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Dodaj tydzień</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Days in Current Week Selector */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-black uppercase text-neutral-400 font-heading tracking-wider">
+                Treningi w Tygodniu {currentPhase.week} ({currentWeekDays.length})
+              </span>
           <button
             onClick={() => onAddDay()}
             className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-400/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
@@ -910,7 +940,7 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
           >
             <div className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 scrollbar-none select-none">
               {currentWeekDays.map((day, index) => {
-                const isSelected = selectedDay && selectedDay.id === day.id;
+                const isSelected = Boolean(selectedDay && selectedDay.id === day.id);
                 return (
                   <SortableDayTile
                     key={day.id}
@@ -1069,7 +1099,21 @@ export const CycleEditView: React.FC<CycleEditViewProps> = ({
             </div>
           )}
         </div>
-      ) : null}
+      ) : (
+        <div className="bg-neutral-900/75 border border-neutral-800/90 rounded-3xl p-7 text-center space-y-3 shadow-lg">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-800/80 border border-neutral-700/80 text-amber-400 flex items-center justify-center mx-auto">
+            <Dumbbell className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-black text-white font-heading">
+            Brak zaplanowanych treningów w tym tygodniu
+          </h3>
+          <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+            Tydzień {currentPhase.week} jest jeszcze pusty. Kliknij „+ Dodaj Trening”, aby dodać pierwszy dzień.
+          </p>
+        </div>
+      )}
+        </>
+      )}
 
       {/* Day Settings Modal */}
       {selectedDay && isDaySettingsOpen && (

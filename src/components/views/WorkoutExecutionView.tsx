@@ -24,7 +24,8 @@ import {
   ArrowUp,
   ArrowDown,
   GripVertical,
-  X
+  X,
+  Calendar
 } from 'lucide-react';
 import {
   DndContext,
@@ -473,8 +474,11 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     }));
   };
 
+  const hasWeeks = Array.isArray(weeksList) && weeksList.length > 0;
   const selectedDay =
-    currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null;
+    hasWeeks && Array.isArray(currentWeekDays) && currentWeekDays.length > 0
+      ? (currentWeekDays.find((d) => d && d.id === selectedDayId) || currentWeekDays[0] || null)
+      : null;
 
   // Session Progress Calculation: total planned sets vs completed sets in active session / logs
   const { totalPlannedSets, completedSetsCount, completionPercentage } = useMemo(() => {
@@ -555,15 +559,9 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
     };
   }, [selectedDay, workoutLogs, activeOngoingWorkoutDay, currentWeek]);
 
-  const currentPhase = weeksList.find((w) => w.week === currentWeek) || {
-    week: currentWeek,
-    name: `Tydzień ${currentWeek}: Plan Indywidualny`,
-    volumeMultiplier: 1.0,
-    targetRIR: 2,
-    targetRPE: 8.0,
-    progressionNote: 'Dostosuj obciążenie i tempo w każdym ćwiczeniu.',
-    isDeload: false,
-  };
+  const currentPhase: MesocyclePhase | null = hasWeeks
+    ? (weeksList.find((w) => w && w.week === currentWeek) || weeksList[0] || null)
+    : null;
 
   // Helper to check day status: 'completed' | 'in_progress' | 'not_started'
   const getDayStatus = (day: WorkoutDay): 'completed' | 'in_progress' | 'not_started' => {
@@ -918,17 +916,46 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
         if (openKebabExerciseId) setOpenKebabExerciseId(null);
       }}
     >
-      {/* Week Header info with quick change */}
-      <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-4 shadow-lg">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-400 text-black shadow-sm">
-              Tydzień {currentWeek}
-            </span>
-            <span className="text-xs font-bold text-white font-heading truncate max-w-[150px] sm:max-w-xs">
-              {currentPhase.name.replace(/^Tydzień\s*\d+:\s*/i, '')}
-            </span>
+      {!hasWeeks || !currentPhase ? (
+        /* Clean Slate Empty State when the active cycle has 0 weeks */
+        <div className="bg-gradient-to-b from-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-8 sm:p-10 text-center shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-3xl bg-amber-400/10 border border-amber-400/30 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-400/10">
+            <Calendar className="w-8 h-8" />
           </div>
+          <div className="space-y-2 max-w-md mx-auto">
+            <h2 className="text-lg sm:text-xl font-black text-white font-heading tracking-tight">
+              Brak zaplanowanych aktywności
+            </h2>
+            <p className="text-xs sm:text-sm text-neutral-400 leading-relaxed">
+              Ten cykl jest jeszcze pusty. Dodaj pierwszy tydzień, aby rozpocząć planowanie treningów.
+            </p>
+          </div>
+          {onOpenAddWeekModal && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={onOpenAddWeekModal}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg shadow-amber-400/20 active:scale-[0.98] cursor-pointer touch-manipulation min-h-[48px]"
+              >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>Dodaj tydzień</span>
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Week Header info with quick change */}
+          <div className="bg-gradient-to-r from-neutral-900 via-neutral-900/95 to-neutral-950 border border-neutral-800 rounded-3xl p-4 shadow-lg">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-400 text-black shadow-sm">
+                  Tydzień {currentPhase.week}
+                </span>
+                <span className="text-xs font-bold text-white font-heading truncate max-w-[150px] sm:max-w-xs">
+                  {currentPhase.name.replace(/^Tydzień\s*\d+:\s*/i, '')}
+                </span>
+              </div>
 
           <div className="flex items-center gap-2">
             {currentPhase.isDeload && (
@@ -1035,7 +1062,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
               strategy={horizontalListSortingStrategy}
             >
               {currentWeekDays.map((day, index) => {
-                const isSelected = selectedDay && selectedDay.id === day.id;
+                const isSelected = Boolean(selectedDay && selectedDay.id === day.id);
                 const status = getDayStatus(day);
 
                 return (
@@ -1975,7 +2002,36 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             )}
           </div>
         </div>
-      ) : null}
+      ) : (
+        /* Discreet Empty State when the active week has 0 workouts */
+        <div className="bg-neutral-900/75 border border-neutral-800/90 rounded-3xl p-7 sm:p-8 text-center space-y-4 shadow-lg">
+          <div className="w-12 h-12 rounded-2xl bg-neutral-800/80 border border-neutral-700/80 text-amber-400 flex items-center justify-center mx-auto">
+            <Dumbbell className="w-6 h-6" />
+          </div>
+          <div className="space-y-1.5 max-w-sm mx-auto">
+            <h3 className="text-sm sm:text-base font-black text-white font-heading">
+              Brak zaplanowanych treningów w tym tygodniu
+            </h3>
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Tydzień {currentPhase.week} nie zawiera jeszcze żadnych dni treningowych. Dodaj swój pierwszy trening, aby ułożyć plan ćwiczeń.
+            </p>
+          </div>
+          {onAddDay && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => onAddDay()}
+                className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40 hover:border-amber-400 font-bold text-xs transition-all cursor-pointer touch-manipulation min-h-[42px]"
+              >
+                <Plus className="w-4 h-4 text-amber-400" />
+                <span>Dodaj trening</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+        </>
+      )}
 
       {/* Tryb Reorganizacji - Dolny Panel Zatwierdzenia */}
       {isReorderMode && (
@@ -2018,7 +2074,7 @@ export const WorkoutExecutionView: React.FC<WorkoutExecutionViewProps> = ({
             setSelectedWeekToEdit(null);
           }}
           week={selectedWeekToEdit}
-          canDelete={weeksList.length > 1}
+          canDelete={weeksList.length > 0}
           onSave={(updatedPhase: MesocyclePhase) => {
             if (onUpdatePhase) onUpdatePhase(updatedPhase);
             setIsEditWeekModalOpen(false);

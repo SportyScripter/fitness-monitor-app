@@ -53,7 +53,7 @@ import {
   normalizeMuscleGroup
 } from './types/hyrox';
 import { MASTER_HYROX_WEEK_PLAN, MESOCYCLE_WEEKS } from './data/hyroxPlanData';
-import { DEFAULT_TRAINING_CYCLES, MASA_WEEK_PLAN, REDUKCJA_WEEK_PLAN } from './data/defaultCycles';
+import { DEFAULT_TRAINING_CYCLES } from './data/defaultCycles';
 import { getLocalDateString, extractLogDate, compareLogsDescending } from './utils/dateUtils';
 
 type ThemeMode = 'dark' | 'light';
@@ -77,51 +77,28 @@ const getInitialTheme = (): ThemeMode => {
   }
 };
 
-// Helper to safely resolve or derive workout days for any week of a training cycle
+// Helper to safely resolve workout days for a given week of a training cycle.
+// Never falls back to hardcoded/preset templates when a cycle has 0 weeks or a week is empty.
 export const getDaysForCycleWeek = (cycle: TrainingCycleCatalog, weekNum: number): WorkoutDay[] => {
-  if (!cycle) return [];
+  if (!cycle || !weekNum) return [];
 
-  // 1. If explicit plan exists for this week (even if empty array []), return it with healed unique day IDs
-  if (cycle.weeksPlansMap && cycle.weeksPlansMap[weekNum] !== undefined) {
-    const rawDays = Array.isArray(cycle.weeksPlansMap[weekNum]) ? cycle.weeksPlansMap[weekNum] : [];
-    return rawDays.map((d, idx) => {
+  const cycleWeeks = Array.isArray(cycle.weeksList) ? cycle.weeksList : [];
+  if (cycleWeeks.length === 0) return [];
+  if (!cycleWeeks.some((w) => w && w.week === weekNum)) return [];
+
+  // Return only the explicitly stored workouts for this week (empty array [] if week has 0 workouts)
+  if (cycle.weeksPlansMap && Array.isArray(cycle.weeksPlansMap[weekNum])) {
+    return cycle.weeksPlansMap[weekNum].filter(Boolean).map((d, idx) => {
       const expectedPrefix = `w${weekNum}-`;
-      const fixedId = d.id && d.id.startsWith(expectedPrefix) ? d.id : `w${weekNum}-${d.dayNumber || idx + 1}-${d.id || 'day'}`;
+      const fixedId =
+        d.id && d.id.startsWith(expectedPrefix)
+          ? d.id
+          : `w${weekNum}-${d.dayNumber || idx + 1}-${d.id || 'day'}`;
       return {
         ...d,
         id: fixedId,
       };
     });
-  }
-
-  // 2. Derive from week 1 or preset template if not yet explicitly saved
-  const baseDays =
-    cycle.weeksPlansMap?.[1] ||
-    (cycle.id?.includes('hyrox') || cycle.goal === 'HYROX'
-      ? MASTER_HYROX_WEEK_PLAN
-      : cycle.id?.includes('masa') || cycle.goal === 'MASA'
-      ? MASA_WEEK_PLAN
-      : cycle.id?.includes('redukcja') || cycle.goal === 'REDUKCJA'
-      ? REDUKCJA_WEEK_PLAN
-      : null);
-
-  if (baseDays && Array.isArray(baseDays) && baseDays.length > 0) {
-    const phase = cycle.weeksList?.find((w) => w && w.week === weekNum);
-    const mult = typeof phase?.volumeMultiplier === 'number' ? phase.volumeMultiplier : 1.0;
-    const isDeload = phase?.isDeload || false;
-
-    return baseDays.filter(Boolean).map((d) => ({
-      ...d,
-      id: `w${weekNum}-${d.dayNumber}-${d.id}`,
-      exercises: (d.exercises || []).filter(Boolean).map((ex) => ({
-        ...ex,
-        id: `ex-w${weekNum}-${(ex.name || 'cwiczenie').replace(/\s+/g, '-').toLowerCase()}`,
-        defaultWeightKg: isDeload
-          ? Math.round((ex.defaultWeightKg || 0) * 0.7)
-          : (mult === 1.0 ? (ex.defaultWeightKg || 0) : Number(((ex.defaultWeightKg || 0) * (mult >= 0.5 ? mult : 1.0)).toFixed(1))),
-      })),
-      sessionNotes: phase?.progressionNote || d.sessionNotes,
-    }));
   }
 
   return [];
@@ -230,11 +207,19 @@ export default function App() {
     cyclesList.find((c) => c.id === activeCycleId) ||
     cyclesList[0] ||
     null;
-  const currentWeek = activeCycle?.currentWeek || 1;
   const weeksList = activeCycle
-    ? (activeCycle.weeksList !== undefined ? activeCycle.weeksList : (activeCycle.id?.includes('hyrox') ? MESOCYCLE_WEEKS : []))
+    ? (activeCycle.weeksList !== undefined
+        ? (Array.isArray(activeCycle.weeksList) ? activeCycle.weeksList : [])
+        : (activeCycle.id?.includes('hyrox') ? MESOCYCLE_WEEKS : []))
     : [];
-  const currentWeekDays: WorkoutDay[] = activeCycle ? getDaysForCycleWeek(activeCycle, currentWeek) : [];
+  const activeWeekPhase = weeksList.length > 0
+    ? (weeksList.find((w) => w && w.week === activeCycle?.currentWeek) || weeksList[0] || null)
+    : null;
+  const currentWeek = activeWeekPhase ? activeWeekPhase.week : 0;
+  const currentWeekDays: WorkoutDay[] =
+    activeCycle && activeWeekPhase
+      ? getDaysForCycleWeek(activeCycle, activeWeekPhase.week)
+      : [];
 
   // 4 Bottom Navigation tabs: 'edit' | 'workout' | 'calendar' | 'more'
   const [activeTab, setActiveTab] = useState<MainNavTab>('workout');
@@ -686,8 +671,12 @@ export default function App() {
       return;
     }
 
-    const targetWeek = selectedCycle.currentWeek || 1;
-    const days = getDaysForCycleWeek(selectedCycle, targetWeek);
+    const selectedWeeks = Array.isArray(selectedCycle.weeksList) ? selectedCycle.weeksList : [];
+    const targetPhase = selectedWeeks.length > 0
+      ? (selectedWeeks.find((w) => w && w.week === selectedCycle.currentWeek) || selectedWeeks[0] || null)
+      : null;
+    const targetWeek = targetPhase ? targetPhase.week : 0;
+    const days = targetPhase ? getDaysForCycleWeek(selectedCycle, targetWeek) : [];
 
     // Find next uncompleted workout day in this cycle (non-rest day without completed logs)
     let targetDay = days.find((d) => {
@@ -702,9 +691,7 @@ export default function App() {
       targetDay = days.find((d) => d.type !== 'REST_RECOVERY') || days[0];
     }
 
-    if (targetDay) {
-      setSelectedDayId(targetDay.id);
-    }
+    setSelectedDayId(targetDay ? targetDay.id : '');
 
     // Switch view to "Trening" (main action)
     setActiveTab('workout');
@@ -725,6 +712,8 @@ export default function App() {
 
         setSelectedDayId(nextUncompleted.id);
       }
+    } else if (selectedDayId !== '') {
+      setSelectedDayId('');
     }
   }, [currentWeek, activeCycleId, currentWeekDays, selectedDayId, workoutLogs]);
 
@@ -1335,7 +1324,7 @@ export default function App() {
     const updatedPlansMap = { ...(activeCycle.weeksPlansMap || {}) };
     delete updatedPlansMap[weekNumber];
 
-    const nextWeek = updatedWeeksList.length > 0 ? updatedWeeksList[0].week : 1;
+    const nextWeek = updatedWeeksList.length > 0 ? updatedWeeksList[0].week : 0;
 
     const updatedCycle: TrainingCycleCatalog = {
       ...activeCycle,
